@@ -32,13 +32,15 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - `Origin` check on every request (DNS rebinding was already covered by the Host check).
 - `export_react` (JSX + Tailwind arbitrary-property classes).
 - Claude Code plugin: `.claude-plugin/`, `.mcp.json`, `skills/design-canvas/SKILL.md`.
+- Design tokens: stored per project with modes, `set_tokens` / `get_design_system`, live Theme tab, `create_foundations`
+  (generated, locked, self-refreshing), `lint` resolves `var()` per mode, exports declare the tokens.
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
 ## Not done, in suggested order
 
-1. **Theme editor + modes**: edit tokens in the app and recompile CSS variables, light/dark modes, token names
-   shown in the inspector. Needs a real `theme` object in the doc (today tokens are only extracted).
+1. **Theme, remaining parts**: token names shown in an inspector field with a detach option (needs the inspector), and
+   `extract_tokens` from a node or a repo CSS file (today `get_design_tokens` scans the whole project).
 2. **Components**: masters with variants, `insert_component`, `create_component`; edit a master and every instance
    updates. Builds on `<x-clone>`, but live linking needs a `data-component` reference.
 3. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
