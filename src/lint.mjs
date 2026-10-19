@@ -107,6 +107,8 @@ export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
       if (st.has('color')) ctx.fg = st.get('color');
       if (st.has('font-size')) ctx.size = px(st.get('font-size')) ?? ctx.size;
       if (st.has('font-weight')) ctx.weight = Number(st.get('font-weight')) || (st.get('font-weight') === 'bold' ? 700 : ctx.weight);
+      // WCAG exempts inactive controls and purely decorative text, so the author can opt out.
+      if (child.hasAttribute('disabled') || child.getAttribute('aria-disabled') === 'true' || child.getAttribute('aria-hidden') === 'true') ctx.exempt = true;
       if (st.has('opacity')) ctx.opacity = (ctx.opacity ?? 1) * Number(st.get('opacity'));
 
       const ownText = child.childNodes.some((n) => !(n instanceof HTMLElement) && n.rawText.trim());
@@ -116,7 +118,7 @@ export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
         if (size < 12) add(child, `small text ${size}px ${label}: use 12px or larger`);
         if (/lorem ipsum|dolor sit amet/i.test(child.text)) add(child, `placeholder copy ${label}: write real content`);
         const fg = parseColor(ctx.fg ?? '#000');
-        if (fg && !ctx.bgUnknown) {
+        if (fg && !ctx.bgUnknown && !ctx.exempt) {
           // Blend a translucent text colour (and any ancestor opacity) over the backdrop first,
           // so "rgba(0,0,0,.3)" is judged by the grey it actually paints.
           const alpha = fg.alpha * (ctx.opacity ?? 1);
@@ -133,7 +135,10 @@ export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
       // A fixed width wider than the artboard always overflows it.
       const w = px(st.get('width'));
       if (w !== null && w > ab.width) add(child, `width ${w}px is wider than the artboard (${ab.width}px)`);
-      if (st.get('position') === 'absolute') {
+      // A negative offset only escapes the artboard when nothing between here and the artboard is
+      // positioned; otherwise it is relative to that parent (a corner badge, a timeline dot).
+      if (st.get('position') && st.get('position') !== 'static') ctx.positioned = true;
+      if (st.get('position') === 'absolute' && !inherit.positioned) {
         const left = px(st.get('left'));
         const top = px(st.get('top'));
         if ((left !== null && left < 0) || (top !== null && top < 0)) add(child, 'absolutely positioned outside the artboard (negative offset)');
@@ -152,7 +157,7 @@ export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
     }
   };
 
-  walk(rootEl, { bg: [1, 1, 1], bgUnknown: false, fg: '#000' });
+  walk(rootEl, { bg: [1, 1, 1], bgUnknown: false, fg: '#000', positioned: false });
   return issues;
 }
 
