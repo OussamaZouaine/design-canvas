@@ -47,6 +47,8 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - Pages: header page selector (add, rename, delete), per-page canvas background (Design tab with nothing selected), boards move
   between pages from the Design tab, the canvas follows Claude to the page it draws on. Tools `create_page`, `update_page`,
   `delete_page`, `move_to_page`, `set_page`. Stored sparsely: the first page is implicit until a second exists.
+- Reference images: `add_reference_image` (path), paste or drop a picture on the canvas, a locked Reference board beside your
+  work, `compare_to_reference` (pixel diff at up to 800 px: different %, worst 4x4 areas, diff picture).
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
@@ -55,8 +57,9 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 1. **Manual editing, remaining parts**: resize handles and dragging absolutely positioned nodes on the canvas, drag-reorder
    inside flex parents on the canvas, copy / paste, a toolbar for inserting frames, text, images and components, image upload
    into `assets/`, per-side padding fields and a colour picker. Style fields, in-place text and undo / redo are done.
-2. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
-   `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
+2. **References, remaining part**: `capture_url` (copy a live page as an artboard). It needs a headless browser; the open tab
+   cannot fetch cross-origin pages, so it stays out until a Chrome dependency is acceptable. Reference images, paste / drop and
+   `compare_to_reference` are done.
 3. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
 4. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,

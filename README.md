@@ -109,6 +109,7 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
 | Token sync | `link_repo`, `import_tokens`, `export_tokens` |
 | Pages | `create_page`, `update_page`, `delete_page`, `move_to_page`, `set_page`; `create_artboard` takes `page_id` |
+| References | `add_reference_image`, `compare_to_reference`, `delete_reference`; paste or drop an image on the canvas |
 | Components | `set_component`, `insert_component`, `detach_component`, `delete_component`, `create_components_sheet` |
 | Editing in the app | Design tab (`I`): style fields with token suggestions; double-click text to edit; Ctrl+Z / Ctrl+Shift+Z; Layers panel (`L`) |
 | Layers | `move_node`, `set_flags` (hidden / locked); in the app: Layers panel (`L`) |

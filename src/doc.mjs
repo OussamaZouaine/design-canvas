@@ -90,7 +90,7 @@ export class Doc {
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
   _snapshotState(label) {
-    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components), pages: structuredClone(this.data.pages) };
+    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components), pages: structuredClone(this.data.pages), references: structuredClone(this.data.references) };
   }
 
   _checkpoint(label) {
@@ -104,6 +104,7 @@ export class Doc {
     this.data.theme = entry.theme;
     this.data.components = entry.components;
     this.data.pages = entry.pages;
+    this.data.references = entry.references;
   }
 
   // Step back `steps` mutations. The id counter is deliberately NOT rewound, so an id that was
@@ -245,6 +246,7 @@ export class Doc {
   basicInfo() {
     return {
       pages: this.pages,
+      references: this.references,
       artboards: this.data.artboards.map((a) => ({
         id: a.id, name: a.name, x: a.x, y: a.y, width: a.width, height: a.height, page: this.pageOf(a),
       })),
@@ -390,7 +392,7 @@ export class Doc {
   // hand-edits something that the next token change would overwrite.
   _refreshFoundations() {
     for (const ab of this.data.artboards) {
-      if (!ab.generated) continue;
+      if (!ab.generated || ab.generated === 'reference') continue;
       const { html, height } = ab.generated === 'components' ? componentsSheetHtml(this.components, this.theme) : foundationsHtml(this.theme);
       ab.html = this._prepare(html, false).toString();
       ab.height = height;
@@ -409,6 +411,43 @@ export class Doc {
     this._refreshFoundations();
     this._commit();
     return ab;
+  }
+
+  // ---- Reference images ------------------------------------------------------------
+  // Screenshots to rebuild from. The bytes live in the project's refs/ folder (the store writes
+  // them); the document only keeps the metadata and a board that shows the picture.
+
+  get references() { return this.data.references ?? []; }
+
+  addReference({ name, mime, width, height }) {
+    this._checkpoint('add_reference');
+    const n = this.references.reduce((m, r) => Math.max(m, Number(r.id.slice(1)) || 0), 0) + 1;
+    const ref = { id: `R${n}`, name: String(name || 'Reference').trim().slice(0, 80) || 'Reference', mime, width, height };
+    this.data.references = [...this.references, ref];
+    this._commit();
+    return ref;
+  }
+
+  // A board that displays the reference at (up to) its own size, placed like any new board.
+  createReferenceBoard(ref, src, page) {
+    const width = Math.min(1600, ref.width);
+    const height = Math.max(40, Math.round((ref.height * width) / ref.width));
+    const ab = this.createArtboard({ name: `Reference · ${ref.name}`, width, height, page });
+    ab.generated = 'reference';
+    ab.ref = ref.id;
+    const alt = ref.name.replace(/[&<>"]/g, '');
+    ab.html = this._prepare(`<img data-name="Reference" data-locked src="${src}" alt="Reference: ${alt}" style="display:block;width:100%;height:100%;object-fit:contain">`, false).toString();
+    this._commit();
+    return ab;
+  }
+
+  // Remove a reference and its boards. The file stays on disk so undo can bring it back.
+  deleteReference(refId) {
+    if (!this.references.some((r) => r.id === refId)) throw new Error(`No reference ${refId}`);
+    this._checkpoint('delete_reference');
+    this.data.references = this.references.filter((r) => r.id !== refId);
+    this.data.artboards = this.data.artboards.filter((a) => a.ref !== refId);
+    this._commit();
   }
 
   // ---- Pages -------------------------------------------------------------------

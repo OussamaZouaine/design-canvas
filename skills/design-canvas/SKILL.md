@@ -28,6 +28,12 @@ artboards; the user watches them appear live and can pin comments on elements.
 6. **Finish.** `reply_comment` + `resolve_comment` for each comment handled, then `finish_working`.
    A bad change can be reverted with `undo`.
 
+## Rebuilding from a screenshot
+
+`add_reference_image` (absolute path) puts the picture on a locked board. Build your own artboard at the same width next to it,
+then loop: `compare_to_reference` -> fix the worst areas it lists (and look at the diff image) -> compare again. Stop after 3
+rounds or when different is under about 5%. The user can also paste or drop an image on the canvas to add a reference.
+
 ## Design rules
 
 - **Colour:** OKLCH only, `oklch(L C H)`. Hold C and H, step L for ramps. Text contrast at least
