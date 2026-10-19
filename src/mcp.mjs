@@ -376,6 +376,17 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     return text({ reverted });
   }));
 
+  server.registerTool('redo', {
+    description: 'Re-apply changes that undo reverted (only until the next new change is made).',
+    inputSchema: { ...pid, steps: z.number().int().min(1).max(20).optional() },
+  }, safe(({ project_id, steps = 1 }) => {
+    const { meta, doc } = target(project_id);
+    const redone = doc.redo(steps, 'claude');
+    if (!redone.length) return text('Nothing to redo');
+    store.logAction(meta.id, { tool: 'redo', detail: redone.join(', ') });
+    return text({ redone });
+  }));
+
   server.registerTool('get_tree_summary', {
     description: 'Indented outline of an artboard with node ids and short text, for choosing edit targets.',
     inputSchema: { ...pid, artboard_id: z.string(), depth: z.number().min(1).max(12).optional() },
