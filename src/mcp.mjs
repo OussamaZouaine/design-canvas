@@ -7,6 +7,7 @@ import { formatIssues } from './lint.mjs';
 import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
+import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
@@ -170,10 +171,13 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
       ...pid,
       format: z.enum(['summary', 'css', 'json', 'tailwind']).optional(),
       artboard_ids: z.array(z.string()).optional().describe('Limit to these artboards (default: all).'),
+      node_id: z.string().optional().describe('Scan just this node (e.g. a card you want to turn into tokens) instead of whole artboards.'),
     },
-  }, safe(({ project_id, format = 'summary', artboard_ids }) => {
+  }, safe(({ project_id, format = 'summary', artboard_ids, node_id }) => {
     const { doc } = target(project_id);
-    const boards = doc.data.artboards.filter((a) => !artboard_ids || artboard_ids.includes(a.id));
+    const boards = node_id
+      ? [{ id: node_id, name: 'node', html: doc.nodeInfo(node_id).html }]
+      : doc.data.artboards.filter((a) => !artboard_ids || artboard_ids.includes(a.id));
     if (!boards.length) throw new Error('No artboards to scan yet. Create some designs first.');
     const { outputs, ...tokens } = extractTokens(boards);
     return text(format === 'summary' ? { ...tokens, css: outputs.css } : outputs[format]);
@@ -339,6 +343,32 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     log(meta, doc, 'set_flags', node_ids);
     return text('ok');
   }));
+
+  server.registerTool('link_repo', {
+    description: 'Link the project to the folder of your code (an absolute path) so tokens can be imported from its stylesheets. Pass null to unlink. Files are only ever read from inside this folder.',
+    inputSchema: { ...pid, path: z.string().nullable() },
+  }, safe(({ project_id, path: repoPath }) => {
+    const { meta } = target(project_id);
+    store.update(meta.id, { repo: repoPath });
+    return text(meta.repo ? { repo: meta.repo } : 'Unlinked');
+  }));
+
+  server.registerTool('import_tokens', {
+    description: 'Read CSS custom properties from a stylesheet in the linked repo (path relative to the repo, e.g. src/styles.css) into the project tokens. selector picks the rule: default :root; use ".dark" with mode "dark" to import dark-mode overrides. Names starting with a token family are kept; others are classified by name and value (--brand: oklch(...) becomes color-brand); anything unclear is reported in skipped and not imported.',
+    inputSchema: { ...pid, file: z.string(), selector: z.string().optional(), mode: z.string().optional(), dry_run: z.boolean().optional() },
+  }, safe(({ project_id, file, selector, mode, dry_run }) => {
+    const { meta, doc } = target(project_id);
+    const props = parseCustomProperties(readInsideRepo(meta.repo, file), selector);
+    if (!Object.keys(props).length) throw new Error(`No custom properties found in ${file} for selector ${selector ?? ':root'}`);
+    const { tokens, skipped } = mapProperties(props);
+    if (!dry_run && Object.keys(tokens).length) { doc.setTokens(tokens, { mode }); log(meta, doc, 'import_tokens', []); }
+    return text({ imported: dry_run ? [] : Object.keys(tokens), would_import: dry_run ? tokens : undefined, skipped });
+  }));
+
+  server.registerTool('export_tokens', {
+    description: 'The project tokens as text you can paste into a codebase: css (:root plus [data-theme] blocks for modes), tailwind (an @theme block) or json.',
+    inputSchema: { ...pid, format: z.enum(['css', 'tailwind', 'json']).optional() },
+  }, safe(({ project_id, format = 'css' }) => text(exportTokens(target(project_id).doc.theme, format))));
 
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',

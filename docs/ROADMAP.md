@@ -42,23 +42,22 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - Inspector (Design tab, `I`): style fields grouped as Layout, Auto layout, Appearance, Fill, Stroke, Shadow and Typography,
   token suggestions and a Detach chip, an "Other styles" list for CSS with no control, artboard fields. In-place text
   editing (double-click), Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z, and a redo stack.
+- Token sync: `link_repo`, `import_tokens` (CSS custom properties from a stylesheet inside the linked repo, classified by
+  name and value, unclear ones reported), `export_tokens` (css / tailwind @theme / json), `get_design_tokens` on one node.
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
 ## Not done, in suggested order
 
-1. **Theme, remaining parts**: `extract_tokens` from a node or a repo CSS file (today `get_design_tokens` scans the whole project).
-2. **Manual editing, remaining parts**: resize handles and dragging absolutely positioned nodes on the canvas, drag-reorder
+1. **Manual editing, remaining parts**: resize handles and dragging absolutely positioned nodes on the canvas, drag-reorder
    inside flex parents on the canvas, copy / paste, a toolbar for inserting frames, text, images and components, image upload
    into `assets/`, per-side padding fields and a colour picker. Style fields, in-place text and undo / redo are done.
-3. **Pages** inside a project, `navigate`, dashboard tabs.
-4. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
+2. **Pages** inside a project, `navigate`, dashboard tabs.
+3. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-5. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+4. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-6. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
-   Tailwind theme and import them back).
-10. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
+5. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
 
 ## Deliberate differences to revisit

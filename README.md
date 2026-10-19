@@ -107,6 +107,7 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Comments | `get_comments`, `reply_comment`, `resolve_comment` |
 | Tokens | `get_design_tokens` (scan what designs use), `get_design_system`, `set_tokens`, `create_foundations` (stored theme: CSS variables with modes) |
 | Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
+| Token sync | `link_repo`, `import_tokens`, `export_tokens` |
 | Components | `set_component`, `insert_component`, `detach_component`, `delete_component`, `create_components_sheet` |
 | Editing in the app | Design tab (`I`): style fields with token suggestions; double-click text to edit; Ctrl+Z / Ctrl+Shift+Z; Layers panel (`L`) |
 | Layers | `move_node`, `set_flags` (hidden / locked); in the app: Layers panel (`L`) |
