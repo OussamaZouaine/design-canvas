@@ -14,6 +14,7 @@
     <span id="count"></span>
     <span class="sep"></span>
     <button id="open-layers" aria-pressed="false" title="Layer tree (L)">Layers</button>
+    <button id="open-design" title="Edit the selected layer (I)">Design</button>
     <button id="new">+ Artboard</button>
     <button id="fit">Fit</button>
     <span id="zoom">100%</span>
@@ -54,6 +55,7 @@
   <aside id="panel" inert aria-label="Project panel">
     <div class="panel-head">
       <div class="tabs" role="tablist">
+        <button role="tab" data-tab="design">Design</button>
         <button role="tab" data-tab="comments">Comments</button>
         <button role="tab" data-tab="activity">Activity</button>
         <button role="tab" data-tab="versions">Versions</button>
@@ -63,6 +65,7 @@
       </div>
       <button id="panel-close" class="icon" aria-label="Close panel">×</button>
     </div>
+    <div class="pane" data-pane="design"></div>
     <div class="pane" data-pane="comments"></div>
     <div class="pane" data-pane="activity"></div>
     <div class="pane" data-pane="versions"></div>

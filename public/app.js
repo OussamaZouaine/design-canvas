@@ -3,6 +3,7 @@
 // (comments, activity, versions, tokens). Everything user-visible that Claude or a
 // collaborator wrote is inserted with textContent / DOM nodes, never innerHTML.
 import { initLayers } from '/layers.js';
+import { initInspector } from '/inspector.js';
 const $ = (s) => document.querySelector(s);
 const viewport = $('#viewport');
 const world = $('#world');
@@ -16,6 +17,7 @@ const papi = `/api/projects/${projectId}`;
 let doc = { artboards: [] };
 let userEditUntil = 0; // doc changes arriving before this time came from the user's own edit
 const markUserEdit = () => { userEditUntil = Date.now() + 1500; };
+let inspector = null; // the Design tab (style fields for the selected layer)
 let layers = null; // the Layers panel controller, created once everything it needs exists (bottom of this file)
 
 // ---- Theme (design tokens) ----------------------------------------------------
@@ -487,6 +489,7 @@ function findElement(id, { mount = false } = {}) {
 function select(id) {
   selected = id;
   layers?.reveal(id); // open the tree down to it and scroll it into view
+  if (panelOpen() && panelTab === 'design') inspector?.render();
   post(`${api}/selection`, { ids: id ? [id] : [] });
   render();
 }
@@ -575,6 +578,7 @@ window.addEventListener('keydown', (e) => {
     else if (selected && !selected.startsWith('A') && layers?.parentOf(selected)) select(layers.parentOf(selected)); // up one level
     else select(null);
   }
+  if (e.key.toLowerCase() === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey) $('#open-design').click();
   if (e.key.toLowerCase() === 'l' && !e.metaKey && !e.ctrlKey && !e.altKey) layers?.toggle();
   if (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey && $('#pop').hidden) setCommentMode(!commentMode);
   // Undo / redo go through the server so they cover Claude's changes and the theme too.
@@ -665,6 +669,7 @@ events.addEventListener('doc', (e) => {
   $('#count').textContent = `${doc.artboards.length} artboard${doc.artboards.length === 1 ? '' : 's'}`;
   render({ animate: !firstDoc });
   layers?.refresh();
+  if (panelOpen() && panelTab === 'design') inspector?.refresh();
   applyTheme();
   refreshTheme();
   $('#hint').hidden = doc.artboards.length > 0;
@@ -809,6 +814,7 @@ function closePanel() { panel.classList.remove('open'); panel.inert = true; }
 for (const b of panel.querySelectorAll('.tabs button')) b.onclick = () => openPanel(b.dataset.tab);
 $('#panel-close').onclick = closePanel;
 $('#hist').onclick = () => (panelOpen() && ['activity', 'versions'].includes(panelTab) ? closePanel() : openPanel(['activity', 'versions'].includes(panelTab) ? panelTab : 'activity'));
+$('#open-design').onclick = () => (panelOpen() && panelTab === 'design' ? closePanel() : openPanel('design'));
 $('#open-tokens').onclick = () => (panelOpen() && panelTab === 'tokens' ? closePanel() : openPanel('tokens'));
 
 // Reload a tab shortly after a burst of changes.
@@ -968,7 +974,7 @@ function loadTheme() {
 // A Theme tab that is open must follow edits made by Claude, but never rebuild while someone is typing in it.
 const refreshTheme = () => { if (panelOpen() && panelTab === 'theme' && !pane('theme').contains(document.activeElement)) loadTheme(); };
 
-const loaders = { comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens, mcp: loadMcp, theme: loadTheme };
+const loaders = { design: () => inspector?.render(), comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens, mcp: loadMcp, theme: loadTheme };
 
 // ---- Comments ---------------------------------------------------------------
 
@@ -1135,3 +1141,9 @@ layers = initLayers({
   onHover: (id) => { hoverId = id; drawHover(); },
 });
 $('#open-layers').onclick = () => layers.toggle();
+
+// ---- Inspector -------------------------------------------------------------------
+inspector = initInspector({
+  h, getSelected: () => selected, getDoc: () => doc, nodeOf: (id) => layers.nodeOf(id),
+  post, api, toast, markUserEdit, getMode: () => themeMode,
+});

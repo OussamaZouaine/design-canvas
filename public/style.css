@@ -229,6 +229,17 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* ---- Inspector (Design tab) ---------------------------------------------------- */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex: none; }
+.insp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.insp-head small { color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
+.insp-sec.off { opacity: 0.5; pointer-events: none; }
+.frow { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.flabel { flex: none; width: 62px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.in-sel { flex: 1; min-width: 0; font: 12px ui-monospace, Consolas, monospace; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.chip-token { flex: none; font: 11px ui-monospace, Consolas, monospace; color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 10px; padding: 1px 7px; cursor: pointer; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ---- Layers panel (left drawer) --------------------------------------------- */
 #layers {
   position: fixed; top: 44px; left: 0; bottom: 0; width: 280px; z-index: 9;
