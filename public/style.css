@@ -128,6 +128,11 @@ header .grow { flex: 1; }
 @keyframes pulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
 
 #sel { position: fixed; pointer-events: none; border: 2px solid var(--accent); z-index: 5; }
+/* Boxes around the nodes Claude is reading or writing right now (cleared by finish_working). */
+#agent { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+#agent i { position: fixed; border: 1.5px dashed var(--accent); border-radius: 3px; background: oklch(0.68 0.2 295 / 0.08); animation: agent-in 200ms var(--ease-out); }
+@keyframes agent-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #agent i { animation: none; } }
 #hint { position: fixed; inset: 44px 0 0 0; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.8; color: var(--muted); pointer-events: none; text-wrap: balance; }
 #hint[hidden] { display: none; }
 
