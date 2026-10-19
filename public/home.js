@@ -30,6 +30,13 @@ async function load() {
     fetch('/api/projects?deleted=1').then((r) => r.json()),
   ]);
   render();
+  // Open-comment count on the Comments link (cheap: one small request per reload)
+  fetch('/api/comments').then((r) => r.json()).then((cs) => {
+    const n = cs.filter((c) => !c.resolved).length;
+    const badge = $('#c-open');
+    badge.textContent = n;
+    badge.hidden = !n;
+  }).catch(() => {});
 }
 
 // Reload shortly after a burst of changes (Claude can fire many edits per second).

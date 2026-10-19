@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Comments · Design Canvas</title>
+  <link rel="stylesheet" href="/home.css" />
+  <link rel="stylesheet" href="/comments.css" />
+</head>
+<body>
+  <header>
+    <a class="brand" href="/" title="All projects">Design Canvas</a>
+    <span class="crumb">Comments</span>
+    <input id="search" type="search" placeholder="Search comments" aria-label="Search comments" />
+    <select id="project" aria-label="Filter by project"><option value="">All projects</option></select>
+    <select id="who" aria-label="Filter by author">
+      <option value="">Anyone</option>
+      <option value="user">From you</option>
+      <option value="claude">From Claude</option>
+    </select>
+    <span class="grow"></span>
+    <span id="status" class="off">connecting…</span>
+  </header>
+
+  <main>
+    <!-- Status tabs double as the summary: how many are open vs resolved -->
+    <div class="tabs" role="tablist" aria-label="Comment status">
+      <button data-st="all" class="on" role="tab">All <span id="n-all">0</span></button>
+      <button data-st="open" role="tab">Open <span id="n-open">0</span></button>
+      <button data-st="resolved" role="tab">Resolved <span id="n-resolved">0</span></button>
+    </div>
+    <div id="list"></div>
+    <div id="empty" hidden></div>
+  </main>
+  <script type="module" src="/comments.js"></script>
+</body>
+</html>
