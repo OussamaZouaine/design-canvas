@@ -8,6 +8,7 @@ import { parseStyle, styleToString } from './css.mjs';
 import { normalizeTree } from './normalize.mjs';
 import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
 import { foundationsHtml } from './foundations.mjs';
+import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSheetHtml } from './components.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -87,7 +88,7 @@ export class Doc {
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
   _checkpoint(label) {
-    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme) });
+    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components) });
     if (this.undoStack.length > 50) this.undoStack.shift();
   }
 
@@ -99,6 +100,7 @@ export class Doc {
       const entry = this.undoStack.pop();
       this.data.artboards = entry.artboards;
       this.data.theme = entry.theme;
+      this.data.components = entry.components;
       reverted.push(entry.label);
     }
     if (reverted.length) {
@@ -149,6 +151,18 @@ export class Doc {
       const src = this._find(clone.getAttribute('node-id'));
       if (!src) throw new Error(`x-clone: node ${clone.getAttribute('node-id')} not found`);
       clone.replaceWith(...parse(src.el.toString().replace(/ data-pid="[^"]*"/g, '')).childNodes);
+    }
+    // <x-component name="button" variant="primary" slot-label="Save"> becomes a copy of that master
+    // variant with the slot text filled in. Instances are stored expanded (see components.mjs).
+    for (const x of root.querySelectorAll('x-component')) {
+      const name = x.getAttribute('name');
+      const comp = this.components[name];
+      if (!comp) throw new Error(`x-component: no component named "${name}". Create it with set_component.`);
+      const variant = x.getAttribute('variant') || defaultVariant(comp);
+      if (!comp.variants[variant]) throw new Error(`x-component: ${name} has no variant "${variant}" (has: ${Object.keys(comp.variants).join(', ')})`);
+      const slots = {};
+      for (const [k, v] of Object.entries(x.attributes)) if (k.startsWith('slot-')) slots[k.slice(5)] = v;
+      x.replaceWith(...parse(expand(comp.variants[variant], name, variant, { slots })).childNodes);
     }
     for (const tag of FORBIDDEN_TAGS) root.querySelectorAll(tag).forEach((n) => n.remove());
     const walk = (el) => {
@@ -256,6 +270,12 @@ export class Doc {
       const name = el.getAttribute('data-name');
       const txt = kindOf(el) === 'text' ? ` "${el.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` : '';
       const hidden = d >= depth && kids(el).length ? ` [${kids(el).length}]` : '';
+      const comp = el.getAttribute('data-component');
+      if (comp) {
+        // An instance reads as one tag: name/variant plus its slot text, children not listed.
+        const slotText = el.querySelectorAll('[data-slot]').map((s) => s.text.trim().replace(/\s+/g, ' ').slice(0, 30)).filter(Boolean);
+        return `${'  '.repeat(d)}${el.getAttribute('data-pid')} ${comp}/${el.getAttribute('data-variant')}${slotText.length ? ` ${slotText.map((t) => `"${t}"`).join(' ')}` : ''}${el.hasAttribute('data-locked') ? ' locked' : ''}`;
+      }
       return `${'  '.repeat(d)}${el.getAttribute('data-pid')} ${kindOf(el)}${name ? ` "${name}"` : ''}${txt}${bits.length ? ' ' + bits.join(' ') : ''}${hidden}${extra}`;
     };
     const walk = (el, d) => {
@@ -266,7 +286,7 @@ export class Doc {
           walk(c, d + 1); // keep searching: matches can be anywhere in the tree
         } else {
           lines.push(line(c, d));
-          if (d < depth) walk(c, d + 1);
+          if (d < depth && !c.getAttribute('data-component')) walk(c, d + 1);
         }
       }
     };
@@ -340,8 +360,8 @@ export class Doc {
   // hand-edits something that the next token change would overwrite.
   _refreshFoundations() {
     for (const ab of this.data.artboards) {
-      if (ab.generated !== 'foundations') continue;
-      const { html, height } = foundationsHtml(this.theme);
+      if (!ab.generated) continue;
+      const { html, height } = ab.generated === 'components' ? componentsSheetHtml(this.components, this.theme) : foundationsHtml(this.theme);
       ab.html = this._prepare(html, false).toString();
       ab.height = height;
     }
@@ -355,6 +375,95 @@ export class Doc {
       ab.generated = 'foundations';
     } else {
       this._checkpoint('create_foundations');
+    }
+    this._refreshFoundations();
+    this._commit();
+    return ab;
+  }
+
+  // ---- Components ------------------------------------------------------------
+
+  get components() { return this.data.components ?? {}; }
+
+  // Create a component or replace ALL of its variants, then re-expand every instance so they
+  // follow the master. `variants` maps variant name -> HTML (one root element, data-slot marks text).
+  setComponent(name, variants) {
+    checkName(name);
+    if (!variants || !Object.keys(variants).length) throw new Error('Give at least one variant');
+    const clean = {};
+    for (const [vname, html] of Object.entries(variants)) {
+      checkName(vname, 'Variant');
+      // Same sanitizing as any write, then drop the ids: a master has none, instances mint their own.
+      clean[vname] = this._prepare(String(html), false).toString().replace(/ data-pid="[^"]*"/g, '');
+      checkMaster(clean[vname], name, vname);
+    }
+    this._checkpoint('set_component');
+    const existed = name in this.components;
+    this.data.components = { ...this.components, [name]: { variants: clean } };
+    const updated = this._reexpand(name);
+    this._refreshFoundations();
+    this._commit();
+    return { created: !existed, instancesUpdated: updated };
+  }
+
+  // Re-expand every instance of a component in place. The instance's root id and its slot text are
+  // kept; everything else comes from the master. A variant that no longer exists falls back to the default.
+  _reexpand(name) {
+    const comp = this.components[name];
+    let count = 0;
+    for (const ab of this.data.artboards) {
+      if (ab.generated || !ab.html.includes(`data-component="${name}"`)) continue;
+      const root = this._artboardRoot(ab);
+      for (const el of root.querySelectorAll(`[data-component="${name}"]`)) {
+        const wanted = el.getAttribute('data-variant');
+        const variant = comp.variants[wanted] ? wanted : defaultVariant(comp);
+        const html = expand(comp.variants[variant], name, variant, { rawSlots: readSlots(el), pid: el.getAttribute('data-pid') });
+        el.replaceWith(...parse(this._prepare(html, false).toString()).childNodes); // _prepare gives the new children ids
+        count++;
+      }
+      this._save(ab, root);
+    }
+    return count;
+  }
+
+  // Remove a component; its instances stay as ordinary nodes (detached).
+  deleteComponent(name) {
+    if (!(name in this.components)) throw new Error(`No component named "${name}"`);
+    this._checkpoint('delete_component');
+    for (const ab of this.data.artboards) {
+      if (!ab.html.includes(`data-component="${name}"`)) continue;
+      const root = this._artboardRoot(ab);
+      for (const el of root.querySelectorAll(`[data-component="${name}"]`)) { el.removeAttribute('data-component'); el.removeAttribute('data-variant'); }
+      this._save(ab, root);
+    }
+    const { [name]: _gone, ...rest } = this.components;
+    this.data.components = rest;
+    this._refreshFoundations();
+    this._commit();
+  }
+
+  // Turn one instance into plain nodes so it no longer follows its master.
+  detach(id) {
+    const hit = this._find(id);
+    if (!hit) throw new Error(`Node ${id} not found`);
+    if (!hit.el.getAttribute('data-component')) throw new Error(`Node ${id} is not a component instance`);
+    this._assertUnlocked(hit.el, id);
+    this._checkpoint('detach_component');
+    hit.el.removeAttribute('data-component');
+    hit.el.removeAttribute('data-variant');
+    this._save(hit.ab, hit.root);
+    this._commit();
+  }
+
+  // The generated sheet that lists every component and variant (kept current by setComponent).
+  createComponentsSheet() {
+    if (!Object.keys(this.components).length) throw new Error('No components yet. Call set_component first.');
+    let ab = this.data.artboards.find((a) => a.generated === 'components');
+    if (!ab) {
+      ab = this.createArtboard({ name: 'Components', width: 1200, height: 600 }); // checkpoints itself
+      ab.generated = 'components';
+    } else {
+      this._checkpoint('create_components_sheet');
     }
     this._refreshFoundations();
     this._commit();

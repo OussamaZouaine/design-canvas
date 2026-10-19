@@ -6,6 +6,7 @@ import { extractTokens } from './tokens.mjs';
 import { formatIssues } from './lint.mjs';
 import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
+import { slotsOf } from './components.mjs';
 
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
@@ -234,9 +235,19 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
   }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
 
   server.registerTool('get_design_system', {
-    description: 'The design tokens as "name: value" lines (modes listed as "name [dark]: value"). Reference them in designs as var(--name). Empty until set_tokens is used; section limits to one family (color, space, radius, size, font, ...).',
-    inputSchema: { ...pid, section: z.enum(FAMILIES).optional() },
-  }, safe(({ project_id, section }) => text(describe(target(project_id).doc.theme, section) || 'No tokens yet. Call set_tokens (preset "starter" loads a ready scale).')));
+    description: 'The design tokens as "name: value" lines (modes listed as "name [dark]: value"), then the components with their variants and slots. Reference tokens as var(--name) and components with insert_component. section limits to one token family (color, space, radius, size, font, ...) or "components".',
+    inputSchema: { ...pid, section: z.enum([...FAMILIES, 'components']).optional() },
+  }, safe(({ project_id, section }) => {
+    const { doc } = target(project_id);
+    const tokens = section === 'components' ? '' : describe(doc.theme, section);
+    const comps = Object.entries(doc.components).map(([name, c]) => {
+      const first = Object.values(c.variants)[0];
+      const slots = Object.keys(slotsOf(first));
+      return `${name}: variants ${Object.keys(c.variants).join(', ')}${slots.length ? ` · slots ${slots.join(', ')}` : ''}`;
+    });
+    const out = [tokens, section && section !== 'components' ? '' : comps.length ? `components:\n${comps.join('\n')}` : ''].filter(Boolean).join('\n\n');
+    return text(out || 'No tokens or components yet. Call set_tokens (preset "starter") and set_component.');
+  }));
 
   server.registerTool('set_tokens', {
     description: 'Create or change design tokens (CSS custom properties). Names start with a family: ' + FAMILIES.join(', ') + ', e.g. color-primary, space-4, radius-md. Values are CSS (colours as oklch()). null deletes a token. mode "dark" writes overrides for that mode only. preset "starter" first loads a ready scale (semantic colours, 4px spacing, radii, type) into an empty theme. Designs use var(--color-primary), so changing a token restyles every board that uses it.',
@@ -261,6 +272,52 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     const ab = doc.createFoundations();
     log(meta, doc, 'create_foundations', ab.id);
     return text({ artboard_id: ab.id, width: ab.width, height: ab.height });
+  }));
+
+  server.registerTool('set_component', {
+    description: 'Create a component or replace all of its variants, then update every instance in every artboard. variants maps a variant name to one HTML root element (inline styles, preferably var(--tokens)); mark text that differs per instance with data-slot="label". Example: {"default": "<button style=\"...\"><span data-slot=\"label\">Button</span></button>", "primary": "..."}. Insert instances with insert_component. Instance text in slots survives a master edit; other edits made inside an instance are replaced by the master.',
+    inputSchema: { ...pid, name: z.string(), variants: z.record(z.string(), z.string().max(20_000)) },
+  }, safe(({ project_id, name, variants }) => {
+    const { meta, doc } = target(project_id);
+    const r = doc.setComponent(name, variants);
+    log(meta, doc, 'set_component', []);
+    return text({ name, variants: Object.keys(variants), ...r });
+  }));
+
+  server.registerTool('insert_component', {
+    description: 'Insert an instance of a component. target_id is an artboard or node; mode as in write_html (append, prepend, before, after). slots fills data-slot text, e.g. {"label": "Save"}. Returns the new node id. Far cheaper than writing the markup again.',
+    inputSchema: {
+      ...pid, target_id: z.string(), name: z.string(), variant: z.string().optional(),
+      slots: z.record(z.string(), z.string()).optional(),
+      mode: z.enum(['append', 'prepend', 'before', 'after']).optional(),
+    },
+  }, safe(({ project_id, target_id, name, variant, slots = {}, mode }) => {
+    const { meta, doc } = target(project_id);
+    const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    const tag = `<x-component name="${attr(name)}"${variant ? ` variant="${attr(variant)}"` : ''}${Object.entries(slots).map(([k, v]) => ` slot-${attr(k)}="${attr(v)}"`).join('')}></x-component>`;
+    const created = doc.writeHtml(target_id, tag, mode);
+    log(meta, doc, 'insert_component', created);
+    return text({ created });
+  }));
+
+  server.registerTool('detach_component', {
+    description: 'Turn one component instance into ordinary nodes so it stops following its master.',
+    inputSchema: { ...pid, node_id: z.string() },
+  }, safe(({ project_id, node_id }) => { const { meta, doc } = target(project_id); doc.detach(node_id); log(meta, doc, 'detach_component', node_id); return text('ok'); }));
+
+  server.registerTool('delete_component', {
+    description: 'Delete a component. Its instances stay in the designs as ordinary nodes.',
+    inputSchema: { ...pid, name: z.string() },
+  }, safe(({ project_id, name }) => { const { meta, doc } = target(project_id); doc.deleteComponent(name); log(meta, doc, 'delete_component', []); return text('ok'); }));
+
+  server.registerTool('create_components_sheet', {
+    description: 'Create (or refresh) the read-only "Components" artboard that shows every component and variant. It updates itself when components change.',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.createComponentsSheet();
+    log(meta, doc, 'create_components_sheet', ab.id);
+    return text({ artboard_id: ab.id, height: ab.height });
   }));
 
   server.registerTool('get_changes', {
