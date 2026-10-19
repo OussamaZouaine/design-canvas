@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# user data: projects, versions, comments and activity live here (regenerated at runtime)
+data/
+
+# temp / recovery files written by the app's atomic saves
+*.tmp
+*.corrupt
+design.json.migrated
+
+# local env, logs, OS and editor noise
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
