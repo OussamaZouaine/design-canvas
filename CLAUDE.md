@@ -18,7 +18,8 @@ elements, and Claude reads and answers those comments. Local only, no database (
 - `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there.
 - `src/store.mjs` `ProjectStore`: projects, snapshots (versions), activity log, comments, active project.
 - `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
-- `src/lint.mjs` static lint (`lint` tool); `src/export.mjs` React+Tailwind export; `src/meter.mjs` per-tool token estimates
+- `src/normalize.mjs` opt-in HTML normalization on write (`meta.normalize`: on for new projects, off for Sprig and imports).
+- `src/lint.mjs` static lint (`lint` tool; spacing grid 4 by default, use `grid: 2` for Sprig); `src/export.mjs` React+Tailwind export; `src/meter.mjs` per-tool token estimates
   (`/api/status`). `test/` holds `node:test` tests: run `pnpm test` before committing.
 - `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
 - `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
