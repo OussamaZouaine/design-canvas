@@ -778,8 +778,10 @@ events.addEventListener('computed', async (e) => {
 async function rasterizeCanvas(ab, scale, crop = { x: 0, y: 0, w: ab.width, h: ab.height }) {
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
-  const xhtml = '<style>[hidden]{display:none !important}</style>' + new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls().replace(/"/g, '&quot;')}">${xhtml.replace(/^<div[^>]*>|<\/div>$/g, '')}</div></foreignObject></svg>`;
+  // HTML -> well-formed XML (required by SVG), minus the holder div we wrapped it in. The [hidden] rule is added
+  // AFTER stripping: the strip regex anchors on the holder's opening tag at the very start.
+  const xhtml = '<style>[hidden]{display:none !important}</style>' + new XMLSerializer().serializeToString(holder).replace(/^<div[^>]*>|<\/div>$/g, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls().replace(/"/g, '&quot;')}">${xhtml}</div></foreignObject></svg>`;
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   await img.decode();
