@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "design-canvas": { "type": "http", "url": "http://localhost:3777/mcp" }
+  }
+}

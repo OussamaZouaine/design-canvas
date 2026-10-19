@@ -1,0 +1,6 @@
+{
+  "name": "design-canvas",
+  "version": "0.3.0",
+  "description": "Design on a local infinite canvas: HTML artboards Claude writes, checks and fixes, shared live in the browser.",
+  "author": { "name": "Oussama Zouaine" }
+}
