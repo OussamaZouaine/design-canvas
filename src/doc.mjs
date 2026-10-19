@@ -26,6 +26,12 @@ export class Doc {
     this.file = file;
     this.data = { counter: 0, artboards: [] };
     this.listeners = new Set();
+    // In-memory only (not saved): the last states Claude/the user can step back to.
+    this.undoStack = [];
+    // Who changed what, newest last. `version` grows by one per entry, so a reader can ask
+    // "what changed since version N" instead of re-reading whole artboards.
+    this.journal = [];
+    this.version = 0;
     if (file && fs.existsSync(file)) {
       try {
         this.data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -62,6 +68,7 @@ export class Doc {
   // Swap in a whole document (snapshot restore / import) and notify listeners.
   replace(data) {
     this.data = data;
+    this.undoStack = []; // history belongs to the old document
     this._commit();
   }
 
@@ -78,6 +85,49 @@ export class Doc {
     for (const ab of this.data.artboards) ab.html = this._prepare(String(ab.html)).toString();
   }
 
+  // ---- Undo + change journal ----------------------------------------------
+
+  // Remember the current artboards before a mutation. Artboard objects are shallow-copied
+  // because mutations replace `html` strings (immutable) rather than editing them in place,
+  // so a copy is cheap even for a multi-megabyte design.
+  _checkpoint(label) {
+    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })) });
+    if (this.undoStack.length > 50) this.undoStack.shift();
+  }
+
+  // Step back `steps` mutations. The id counter is deliberately NOT rewound, so an id that was
+  // handed out once is never reused for a different node.
+  undo(steps = 1) {
+    const reverted = [];
+    for (let i = 0; i < steps && this.undoStack.length; i++) {
+      const entry = this.undoStack.pop();
+      this.data.artboards = entry.artboards;
+      reverted.push(entry.label);
+    }
+    if (reverted.length) {
+      this.record('claude', 'undo', []);
+      this._commit();
+    }
+    return reverted;
+  }
+
+  // Note a change for get_changes. `actor` is 'user' (browser) or 'claude' (MCP).
+  record(actor, tool, ids = []) {
+    this.journal.push({ version: ++this.version, actor, tool, ids, at: Date.now() });
+    if (this.journal.length > 500) this.journal.shift();
+  }
+
+  changesSince(version, actor) {
+    return this.journal.filter((e) => e.version > version && (!actor || e.actor === actor));
+  }
+
+  // A locked node (data-locked) or anything inside one can't be edited until it is unlocked.
+  _assertUnlocked(el, id) {
+    for (let n = el; n instanceof HTMLElement; n = n.parentNode) {
+      if (n.hasAttribute?.('data-locked')) throw new Error(`Node ${id} is locked (data-locked). Remove the lock first.`);
+    }
+  }
+
   _newId(prefix) {
     return `${prefix}${++this.data.counter}`;
   }
@@ -88,6 +138,13 @@ export class Doc {
   // target individual nodes later (like Paper's node ids).
   _prepare(html) {
     const root = parse(html, { comment: false });
+    // <x-clone node-id="N5"> is replaced by a copy of that node, so Claude can repeat a card
+    // without resending its markup. The copy loses its ids and gets fresh ones below.
+    for (const clone of root.querySelectorAll('x-clone')) {
+      const src = this._find(clone.getAttribute('node-id'));
+      if (!src) throw new Error(`x-clone: node ${clone.getAttribute('node-id')} not found`);
+      clone.replaceWith(...parse(src.el.toString().replace(/ data-pid="[^"]*"/g, '')).childNodes);
+    }
     for (const tag of FORBIDDEN_TAGS) root.querySelectorAll(tag).forEach((n) => n.remove());
     const walk = (el) => {
       for (const child of el.childNodes) {
@@ -183,6 +240,7 @@ export class Doc {
 
   createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y } = {}) {
     // Place new artboards to the right of the rightmost one so they never overlap.
+    this._checkpoint('create_artboard');
     const right = this.data.artboards.reduce((m, a) => Math.max(m, a.x + a.width), -120);
     const ab = {
       id: this._newId('A'),
@@ -198,20 +256,31 @@ export class Doc {
     return ab;
   }
 
-  // Add HTML into an artboard or into an existing node. mode: append | replace.
+  // Add HTML into an artboard or relative to a node.
+  //   append / prepend: inside the target, last / first   replace: swap the target's children
+  //   before / after:   next to the target (nodes only, an artboard has no siblings)
   writeHtml(targetId, html, mode = 'append') {
     const ab = this.getArtboard(targetId);
     if (ab) {
+      if (mode === 'before' || mode === 'after') throw new Error('before/after need a node id, not an artboard id');
       const prepared = this._prepare(html);
-      ab.html = mode === 'replace' ? prepared.toString() : ab.html + prepared.toString();
+      this._checkpoint('write_html');
+      const out = prepared.toString();
+      ab.html = mode === 'replace' ? out : mode === 'prepend' ? out + ab.html : ab.html + out;
       this._commit();
       return this._topLevelIds(prepared);
     }
     const hit = this._find(targetId);
     if (!hit) throw new Error(`Target ${targetId} is neither an artboard nor a node`);
+    // Inserting beside a locked node is fine; changing what is inside one is not.
+    if (mode !== 'before' && mode !== 'after') this._assertUnlocked(hit.el, targetId);
     const prepared = this._prepare(html);
+    this._checkpoint('write_html');
     if (mode === 'replace') hit.el.set_content(prepared.toString());
-    else hit.el.insertAdjacentHTML('beforeend', prepared.toString());
+    else {
+      const where = { append: 'beforeend', prepend: 'afterbegin', before: 'beforebegin', after: 'afterend' }[mode];
+      hit.el.insertAdjacentHTML(where, prepared.toString());
+    }
     this._save(hit.ab, hit.root);
     this._commit();
     return this._topLevelIds(prepared);
@@ -222,9 +291,17 @@ export class Doc {
   }
 
   updateStyles(ids, styles) {
+    // Validate every id first so a bad id can't leave the batch half-applied.
     for (const id of ids) {
       const hit = this._find(id);
       if (!hit) throw new Error(`Node ${id} not found`);
+      this._assertUnlocked(hit.el, id);
+    }
+    this._checkpoint('update_styles');
+    // Re-find per id: each lookup parses a fresh copy of its artboard, and saving a stale copy
+    // would overwrite the previous node's edit when two ids share an artboard.
+    for (const id of ids) {
+      const hit = this._find(id);
       const map = parseStyle(hit.el.getAttribute('style'));
       for (const [k, v] of Object.entries(styles)) {
         // null/'' removes a property; accept camelCase like Paper does.
@@ -240,6 +317,8 @@ export class Doc {
   setText(id, text) {
     const hit = this._find(id);
     if (!hit) throw new Error(`Node ${id} not found`);
+    this._assertUnlocked(hit.el, id);
+    this._checkpoint('set_text_content');
     // Escape so AI-provided text can never inject markup.
     hit.el.set_content(text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
     this._save(hit.ab, hit.root);
@@ -247,6 +326,7 @@ export class Doc {
   }
 
   deleteNodes(ids) {
+    this._checkpoint('delete_nodes');
     for (const id of ids) {
       const ab = this.getArtboard(id);
       if (ab) {
@@ -255,6 +335,7 @@ export class Doc {
       }
       const hit = this._find(id);
       if (!hit) throw new Error(`Node ${id} not found`);
+      this._assertUnlocked(hit.el, id);
       hit.el.remove();
       this._save(hit.ab, hit.root);
     }
@@ -262,6 +343,7 @@ export class Doc {
   }
 
   renameNodes(map) {
+    this._checkpoint('rename_nodes');
     for (const [id, name] of Object.entries(map)) {
       const ab = this.getArtboard(id);
       if (ab) { ab.name = name; continue; }
@@ -274,6 +356,7 @@ export class Doc {
   }
 
   duplicateNodes(ids) {
+    this._checkpoint('duplicate_nodes');
     const out = [];
     for (const id of ids) {
       const ab = this.getArtboard(id);
