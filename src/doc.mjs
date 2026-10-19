@@ -220,6 +220,65 @@ export class Doc {
     return lines.join('\n');
   }
 
+  // Compact one-line-per-node outline, much cheaper to read than HTML. Shape:
+  //   N5 frame "Sidebar" col w:240 bg:oklch(...) gap:16 [6]      ([n] = children not shown)
+  // `id` may be an artboard or a node; with a `query` it lists every node whose name or text matches.
+  outline(id, { depth = 2, query } = {}) {
+    const ids = id ? [id] : this.data.artboards.map((a) => a.id);
+    const q = query?.toLowerCase();
+    const lines = [];
+    const kids = (el) => el.childNodes.filter((c) => c instanceof HTMLElement);
+    const kindOf = (el) => {
+      const t = el.rawTagName.toLowerCase();
+      if (t === 'svg') return 'svg';
+      if (t === 'img') return 'image';
+      // Only text/inline children: Paper flattens these into one text layer, so we call it text.
+      const inline = new Set(['span', 'b', 'strong', 'i', 'em', 'a', 'br', 'small', 'sub', 'sup', 'code']);
+      return kids(el).every((c) => inline.has(c.rawTagName.toLowerCase())) && el.text.trim() ? 'text' : 'frame';
+    };
+    const line = (el, d, extra = '') => {
+      const st = parseStyle(el.getAttribute('style'));
+      const bits = [];
+      if (/flex/.test(st.get('display') || '')) bits.push(st.get('flex-direction')?.startsWith('column') ? 'col' : 'row');
+      else if (st.get('display') === 'grid') bits.push('grid');
+      if (st.get('position') === 'absolute') bits.push('abs');
+      for (const [k, short] of [['width', 'w'], ['height', 'h'], ['background', 'bg'], ['background-color', 'bg'], ['color', 'fg'], ['gap', 'gap'], ['padding', 'p']]) {
+        if (st.has(k) && !bits.some((b) => b.startsWith(short + ':'))) bits.push(`${short}:${st.get(k).slice(0, 28)}`);
+      }
+      if (el.hasAttribute('data-locked')) bits.push('locked');
+      if (el.hasAttribute('hidden')) bits.push('hidden');
+      const name = el.getAttribute('data-name');
+      const txt = kindOf(el) === 'text' ? ` "${el.text.trim().replace(/\s+/g, ' ').slice(0, 40)}"` : '';
+      const hidden = d >= depth && kids(el).length ? ` [${kids(el).length}]` : '';
+      return `${'  '.repeat(d)}${el.getAttribute('data-pid')} ${kindOf(el)}${name ? ` "${name}"` : ''}${txt}${bits.length ? ' ' + bits.join(' ') : ''}${hidden}${extra}`;
+    };
+    const walk = (el, d) => {
+      for (const c of kids(el)) {
+        if (q) {
+          const hay = `${c.getAttribute('data-name') || ''} ${c.text}`.toLowerCase();
+          if (hay.includes(q) && kids(c).every((k) => !`${k.getAttribute('data-name') || ''} ${k.text}`.toLowerCase().includes(q))) lines.push(line(c, 0));
+          walk(c, d + 1); // keep searching: matches can be anywhere in the tree
+        } else {
+          lines.push(line(c, d));
+          if (d < depth) walk(c, d + 1);
+        }
+      }
+    };
+    for (const one of ids) {
+      const ab = this.getArtboard(one);
+      if (ab) {
+        lines.push(`${ab.id} artboard "${ab.name}" ${ab.width}×${ab.height}`);
+        walk(this._artboardRoot(ab), q ? 0 : 1);
+        continue;
+      }
+      const hit = this._find(one);
+      if (!hit) throw new Error(`Node ${one} not found`);
+      if (!q) lines.push(line(hit.el, 0));
+      walk(hit.el, q ? 0 : 1);
+    }
+    return lines.join('\n');
+  }
+
   nodeInfo(id) {
     const hit = this._find(id);
     if (!hit) throw new Error(`Node ${id} not found`);
