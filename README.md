@@ -108,6 +108,7 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Tokens | `get_design_tokens` (scan what designs use), `get_design_system`, `set_tokens`, `create_foundations` (stored theme: CSS variables with modes) |
 | Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
 | Components | `set_component`, `insert_component`, `detach_component`, `delete_component`, `create_components_sheet` |
+| Layers | `move_node`, `set_flags` (hidden / locked); in the app: Layers panel (`L`) |
 | Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `undo` |
 | Verifying | `lint` (contrast, small text, spacing, undefined tokens; resolves `var()`), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
 | Output | `export_html`, `export_react` (JSX + Tailwind arbitrary-property classes) |

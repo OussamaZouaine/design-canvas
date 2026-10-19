@@ -2,6 +2,7 @@
 // "Claude is designing" animation, handles comment pins, and drives the side drawer
 // (comments, activity, versions, tokens). Everything user-visible that Claude or a
 // collaborator wrote is inserted with textContent / DOM nodes, never innerHTML.
+import { initLayers } from '/layers.js';
 const $ = (s) => document.querySelector(s);
 const viewport = $('#viewport');
 const world = $('#world');
@@ -13,6 +14,9 @@ const api = `/api/p/${projectId}`;
 const papi = `/api/projects/${projectId}`;
 
 let doc = { artboards: [] };
+let userEditUntil = 0; // doc changes arriving before this time came from the user's own edit
+const markUserEdit = () => { userEditUntil = Date.now() + 1500; };
+let layers = null; // the Layers panel controller, created once everything it needs exists (bottom of this file)
 
 // ---- Theme (design tokens) ----------------------------------------------------
 // Tokens are CSS custom properties. Setting them on each artboard's shadow host (and on the
@@ -107,7 +111,7 @@ function mountFrame(el, ab) {
   const frame = el.querySelector('.frame');
   if (frame._shown === ab.html) return false;
   const oldHtml = frame._shown ?? '';
-  frame.shadowRoot.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}</style><style data-theme>:host{${themeDecls()}}</style><div style="position:relative;width:100%;height:100%">${ab.html}</div>`;
+  frame.shadowRoot.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}[hidden]{display:none !important}</style><style data-theme>:host{${themeDecls()}}</style><div style="position:relative;width:100%;height:100%">${ab.html}</div>`;
   frame._shown = ab.html;
   el.classList.remove('lod');
   frame._oldHtml = oldHtml;
@@ -307,7 +311,8 @@ function render({ animate = false } = {}) {
     const el = abEls.get(ab.id);
     return !el || el.querySelector('.frame')._html !== ab.html;
   });
-  const showGen = animate && changed.length <= 3;
+  // Edits the user just made themselves (layers panel, theme tab) are not "Claude designing": no reveal animation, no camera follow.
+  const showGen = animate && changed.length <= 3 && Date.now() > userEditUntil;
 
   for (const ab of doc.artboards) {
     seen.add(ab.id);
@@ -429,8 +434,20 @@ function glide(ms) {
 
 // Outline the selected element. getBoundingClientRect already accounts for the
 // world transform, so the box lands in the right place at any pan/zoom.
+// Thin box for the layer the pointer is over in the Layers panel (same rect maths as the selection box).
+let hoverId = null;
+function drawHover() {
+  const box = $('#hover');
+  const el = hoverId && findElement(hoverId);
+  if (!el) { box.hidden = true; return; }
+  const r = el.getBoundingClientRect();
+  Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  box.hidden = false;
+}
+
 function drawSelection() {
   drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
+  drawHover();
   const target = selected && findElement(selected);
   if (!target) { selBox.hidden = true; return; }
   const r = target.getBoundingClientRect();
@@ -469,6 +486,7 @@ function findElement(id, { mount = false } = {}) {
 
 function select(id) {
   selected = id;
+  layers?.reveal(id); // open the tree down to it and scroll it into view
   post(`${api}/selection`, { ids: id ? [id] : [] });
   render();
 }
@@ -553,8 +571,10 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!$('#pop').hidden) closePop();
     else if (commentMode) setCommentMode(false);
+    else if (selected && !selected.startsWith('A') && layers?.parentOf(selected)) select(layers.parentOf(selected)); // up one level
     else select(null);
   }
+  if (e.key.toLowerCase() === 'l' && !e.metaKey && !e.ctrlKey && !e.altKey) layers?.toggle();
   if (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey && $('#pop').hidden) setCommentMode(!commentMode);
   if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selected) { e.preventDefault(); post(`${api}/duplicate`, { ids: [selected] }); }
 });
@@ -601,6 +621,7 @@ events.addEventListener('doc', (e) => {
   for (const ab of doc.artboards) if (ab.html === null) ab.html = prev.get(ab.id) ?? '';
   $('#count').textContent = `${doc.artboards.length} artboard${doc.artboards.length === 1 ? '' : 's'}`;
   render({ animate: !firstDoc });
+  layers?.refresh();
   applyTheme();
   refreshTheme();
   $('#hint').hidden = doc.artboards.length > 0;
@@ -660,7 +681,7 @@ events.addEventListener('computed', async (e) => {
 async function rasterizeCanvas(ab, scale, crop = { x: 0, y: 0, w: ab.width, h: ab.height }) {
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
-  const xhtml = new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
+  const xhtml = '<style>[hidden]{display:none !important}</style>' + new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls().replace(/"/g, '&quot;')}">${xhtml.replace(/^<div[^>]*>|<\/div>$/g, '')}</div></foreignObject></svg>`;
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -841,6 +862,7 @@ async function loadMcp() {
 // restyles the boards. Not to be confused with the Tokens tab, which only *reads* what the
 // designs already use.
 async function postTheme(body) {
+  markUserEdit();
   const r = await post(`${api}/theme`, body);
   if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Could not save the token');
 }
@@ -1063,3 +1085,10 @@ function openThread(id, keepPosition = false) {
 const claimActive = () => { if (document.visibilityState === 'visible') post(`${papi}/activate`, {}); };
 claimActive();
 document.addEventListener('visibilitychange', claimActive);
+
+// ---- Layers panel ---------------------------------------------------------------
+layers = initLayers({
+  h, markUserEdit, getDoc: () => doc, getSelected: () => selected, select, post, api, toast, abOf,
+  onHover: (id) => { hoverId = id; drawHover(); },
+});
+$('#open-layers').onclick = () => layers.toggle();
