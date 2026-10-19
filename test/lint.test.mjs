@@ -59,3 +59,13 @@ test('node-scoped lint works', () => {
   const [id] = doc.writeHtml(ab.id, '<p style="color:#ccc">x</p>');
   assert.match(doc.lint(id).join(''), /low contrast/);
 });
+
+test('disabled and aria-hidden text is exempt from contrast', () => {
+  assert.deepEqual(lint('<button aria-disabled="true"><span style="color:#ddd">Off</span></button>'), []);
+  assert.deepEqual(lint('<p aria-hidden="true" style="color:#eee">404</p>'), []);
+});
+
+test('a negative offset inside a positioned parent is not off-artboard', () => {
+  assert.deepEqual(lint('<div style="position:relative"><i style="position:absolute;top:-6px;right:-6px"></i></div>'), []);
+  assert.match(lint('<i style="position:absolute;top:-6px"></i>').join(''), /outside the artboard/);
+});
