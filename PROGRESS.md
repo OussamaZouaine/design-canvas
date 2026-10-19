@@ -37,13 +37,18 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
   per-client `sent` map in `sendDoc` (`src/server.mjs`).
 - Zoomed-out snapshots are slightly soft on high-DPI screens below 30% zoom (`LIVE_K`, snapshot scale cap 0.5).
 - `elementLabel` in `public/app.js` mounts an artboard to read an element's text; acceptable, could be avoided.
-- `ink3` (tertiary text) is 3.3:1 on white: placeholders only. `lineStrong` is decorative (1.4:1 light).
+- `lint` on Sprig (grid 2) still reports ~50 light-theme items, mostly faded calendar days, the lilac logo tile and a few
+  half-step paddings; `lineStrong` is decorative (1.4:1 light). Run `lint` with `grid: 2` per artboard to see them.
 - New tools (`get_tree`, `lint`, `undo`, `get_changes`, `export_react`...) need a Claude Code restart to appear in a session started earlier.
 - The MCP `create_artboard` x/y arguments need a Claude Code restart to appear in a session started before they were added.
 
 15. Build-plan adoption (2026-10-19): `get_tree`, write modes + `<x-clone>`, locked nodes, `undo`, `get_changes`, `lint`,
     lean screenshots + `get_computed_styles`, `finish_working` highlight, token metering + `/api/status`, Origin check,
     `export_react`, Claude Code plugin + skill, unit tests. Details and what is left: `docs/ROADMAP.md`.
+
+16. Plan leftovers closed (2026-10-19): opt-in HTML normalization per project (`meta.normalize`, on for new projects),
+    lint spacing grid parameter (default 4, Sprig uses 2), and the Sprig contrast/size findings fixed at the source
+    (`ink3` darkened, status text on `*Ink`, 12px minimum, disabled states marked) and rebuilt.
 
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.

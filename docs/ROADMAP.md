@@ -32,7 +32,8 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - `Origin` check on every request (DNS rebinding was already covered by the Host check).
 - `export_react` (JSX + Tailwind arbitrary-property classes).
 - Claude Code plugin: `.claude-plugin/`, `.mcp.json`, `skills/design-canvas/SKILL.md`.
-- Unit tests (`pnpm test`) for the doc model, lint, export and meter.
+- Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
+- Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
 ## Not done, in suggested order
 
@@ -48,8 +49,8 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 6. **Pages** inside a project, `navigate`, dashboard tabs.
 7. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-8. **Normalization on write** (flatten text blocks, drop classes, strip redundant styles). Left out on purpose: the
-   Sprig boards rely on current markup and a destructive rewrite would change them. Needs an opt-in or a migration.
+8. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+   class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
 9. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
    Tailwind theme and import them back).
 10. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
@@ -57,6 +58,7 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 
 ## Deliberate differences to revisit
 
-- The lint's spacing rule is a 2px grid, not 4px: the Sprig system uses half-steps (6/10/14) on purpose.
+- `lint` spacing defaults to the plan's 4px grid; pass `grid: 2` for designs with deliberate half-steps (Sprig).
+- Normalization is per project: new projects have it on, existing ones (Sprig), imports and their copies keep it off.
 - `lint` cannot see layout; overflow and clipping still need a screenshot or `get_computed_styles`.
 - Undo does not cover user drags/resizes in the browser, and is lost when the server restarts.
