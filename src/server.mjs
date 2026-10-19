@@ -66,6 +66,7 @@ store.on((type, payload) => {
     else if (type === 'comments' && c.projectId === payload.id) send(c.res, 'comments', payload.comments);
     else if (type === 'activity' && c.projectId === payload.id) send(c.res, 'activity', {});
     else if (type === 'projects' && c.projectId === null) send(c.res, 'projects', {});
+    else if (type === 'comments' && c.projectId === null) send(c.res, 'comments-changed', {});
   }
 });
 
@@ -221,6 +222,23 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, store.import(await readJson(req)));
       }
 
+      // Every comment in every non-trashed project, newest activity first (powers /comments).
+      if (parts[1] === 'comments' && req.method === 'GET') {
+        const out = [];
+        for (const m of store.list()) {
+          const { doc } = store.get(m.id);
+          for (const c of store.listComments(m.id)) {
+            let element = null;
+            try { const n = doc.nodeInfo(c.targetId); element = { tag: n.tag, text: String(n.text || '').slice(0, 80), artboard: n.artboard }; } catch { /* target deleted or is an artboard */ }
+            const abId = element?.artboard || c.artboardId || (c.targetId.startsWith('A') ? c.targetId : '');
+            const ab = abId && doc.getArtboard(abId);
+            out.push({ ...c, projectId: m.id, projectName: m.name, artboardName: ab ? ab.name : null, element, orphaned: !element && !(ab && c.targetId === abId) });
+          }
+        }
+        out.sort((a, b) => Math.max(b.createdAt, ...b.replies.map((r) => r.createdAt)) - Math.max(a.createdAt, ...a.replies.map((r) => r.createdAt)));
+        return json(res, 200, out);
+      }
+
       // Single project: /api/projects/:id/<action>
       if (parts[1] === 'projects' && ID_RE.test(parts[2] || '')) {
         const id = parts[2];
@@ -259,6 +277,7 @@ const server = http.createServer(async (req, res) => {
 
     // --- Pages ---
     if (url.pathname === '/') return serveFile(res, path.join(PUBLIC, 'index.html'));
+    if (url.pathname === '/comments') return serveFile(res, path.join(PUBLIC, 'comments.html'));
     if (parts[0] === 'p' && parts.length === 2) {
       // Unknown or trashed project: back to the home page instead of a broken canvas.
       const p = ID_RE.test(parts[1]) ? store.get(parts[1]) : null;
