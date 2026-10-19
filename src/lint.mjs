@@ -69,11 +69,27 @@ const over = (fg, bg) => fg.rgb.map((c, i) => c * fg.alpha + bg[i] * (1 - fg.alp
 
 // ---- style helpers ------------------------------------------------------------
 
-function styleMap(el) {
+// Replace var(--name) / var(--name, fallback) with the token's value so colours and spacing that
+// come from the theme are checked like literals. Tokens may reference tokens, hence the loop.
+// `missing` collects names with neither a token nor a fallback (a typo that renders as nothing).
+function resolveVars(value, tokens, missing) {
+  let out = value;
+  for (let i = 0; i < 5 && /var\(/.test(out); i++) {
+    out = out.replace(/var\(\s*--([a-z0-9-]+)\s*(?:,\s*([^()]*))?\)/gi, (whole, name, fallback) => {
+      if (name in tokens) return tokens[name];
+      if (fallback !== undefined) return fallback.trim();
+      missing?.add(name);
+      return whole;
+    });
+  }
+  return out;
+}
+
+function styleMap(el, tokens = {}, missing) {
   const map = new Map();
   for (const decl of (el.getAttribute('style') || '').split(';')) {
     const i = decl.indexOf(':');
-    if (i > 0) map.set(decl.slice(0, i).trim().toLowerCase(), decl.slice(i + 1).trim());
+    if (i > 0) map.set(decl.slice(0, i).trim().toLowerCase(), resolveVars(decl.slice(i + 1).trim(), tokens, missing));
   }
   return map;
 }
@@ -83,7 +99,7 @@ const MAX_LINES = 40;
 
 // Lint everything under `rootEl` (a parsed artboard or one node). `ab` supplies the size that
 // widths and offsets are checked against.
-export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
+export function lintArtboard(ab, rootEl, { grid = 4, tokens = {} } = {}) {
   const issues = [];
   const add = (el, msg) => issues.push(`${el.getAttribute('data-pid')} ${msg}`);
 
@@ -92,7 +108,9 @@ export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
   const walk = (el, inherit) => {
     for (const child of el.childNodes) {
       if (!(child instanceof HTMLElement)) continue;
-      const st = styleMap(child);
+      const missing = new Set();
+      const st = styleMap(child, tokens, missing);
+      for (const name of missing) add(child, `var(--${name}) is not a defined token and has no fallback`);
       const tag = child.rawTagName.toLowerCase();
       const ctx = { ...inherit };
 
