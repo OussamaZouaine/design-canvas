@@ -7,7 +7,7 @@ import { extractTokens } from './tokens.mjs';
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
 0b. LOG THE REQUEST. At the start of every new user request, call log_prompt with the request in the user's own words (one short sentence). It records the request in the project's Activity and saves a restore point so the user can roll back to before it.
-1. get_basic_info to see the project's artboards.
+1. get_basic_info to see the project's artboards; get_tree for a compact outline (use query to find a node by name or text).
 2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
 3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
 4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
@@ -204,6 +204,11 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
     log(meta, doc, 'write_html', target_id);
     return text({ created });
   }));
+
+  server.registerTool('get_tree', {
+    description: 'Compact outline, one line per node: id, kind (frame/text/image/svg), name, layout, key styles, [n] hidden children. Far cheaper than HTML: read this first, then get_node_info only for the node you will change. node_id is an artboard or node (default: every artboard); query finds nodes by name or text.',
+    inputSchema: { ...pid, node_id: z.string().optional(), depth: z.number().int().min(1).max(10).optional(), query: z.string().min(1).max(100).optional() },
+  }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
 
   server.registerTool('undo', {
     description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',

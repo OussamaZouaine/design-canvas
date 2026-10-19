@@ -67,3 +67,22 @@ test('journal records changes by actor', () => {
   assert.equal(doc.changesSince(0, 'user').length, 1);
   assert.equal(doc.changesSince(doc.version).length, 0);
 });
+
+test('outline is one compact line per node and supports search', () => {
+  const { doc, ab } = setup();
+  doc.writeHtml(ab.id, '<div data-name="Hero" style="display:flex; flex-direction:column; gap:16px"><h1>Welcome back</h1><svg></svg></div>');
+  const out = doc.outline(ab.id, { depth: 2 });
+  assert.match(out, /artboard "Test"/);
+  assert.match(out, /frame "Hero" col gap:16px/);
+  assert.match(out, /text "Welcome back"/);
+  assert.match(out, /svg/);
+  assert.match(doc.outline(undefined, { query: 'welcome' }), /Welcome back/);
+  assert.doesNotMatch(doc.outline(undefined, { query: 'welcome' }), /Hero/);
+});
+
+test('outline marks locked nodes and counts hidden children', () => {
+  const { doc, ab } = setup();
+  doc.writeHtml(ab.id, '<div data-locked><p>a</p><p>b</p></div>');
+  const out = doc.outline(ab.id, { depth: 1 });
+  assert.match(out, /locked \[2\]/);
+});
