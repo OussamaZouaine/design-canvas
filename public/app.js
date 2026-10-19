@@ -13,6 +13,17 @@ const api = `/api/p/${projectId}`;
 const papi = `/api/projects/${projectId}`;
 
 let doc = { artboards: [] };
+
+// ---- Theme (design tokens) ----------------------------------------------------
+// Tokens are CSS custom properties. Setting them on each artboard's shadow host (and on the
+// screenshot wrapper) makes var(--color-primary) resolve inside the design, and custom
+// properties inherit through shadow boundaries, so one edit restyles every board at once.
+let themeMode = 'base'; // 'base' or a mode name from doc.theme.modes (a view setting, not saved)
+const themeDecls = () => {
+  const t = doc.theme ?? { tokens: {}, modes: {} };
+  const merged = { ...t.tokens, ...(themeMode === 'base' ? {} : t.modes?.[themeMode] ?? {}) };
+  return Object.entries(merged).map(([k, v]) => `--${k}: ${v}`).join('; ');
+};
 let comments = [];
 let view = { x: 80, y: 90, k: 0.5 }; // pan offset + zoom factor (k)
 let selected = null; // id of the selected node or artboard
@@ -96,7 +107,7 @@ function mountFrame(el, ab) {
   const frame = el.querySelector('.frame');
   if (frame._shown === ab.html) return false;
   const oldHtml = frame._shown ?? '';
-  frame.shadowRoot.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}</style><div style="position:relative;width:100%;height:100%">${ab.html}</div>`;
+  frame.shadowRoot.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}</style><style data-theme>:host{${themeDecls()}}</style><div style="position:relative;width:100%;height:100%">${ab.html}</div>`;
   frame._shown = ab.html;
   el.classList.remove('lod');
   frame._oldHtml = oldHtml;
@@ -158,7 +169,7 @@ let thumbBusy = false;
 function wantThumb(ab) {
   const el = abEls.get(ab.id);
   const frame = el.querySelector('.frame');
-  frame._hash ??= hashStr(ab.html);
+  frame._hash ??= hashStr(ab.html + themeDecls());
   const key = `${projectId}:${ab.id}:${frame._hash}`;
   if (el._thumbKey === key) return;
   thumbQueue.set(ab.id, key);
@@ -590,6 +601,8 @@ events.addEventListener('doc', (e) => {
   for (const ab of doc.artboards) if (ab.html === null) ab.html = prev.get(ab.id) ?? '';
   $('#count').textContent = `${doc.artboards.length} artboard${doc.artboards.length === 1 ? '' : 's'}`;
   render({ animate: !firstDoc });
+  applyTheme();
+  refreshTheme();
   $('#hint').hidden = doc.artboards.length > 0;
   // Fit on load, and again when the first artboard ever appears (an empty doc has nothing to fit).
   if (firstDoc || (!hadArtboards && doc.artboards.length)) { firstDoc = false; fit(); }
@@ -604,6 +617,24 @@ events.addEventListener('screenshot', async (e) => {
     await post(`${api}/screenshot`, { id, error: String(err.message || err) });
   }
 });
+
+// Push the current tokens into every mounted board and redraw bitmaps that were drawn with old
+// values. Runs on each doc event but does nothing unless the tokens (or the mode) actually changed.
+let appliedTheme = '';
+function applyTheme() {
+  const decls = themeDecls();
+  if (decls === appliedTheme) return;
+  appliedTheme = decls;
+  for (const ab of doc.artboards) {
+    const el = abEls.get(ab.id);
+    if (!el) continue;
+    const frame = el.querySelector('.frame');
+    const style = frame.shadowRoot.querySelector('style[data-theme]');
+    if (style) style.textContent = `:host{${decls}}`;
+    frame._hash = null;
+    scheduleThumb(ab);
+  }
+}
 
 // Claude asked for computed styles. Only a laid-out DOM knows real values (resolved colours,
 // used widths), so read them from the live node, mounting its board first if needed.
@@ -630,7 +661,7 @@ async function rasterizeCanvas(ab, scale, crop = { x: 0, y: 0, w: ab.width, h: a
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   const xhtml = new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif">${xhtml.replace(/^<div[^>]*>|<\/div>$/g, '')}</div></foreignObject></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls().replace(/"/g, '&quot;')}">${xhtml.replace(/^<div[^>]*>|<\/div>$/g, '')}</div></foreignObject></svg>`;
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   await img.decode();
@@ -732,7 +763,7 @@ async function loadVersions() {
   )) : [h('div', { class: 'empty' }, 'No versions yet. They are saved automatically while you work.')]));
 }
 
-const TOOL_LABEL = { create_artboard: 'Created artboard', write_html: 'Wrote HTML', update_styles: 'Updated styles', set_text_content: 'Edited text', delete_nodes: 'Deleted', duplicate_nodes: 'Duplicated', rename_nodes: 'Renamed' };
+const TOOL_LABEL = { create_artboard: 'Created artboard', write_html: 'Wrote HTML', update_styles: 'Updated styles', set_text_content: 'Edited text', delete_nodes: 'Deleted', duplicate_nodes: 'Duplicated', rename_nodes: 'Renamed', set_tokens: 'Changed tokens', undo: 'Undid a change' };
 async function loadActivity() {
   const runs = await (await fetch(`${api}/activity`)).json();
   pane('activity').replaceChildren(...(runs.length ? runs.map((r) => h('div', { class: 'run' },
@@ -805,7 +836,74 @@ async function loadMcp() {
   ));
 }
 
-const loaders = { comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens, mcp: loadMcp };
+// Theme tab: edit the project's design tokens. Every edit goes to the server (one undo step,
+// visible to Claude through get_design_system) and comes back through the doc event, which
+// restyles the boards. Not to be confused with the Tokens tab, which only *reads* what the
+// designs already use.
+async function postTheme(body) {
+  const r = await post(`${api}/theme`, body);
+  if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Could not save the token');
+}
+const modeArg = () => (themeMode === 'base' ? undefined : themeMode);
+
+function loadTheme() {
+  const box = pane('theme');
+  const t = doc.theme ?? { tokens: {}, modes: {} };
+  if (!Object.keys(t.tokens).length) {
+    box.replaceChildren(h('div', { class: 'empty' }, 'No tokens yet. Tokens are CSS variables (var(--color-primary)) that every board can share, so one edit restyles the whole design.'),
+      h('div', { class: 'exports' }, h('button', { class: 'sm primary', onclick: () => postTheme({ preset: 'starter' }) }, 'Load starter scale')));
+    return;
+  }
+  const modes = Object.keys(t.modes ?? {});
+  if (themeMode !== 'base' && !modes.includes(themeMode)) themeMode = 'base';
+  const seg = ['base', ...modes].map((m) => h('button', { class: `sm${m === themeMode ? ' primary' : ''}`, onclick: () => { themeMode = m; applyTheme(); loadTheme(); } }, m === 'base' ? 'Base' : m));
+  if (!modes.includes('dark')) {
+    // Seed the new mode with the colour tokens so there is something to edit.
+    const colours = Object.fromEntries(Object.entries(t.tokens).filter(([k]) => k.startsWith('color-')));
+    seg.push(h('button', { class: 'sm', title: 'Add a dark mode that overrides the colour tokens', onclick: () => postTheme({ tokens: colours, mode: 'dark' }) }, '+ dark'));
+  }
+
+  const overrides = themeMode === 'base' ? {} : t.modes[themeMode] ?? {};
+  const row = (name) => {
+    const base = t.tokens[name];
+    const inherited = themeMode !== 'base' && !(name in overrides);
+    const input = h('input', { class: 'tok-in', 'aria-label': name, spellcheck: 'false' });
+    input.value = inherited ? '' : (themeMode === 'base' ? base : overrides[name]); // .value, never innerHTML
+    if (inherited) input.placeholder = base;
+    input.onchange = () => {
+      const v = input.value.trim();
+      // Empty in a mode view means "stop overriding"; empty in the base view is ignored.
+      if (!v && themeMode === 'base') { input.value = base; return; }
+      postTheme({ tokens: { [name]: v || null }, mode: modeArg() });
+    };
+    input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
+    const shown = inherited ? base : input.value;
+    const sw = name.startsWith('color-') && CSS.supports('color', shown) ? h('i', { class: 'tok-sw', style: `background:${shown}` }) : h('i', { class: 'tok-sw none' });
+    const del = themeMode === 'base' ? h('button', { class: 'icon tok-del', 'aria-label': `Delete ${name}`, title: 'Delete token', onclick: () => postTheme({ tokens: { [name]: null } }) }, '×') : null;
+    return h('div', { class: 'tok' }, sw, h('span', { class: 'tok-name', title: `var(--${name})` }, name), input, del);
+  };
+
+  const byFamily = new Map();
+  for (const name of Object.keys(t.tokens)) {
+    const f = name.split('-')[0];
+    byFamily.set(f, [...(byFamily.get(f) ?? []), name]);
+  }
+  const addName = h('input', { class: 'tok-in', placeholder: 'color-accent', 'aria-label': 'New token name', spellcheck: 'false' });
+  const addValue = h('input', { class: 'tok-in', placeholder: 'oklch(0.7 0.15 30)', 'aria-label': 'New token value', spellcheck: 'false' });
+  const add = () => { if (addName.value.trim() && addValue.value.trim()) postTheme({ tokens: { [addName.value.trim()]: addValue.value.trim() } }); };
+  addValue.onkeydown = (e) => { if (e.key === 'Enter') add(); };
+
+  box.replaceChildren(h('div', { class: 'tk' },
+    h('div', { class: 'exports', style: 'margin:0 0 8px' }, seg),
+    themeMode !== 'base' ? h('small', { class: 'tok-hint' }, 'Only tokens you fill in are overridden in this mode; empty ones inherit the base value.') : null,
+    [...byFamily].map(([f, names]) => [h('h4', {}, f), names.map(row)]),
+    themeMode === 'base' ? [h('h4', {}, 'Add token'), h('div', { class: 'tok-add' }, addName, addValue, h('button', { class: 'sm primary', onclick: add }, 'Add'))] : null,
+  ));
+}
+// A Theme tab that is open must follow edits made by Claude, but never rebuild while someone is typing in it.
+const refreshTheme = () => { if (panelOpen() && panelTab === 'theme' && !pane('theme').contains(document.activeElement)) loadTheme(); };
+
+const loaders = { comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens, mcp: loadMcp, theme: loadTheme };
 
 // ---- Comments ---------------------------------------------------------------
 

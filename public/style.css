@@ -184,7 +184,7 @@ button.sm.danger { color: var(--danger); }
 /* Slides in with a transform. Closing is a touch quicker than opening, and visibility is
    delayed so the panel stays visible for the whole exit animation. */
 #panel {
-  position: fixed; top: 44px; right: 0; bottom: 0; width: 340px; z-index: 9;
+  position: fixed; top: 44px; right: 0; bottom: 0; width: 380px; z-index: 9;
   background: var(--chrome); border-left: 1px solid var(--line); display: flex; flex-direction: column;
   transform: translateX(100%); visibility: hidden;
   transition: transform 200ms var(--ease-drawer), visibility 0s linear 200ms;
@@ -192,7 +192,7 @@ button.sm.danger { color: var(--danger); }
 #panel.open { transform: none; visibility: visible; transition: transform 260ms var(--ease-drawer), visibility 0s; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 10px 10px 8px; border-bottom: 1px solid var(--line); }
 .tabs { display: flex; gap: 2px; }
-.tabs button { font: inherit; color: var(--muted); background: transparent; border: 0; border-radius: 6px; padding: 5px 9px; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
+.tabs button { font: inherit; color: var(--muted); background: transparent; border: 0; border-radius: 6px; padding: 5px 6px; cursor: pointer; transition: background-color 150ms ease, color 150ms ease; }
 .tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); font-weight: 600; }
 @media (hover: hover) and (pointer: fine) { .tabs button:hover { color: var(--text); } }
 button.icon { font-size: 20px; line-height: 1; width: 32px; height: 32px; background: none; border: 0; border-radius: 6px; color: inherit; cursor: pointer; transition: transform 140ms var(--ease-out), background-color 150ms ease; }
@@ -229,6 +229,17 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* Theme tab: one row per token (swatch, name, editable value) */
+.tok { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+.tok-sw { flex: none; width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--line); }
+.tok-sw.none { background: transparent; border-style: dashed; }
+.tok-name { flex: none; width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.tok-in { flex: 1; min-width: 0; font: 12px ui-monospace, Consolas, monospace; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.tok-in:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tok-del { width: 22px; height: 22px; font-size: 16px; color: var(--muted); }
+.tok-add { display: flex; gap: 6px; flex-wrap: wrap; } .tok-add .tok-in { flex: 1 1 100px; }
+.tok-hint { display: block; color: var(--muted); margin-bottom: 4px; }
+
 /* Copy-paste command box in the MCP tab */
 .code { font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; user-select: all; }
 .bar { height: 6px; border-radius: 3px; background: var(--accent); }
