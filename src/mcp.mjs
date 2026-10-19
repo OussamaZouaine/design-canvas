@@ -1,0 +1,293 @@
+// The MCP tool surface Claude sees. Designs live inside projects: Claude picks or
+// creates a project first, then uses the artboard tools against it.
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { extractTokens } from './tokens.mjs';
+
+const GUIDE = `Design Canvas workflow:
+0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
+0b. LOG THE REQUEST. At the start of every new user request, call log_prompt with the request in the user's own words (one short sentence). It records the request in the project's Activity and saves a restore point so the user can roll back to before it.
+1. get_basic_info to see the project's artboards.
+2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
+3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
+4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting.
+5. Call get_screenshot after meaningful changes and critique it. (Needs the project open in the browser.)
+Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...). Build a ramp by holding C and H and stepping L.
+Tips: pick a palette, type scale and spacing scale first; use px units; give containers explicit widths; use system fonts (Inter, system-ui) because custom fonts are not loaded.
+Feedback: the user can pin comments on elements. Call get_comments at the start of a task and after finishing; fix what open comments ask, then reply_comment and resolve_comment.
+Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
+Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.`;
+
+const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
+
+// Wrap handlers so a thrown error becomes a readable tool error instead of a protocol failure.
+const safe = (fn) => async (args) => {
+  try {
+    return await fn(args ?? {});
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: e.message }] };
+  }
+};
+
+// Shared optional argument on every design tool.
+const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
+
+export function createMcpServer({ store, ui, requestScreenshot, port }) {
+  const server = new McpServer({ name: 'design-canvas', version: '0.2.0' });
+  const url = (id) => `http://localhost:${port}/p/${id}`;
+
+  // Resolve which project a call targets: explicit id, else the active one.
+  const target = (project_id) => {
+    const id = project_id ?? store.activeId;
+    if (!id) throw new Error('No active project. Call list_projects, then open_project or create_project.');
+    const p = store.get(id);
+    if (!p || p.meta.deletedAt) throw new Error(`Project ${id} not found (or in Trash). Call list_projects.`);
+    return p;
+  };
+  // Record a design action in the project's Activity (what Claude did, per artboard).
+  const log = (meta, doc, tool, anyId, detail) => {
+    const ab = anyId ? doc.artboardOf(anyId) : null;
+    store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
+  };
+  const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
+
+  // ---- projects ----------------------------------------------------------
+  server.registerTool('get_guide', {
+    description: 'Read this first. Explains the project + design workflow and constraints.',
+    inputSchema: {},
+  }, safe(() => text(GUIDE)));
+
+  server.registerTool('list_projects', {
+    description: 'List all projects (most recently edited first) with ids, names and artboard counts. Call this before creating a project so you reuse an existing one.',
+    inputSchema: {},
+  }, safe(() => text({
+    active_project_id: store.activeId,
+    home: `http://localhost:${port}`,
+    projects: store.list().sort((a, b) => b.updatedAt - a.updatedAt).map((p) => ({
+      ...summary(p), artboards: p.artboardCount, updated: new Date(p.updatedAt).toISOString(),
+    })),
+  })));
+
+  server.registerTool('create_project', {
+    description: 'Create a project and make it active. Name it after what you are building (2-4 words, e.g. the repo or feature). Fails if a project with that name exists: open it instead.',
+    inputSchema: { name: z.string().min(1).max(80), description: z.string().max(300).optional() },
+  }, safe(({ name, description }) => text(summary(store.create({ name, description, unique: 'error' })))));
+
+  server.registerTool('open_project', {
+    description: 'Make an existing project the active one and return its artboards.',
+    inputSchema: { project_id: z.string() },
+  }, safe(({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    store.setActive(meta.id);
+    return text({ ...summary(meta), ...doc.basicInfo() });
+  }));
+
+  server.registerTool('rename_project', {
+    description: 'Rename a project and/or change its description.',
+    inputSchema: { ...pid, name: z.string().min(1).max(80).optional(), description: z.string().max(300).optional() },
+  }, safe(({ project_id, name, description }) => {
+    const { meta } = target(project_id);
+    return text(summary(store.update(meta.id, { name, description })));
+  }));
+
+  server.registerTool('delete_project', {
+    description: 'Move a project to Trash (the user can restore it from the home page). Only do this when the user asks.',
+    inputSchema: { project_id: z.string() },
+  }, safe(({ project_id }) => { store.remove(target(project_id).meta.id); return text('Moved to Trash'); }));
+
+  server.registerTool('save_version', {
+    description: 'Save a named checkpoint of the project to its version history. Do this before big rewrites.',
+    inputSchema: { ...pid, label: z.string().max(80).optional() },
+  }, safe(({ project_id, label }) => {
+    const { meta } = target(project_id);
+    store.snapshot(meta.id, label || 'Saved version', { force: true });
+    return text('Version saved');
+  }));
+
+  // ---- design tools ------------------------------------------------------
+
+  // ---- history + comments -------------------------------------------------
+  server.registerTool('log_prompt', {
+    description: "Call at the START of every new user request with the request in the user's own words (one short sentence). Records it in the project's Activity and saves a restore point so the user can undo the whole request.",
+    inputSchema: { ...pid, prompt: z.string().min(1).max(500) },
+  }, safe(({ project_id, prompt }) => {
+    store.logPrompt(target(project_id).meta.id, prompt);
+    return text('Logged');
+  }));
+
+  server.registerTool('get_comments', {
+    description: 'Comments the user pinned on elements of the design. Each includes the element it points at (tag, text, style) so you can act on it. Returns open comments by default.',
+    inputSchema: { ...pid, include_resolved: z.boolean().optional() },
+  }, safe(({ project_id, include_resolved }) => {
+    const { meta, doc } = target(project_id);
+    const list = store.listComments(meta.id).filter((c) => include_resolved || !c.resolved);
+    return text(list.map((c) => {
+      let element = null;
+      try { const n = doc.nodeInfo(c.targetId); element = { tag: n.tag, name: n.name, text: n.text, style: n.style, artboard: n.artboard }; }
+      catch { element = doc.getArtboard(c.targetId) ? { artboard: c.targetId } : null; }
+      return { comment_id: c.id, target_id: c.targetId, element: element ?? 'element no longer exists', text: c.text, author: c.author, resolved: c.resolved, replies: c.replies };
+    }));
+  }));
+
+  server.registerTool('reply_comment', {
+    description: 'Reply to a comment (say what you changed). The user sees it on the pin.',
+    inputSchema: { ...pid, comment_id: z.string(), text: z.string().min(1).max(2000) },
+  }, safe(({ project_id, comment_id, text: t }) => { store.replyComment(target(project_id).meta.id, comment_id, { text: t, author: 'claude' }); return text('Replied'); }));
+
+  server.registerTool('resolve_comment', {
+    description: 'Mark a comment resolved once you have addressed it.',
+    inputSchema: { ...pid, comment_id: z.string(), resolved: z.boolean().optional() },
+  }, safe(({ project_id, comment_id, resolved = true }) => { store.setCommentResolved(target(project_id).meta.id, comment_id, resolved); return text(resolved ? 'Resolved' : 'Reopened'); }));
+
+  server.registerTool('get_design_tokens', {
+    description:
+      'Scan the project and extract its design tokens (colours, fonts, sizes, radii, spacing, shadows) from the styles actually used. Use it to keep new pages consistent with existing ones, or to hand tokens to a codebase. format: summary (default, ranked lists + CSS variables), css, json (W3C design tokens) or tailwind.',
+    inputSchema: {
+      ...pid,
+      format: z.enum(['summary', 'css', 'json', 'tailwind']).optional(),
+      artboard_ids: z.array(z.string()).optional().describe('Limit to these artboards (default: all).'),
+    },
+  }, safe(({ project_id, format = 'summary', artboard_ids }) => {
+    const { doc } = target(project_id);
+    const boards = doc.data.artboards.filter((a) => !artboard_ids || artboard_ids.includes(a.id));
+    if (!boards.length) throw new Error('No artboards to scan yet. Create some designs first.');
+    const { outputs, ...tokens } = extractTokens(boards);
+    return text(format === 'summary' ? { ...tokens, css: outputs.css } : outputs[format]);
+  }));
+  server.registerTool('get_basic_info', {
+    description: 'Project details plus all its artboards with ids, names, positions and sizes.',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    return text({ ...summary(meta), ...doc.basicInfo() });
+  }));
+
+  server.registerTool('get_selection', {
+    description: 'Return the nodes/artboards the user currently has selected in the browser.',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    return text((ui.selection.get(meta.id) || []).map((id) => {
+      try { return doc.nodeInfo(id); } catch { return doc.getArtboard(id) ?? { id }; }
+    }));
+  }));
+
+  server.registerTool('create_artboard', {
+    description: 'Create an empty artboard (a frame on the canvas). Returns its id.',
+    inputSchema: {
+      ...pid,
+      name: z.string().optional(),
+      width: z.number().min(40).max(5000).optional(),
+      height: z.number().min(40).max(10000).optional(),
+      x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
+      y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
+    },
+  }, safe(({ project_id, ...a }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.createArtboard(a);
+    log(meta, doc, 'create_artboard', ab.id);
+    return text(ab);
+  }));
+
+  server.registerTool('write_html', {
+    description:
+      'Add HTML into an artboard or inside an existing node (target_id). mode "append" adds after existing children; "replace" swaps them. Inline styles only. Returns ids of the new top-level nodes.',
+    inputSchema: {
+      ...pid,
+      target_id: z.string().describe('Artboard id (A#) or node id (N#)'),
+      html: z.string().max(200_000),
+      mode: z.enum(['append', 'replace']).optional(),
+    },
+  }, safe(({ project_id, target_id, html, mode }) => {
+    const { meta, doc } = target(project_id);
+    const created = doc.writeHtml(target_id, html, mode);
+    log(meta, doc, 'write_html', target_id);
+    return text({ created });
+  }));
+
+  server.registerTool('get_tree_summary', {
+    description: 'Indented outline of an artboard with node ids and short text, for choosing edit targets.',
+    inputSchema: { ...pid, artboard_id: z.string(), depth: z.number().min(1).max(12).optional() },
+  }, safe(({ project_id, artboard_id, depth }) => text(target(project_id).doc.treeSummary(artboard_id, depth))));
+
+  server.registerTool('get_node_info', {
+    description: 'Details of one node: tag, inline style, text, child ids and its HTML.',
+    inputSchema: { ...pid, node_id: z.string() },
+  }, safe(({ project_id, node_id }) => text(target(project_id).doc.nodeInfo(node_id))));
+
+  server.registerTool('update_styles', {
+    description: 'Merge CSS properties (camelCase or kebab-case) into one or more nodes. Use null to remove a property.',
+    inputSchema: {
+      ...pid,
+      node_ids: z.array(z.string()).min(1),
+      styles: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
+    },
+  }, safe(({ project_id, node_ids, styles }) => {
+    const { meta, doc } = target(project_id);
+    doc.updateStyles(node_ids, styles);
+    log(meta, doc, 'update_styles', node_ids[0]);
+    return text('ok');
+  }));
+
+  server.registerTool('set_text_content', {
+    description: 'Replace the text inside a node (plain text; markup is escaped).',
+    inputSchema: { ...pid, node_id: z.string(), text: z.string() },
+  }, safe(({ project_id, node_id, text: t }) => {
+    const { meta, doc } = target(project_id);
+    doc.setText(node_id, t);
+    log(meta, doc, 'set_text_content', node_id);
+    return text('ok');
+  }));
+
+  server.registerTool('rename_nodes', {
+    description: 'Give nodes or artboards friendly names. Map of id to new name.',
+    inputSchema: { ...pid, names: z.record(z.string(), z.string()) },
+  }, safe(({ project_id, names }) => {
+    const { meta, doc } = target(project_id);
+    doc.renameNodes(names);
+    log(meta, doc, 'rename_nodes', Object.keys(names)[0]);
+    return text('ok');
+  }));
+
+  server.registerTool('duplicate_nodes', {
+    description: 'Duplicate nodes (placed right after the original) or artboards. Returns new ids.',
+    inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
+  }, safe(({ project_id, ids }) => {
+    const { meta, doc } = target(project_id);
+    const created = doc.duplicateNodes(ids);
+    log(meta, doc, 'duplicate_nodes', ids[0]);
+    return text({ created });
+  }));
+
+  server.registerTool('delete_nodes', {
+    description: 'Delete nodes or whole artboards.',
+    inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
+  }, safe(({ project_id, ids }) => {
+    const { meta, doc } = target(project_id);
+    log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
+    doc.deleteNodes(ids);
+    return text('ok');
+  }));
+
+  server.registerTool('get_screenshot', {
+    description: 'Render an artboard to a PNG so you can review your work. Requires the project to be open in a browser tab.',
+    inputSchema: { ...pid, artboard_id: z.string() },
+  }, safe(async ({ project_id, artboard_id }) => {
+    const { meta, doc } = target(project_id);
+    if (!doc.getArtboard(artboard_id)) throw new Error(`Artboard ${artboard_id} not found`);
+    const dataUrl = await requestScreenshot(meta.id, artboard_id);
+    return { content: [{ type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/png' }] };
+  }));
+
+  server.registerTool('export_html', {
+    description: 'Return a standalone HTML document for an artboard, ready to save or hand to a codebase.',
+    inputSchema: { ...pid, artboard_id: z.string() },
+  }, safe(({ project_id, artboard_id }) => {
+    const ab = target(project_id).doc.getArtboard(artboard_id);
+    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    const clean = ab.html.replace(/ data-pid="[^"]*"/g, '');
+    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title></head>\n<body style="margin:0"><div style="position:relative;width:${ab.width}px;min-height:${ab.height}px">${clean}</div></body></html>`);
+  }));
+
+  return server;
+}
