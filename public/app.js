@@ -597,18 +597,36 @@ events.addEventListener('doc', (e) => {
 });
 events.addEventListener('agent', (e) => { agentIds = JSON.parse(e.data).ids; drawAgent(); });
 events.addEventListener('screenshot', async (e) => {
-  const { id, artboardId } = JSON.parse(e.data);
+  const { id, artboardId, ...opts } = JSON.parse(e.data);
   try {
-    await post(`${api}/screenshot`, { id, dataUrl: await rasterize(artboardId) });
+    await post(`${api}/screenshot`, { id, dataUrl: await rasterize(artboardId, opts) });
   } catch (err) {
     await post(`${api}/screenshot`, { id, error: String(err.message || err) });
+  }
+});
+
+// Claude asked for computed styles. Only a laid-out DOM knows real values (resolved colours,
+// used widths), so read them from the live node, mounting its board first if needed.
+events.addEventListener('computed', async (e) => {
+  const { id, nodeIds, props } = JSON.parse(e.data);
+  try {
+    const result = {};
+    for (const nid of nodeIds) {
+      const el = findElement(nid, { mount: true });
+      if (!el) { result[nid] = 'not rendered'; continue; }
+      const cs = getComputedStyle(el);
+      result[nid] = Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
+    }
+    await post(`${api}/reply`, { id, result });
+  } catch (err) {
+    await post(`${api}/reply`, { id, error: String(err.message || err) });
   }
 });
 
 // Turn an artboard's HTML into a PNG: wrap it in an SVG <foreignObject>, load that as an
 // image, then draw the image onto a canvas. Limit: only inline styles and data: images
 // survive, since the SVG is rendered in isolation.
-async function rasterizeCanvas(ab, scale) {
+async function rasterizeCanvas(ab, scale, crop = { x: 0, y: 0, w: ab.width, h: ab.height }) {
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   const xhtml = new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
@@ -617,19 +635,38 @@ async function rasterizeCanvas(ab, scale) {
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   await img.decode();
   const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(ab.width * scale));
-  canvas.height = Math.max(1, Math.round(ab.height * scale));
+  canvas.width = Math.max(1, Math.round(crop.w * scale));
+  canvas.height = Math.max(1, Math.round(crop.h * scale));
   const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; // JPEG has no alpha: without this, transparent areas turn black
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.scale(scale, scale);
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(img, -crop.x, -crop.y); // shifting the origin is how the crop is taken
   return canvas;
 }
-async function rasterize(artboardId) {
+
+// Token-lean defaults (an image costs one token per 28x28 px patch): 1x, at most 1000 px wide,
+// JPEG at quality 0.8 (heavier compression blurs small text). Callers can ask for more.
+// With nodeId the picture is cropped to that node's box, measured in artboard units from the
+// live DOM (the node must be laid out, so we mount the board if it was showing a bitmap).
+async function rasterize(artboardId, { nodeId, scale = 1, maxWidth = 1000, format = 'jpeg' } = {}) {
   const ab = doc.artboards.find((a) => a.id === artboardId);
   if (!ab) throw new Error('Artboard not found');
-  const scale = Math.min(2, 2000 / ab.width); // 2x for sharpness, capped to keep payloads small
-  return (await rasterizeCanvas(ab, scale)).toDataURL('image/png');
+  let crop;
+  if (nodeId) {
+    const el = findElement(nodeId, { mount: true });
+    const frame = abEls.get(abOf(nodeId))?.querySelector('.frame');
+    if (!el || !frame) throw new Error('Node not found on the canvas');
+    const f = frame.getBoundingClientRect(), r = el.getBoundingClientRect();
+    const k = f.width / ab.width; // on-screen pixels per artboard unit (the current zoom)
+    crop = { x: (r.left - f.left) / k, y: (r.top - f.top) / k, w: r.width / k, h: r.height / k };
+  }
+  const w = crop?.w ?? ab.width;
+  const eff = Math.min(scale, maxWidth / w); // never exceed maxWidth, whatever scale was asked
+  const canvas = await rasterizeCanvas(ab, eff, crop);
+  return format === 'png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.8);
 }
+const abOf = (id) => (id.startsWith('A') ? id : pidIndex.get(id));
 
 // ---- Project header: name, export ------------------------------------------
 

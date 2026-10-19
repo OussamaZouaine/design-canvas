@@ -74,8 +74,9 @@ store.on((type, payload) => {
   }
 });
 
-// Ask an open tab of this project to rasterize an artboard (only the browser can lay out HTML).
-function requestScreenshot(projectId, artboardId) {
+// Ask an open tab of this project to do something only a browser can (rasterize an artboard,
+// read computed styles): it needs real layout. The tab answers via POST /api/p/:id/reply.
+function askBrowser(projectId, event, payload) {
   const tabs = [...ui.clients].filter((c) => c.projectId === projectId);
   if (!tabs.length) {
     return Promise.reject(new Error(`Open the project in a browser tab first: http://localhost:${PORT}/p/${projectId}`));
@@ -84,12 +85,14 @@ function requestScreenshot(projectId, artboardId) {
     const id = randomUUID();
     const timer = setTimeout(() => {
       ui.pendingShots.delete(id);
-      reject(new Error('Screenshot timed out'));
+      reject(new Error(`Browser did not answer ${event} in time`));
     }, 15000);
     ui.pendingShots.set(id, { resolve, reject, timer });
-    send(tabs[0].res, 'screenshot', { id, artboardId });
+    send(tabs[0].res, event, { id, ...payload });
   });
 }
+const requestScreenshot = (projectId, artboardId, opts = {}) => askBrowser(projectId, 'screenshot', { artboardId, ...opts });
+const requestComputed = (projectId, nodeIds, props) => askBrowser(projectId, 'computed', { nodeIds, props });
 
 // Light up the nodes Claude just touched in every tab of the project. They clear on
 // finish_working, or on their own after 10 s so a forgotten call never leaves them stuck.
@@ -99,7 +102,7 @@ function highlight(projectId, ids) {
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
-const mcpDeps = { store, ui, requestScreenshot, highlight, meter, port: PORT };
+const mcpDeps = { store, ui, requestScreenshot, requestComputed, highlight, meter, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -158,12 +161,14 @@ const canvasActions = {
   'comment-reply': (p, b) => store.replyComment(p.meta.id, String(b.commentId), { text: b.text }),
   'comment-resolve': (p, b) => store.setCommentResolved(p.meta.id, String(b.commentId), b.resolved !== false),
   'comment-delete': (p, b) => store.deleteComment(p.meta.id, String(b.commentId)),
+  // The browser's answer to askBrowser: dataUrl for screenshots, result for everything else.
+  reply: (p, b) => canvasActions.screenshot(p, b),
   screenshot: (p, b) => {
     const s = ui.pendingShots.get(b.id);
     if (!s) return;
     clearTimeout(s.timer);
     ui.pendingShots.delete(b.id);
-    b.error ? s.reject(new Error(b.error)) : s.resolve(b.dataUrl);
+    b.error ? s.reject(new Error(b.error)) : s.resolve(b.dataUrl ?? b.result);
   },
 };
 
