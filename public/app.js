@@ -383,8 +383,9 @@ function followTo(ab, focusEl) {
   const now = Date.now();
   if (!follow || now - lastTouch < 2500 || now - followAt < 500) return;
   const w = viewport.clientWidth - (panelOpen() ? 340 : 0), vh = viewport.clientHeight;
-  // Zoom so the artboard's width fits; never past 100%, never so small it can't be watched.
-  const k = Math.min(1, Math.max(0.2, (w - 160) / ab.width));
+  // Zoom so the artboard's width fits, but cap at 40%: at 100% a long board fills the screen and you
+  // only see a sliver of it. 0.4 stays above LIVE_K (0.3), so the board remains live HTML, not a bitmap.
+  const k = Math.min(0.4, Math.max(0.2, (w - 160) / ab.width));
   const curCy = (vh / 2 - view.y) / view.k;
   let cy = ab.y + ab.height / 2; // short board: centre it
   if (ab.height * k > vh - 80) { // tall board: centre on the newest content, else keep the current spot
