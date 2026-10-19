@@ -34,6 +34,9 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - Claude Code plugin: `.claude-plugin/`, `.mcp.json`, `skills/design-canvas/SKILL.md`.
 - Design tokens: stored per project with modes, `set_tokens` / `get_design_system`, live Theme tab, `create_foundations`
   (generated, locked, self-refreshing), `lint` resolves `var()` per mode, exports declare the tokens.
+- Components: `set_component` (variants + `data-slot` text), `insert_component`, `detach_component`, `delete_component`,
+  `create_components_sheet`. Instances are stored expanded and re-expanded in place when the master changes (ids and slot
+  text kept), shown as one line in `get_tree`.
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 

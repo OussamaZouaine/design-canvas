@@ -50,6 +50,9 @@ elements, and Claude reads and answers those comments. Local only, no database (
   screenshot was seen once and not reproduced).
 - **Live "Claude is designing":** `touchGen` ring + header pill `#live`; **Follow** toggle (`followTo`) glides the camera
   to the artboard being written (centres on newest content for tall boards); backs off 2.5s after user input.
+- **Components:** masters live in `doc.data.components` (`src/components.mjs`). Instances are stored *expanded* in the artboard
+  HTML with `data-component`/`data-variant`; `setComponent` re-expands them in place (root id and `data-slot` text kept).
+  Hand edits inside an instance are replaced by the master on the next master edit; `detach_component` opts out.
 - **Doc history:** `Doc` keeps an in-memory undo stack (50 steps, not saved to disk) and a change journal (`record`,
   `changesSince`) that backs `get_changes`. Nodes with `data-locked` refuse edits. `write_html` expands `<x-clone node-id>`.
 - **Browser round-trips:** screenshots and `get_computed_styles` need real layout, so the server asks an open tab over SSE
