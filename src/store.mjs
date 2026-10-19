@@ -73,6 +73,8 @@ export class ProjectStore {
   _doc(id) {
     if (this.docs.has(id)) return this.docs.get(id);
     const doc = new Doc(path.join(this._dir(id), 'doc.json'));
+    // Read live from meta so toggling the option takes effect without reloading the doc.
+    doc.normalize = () => !!this.metas.get(id)?.normalize;
     doc.onChange((data) => {
       const meta = this.metas.get(id);
       if (!meta) return;
@@ -137,7 +139,7 @@ export class ProjectStore {
     const id = 'p_' + randomBytes(4).toString('hex');
     fs.mkdirSync(path.join(this.projectsDir, id, 'snapshots'), { recursive: true });
     const now = Date.now();
-    this.metas.set(id, { id, name: clean, description: String(description).slice(0, 300), createdAt: now, updatedAt: now, deletedAt: null });
+    this.metas.set(id, { id, name: clean, description: String(description).slice(0, 300), createdAt: now, updatedAt: now, deletedAt: null, normalize: true });
     this._saveMeta(id);
     writeJson(path.join(this._dir(id), 'doc.json'), { counter: 0, artboards: [] });
     this.setActive(id);
@@ -145,10 +147,11 @@ export class ProjectStore {
     return this._meta(id);
   }
 
-  update(id, { name, description }) {
+  update(id, { name, description, normalize }) {
     const meta = this._meta(id);
     if (name !== undefined) meta.name = this._uniqueName(ProjectStore.cleanName(name), id);
     if (description !== undefined) meta.description = String(description).slice(0, 300);
+    if (normalize !== undefined) meta.normalize = !!normalize;
     meta.updatedAt = Date.now();
     this._saveMeta(id);
     this._emit('meta', { id, meta });
@@ -200,6 +203,8 @@ export class ProjectStore {
     const src = this._meta(id);
     const copy = this.create({ name: `${src.name} copy`, description: src.description });
     this._doc(copy.id).replace(JSON.parse(JSON.stringify(this._doc(id).data)));
+    copy.normalize = !!src.normalize; // a copy of an un-normalized design must not start rewriting its markup
+    this._saveMeta(copy.id);
     return copy;
   }
 
@@ -214,6 +219,8 @@ export class ProjectStore {
       throw new Error('Not a Design Canvas project file');
     }
     const meta = this.create({ name: json.name || 'Imported project', description: json.description || '' });
+    meta.normalize = false; // imported markup is kept as written; switch on via rename_project if wanted
+    this._saveMeta(meta.id);
     const doc = this._doc(meta.id);
     // Imported HTML is untrusted: keep only the fields we know, then re-sanitize.
     doc.data = {

@@ -105,11 +105,11 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
   }));
 
   server.registerTool('rename_project', {
-    description: 'Rename a project and/or change its description.',
-    inputSchema: { ...pid, name: z.string().min(1).max(80).optional(), description: z.string().max(300).optional() },
-  }, safe(({ project_id, name, description }) => {
+    description: 'Rename a project, change its description, and/or switch HTML normalization on or off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written).',
+    inputSchema: { ...pid, name: z.string().min(1).max(80).optional(), description: z.string().max(300).optional(), normalize: z.boolean().optional() },
+  }, safe(({ project_id, name, description, normalize }) => {
     const { meta } = target(project_id);
-    return text(summary(store.update(meta.id, { name, description })));
+    return text({ ...summary(store.update(meta.id, { name, description, normalize })), normalize: !!meta.normalize });
   }));
 
   server.registerTool('delete_project', {
