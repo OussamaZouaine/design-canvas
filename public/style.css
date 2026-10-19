@@ -229,6 +229,12 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* ---- Page bar (header) ---------------------------------------------------------- */
+.pagebar { display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
+.pagebar select, .pagebar input { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; max-width: 150px; }
+.pagebar .icon { width: 24px; height: 24px; font-size: 13px; }
+.artboard.offpage { display: none; }
+
 /* ---- Inspector (Design tab) ---------------------------------------------------- */
 .tabs { overflow-x: auto; scrollbar-width: none; }
 .tabs button { flex: none; }

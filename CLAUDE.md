@@ -53,6 +53,9 @@ elements, and Claude reads and answers those comments. Local only, no database (
 - **Components:** masters live in `doc.data.components` (`src/components.mjs`). Instances are stored *expanded* in the artboard
   HTML with `data-component`/`data-variant`; `setComponent` re-expands them in place (root id and `data-slot` text kept).
   Hand edits inside an instance are replaced by the master on the next master edit; `detach_component` opts out.
+- **Pages:** `doc.data.pages` is stored only once a second page exists (before that the first page is implicit and boards
+  carry no `page`). The browser shows one page at a time (`activePage`, remembered per project); off-page boards are
+  `display:none` and unmounted. Claude's default target page is `ui.currentPage` (`set_page`), not document data.
 - **Token sync:** `meta.repo` is the linked code folder; `src/tokensync.mjs` only reads files inside it (path check) and maps
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
 - **Inspector:** `public/inspector.js` (Design tab) reads the selected node's inline style from the parsed HTML and sends

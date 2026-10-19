@@ -43,7 +43,7 @@ function parseStyle(str = '') {
   return map;
 }
 
-export function initInspector({ h, getSelected, getDoc, nodeOf, post, api, toast, markUserEdit, getMode }) {
+export function initInspector({ h, getSelected, getDoc, nodeOf, post, api, toast, markUserEdit, getMode, getPages, getPage }) {
   const pane = document.querySelector('[data-pane="design"]');
 
   async function send(path, body) {
@@ -93,6 +93,25 @@ export function initInspector({ h, getSelected, getDoc, nodeOf, post, api, toast
       h('datalist', { id: `dl-${fam}` }, Object.keys(all).filter((k) => k.split('-')[0] === fam).map((k) => h('option', { value: `var(--${k})` }, all[k]))));
   }
 
+  // Nothing selected: the page itself (name and canvas background).
+  function renderPage() {
+    const page = getPage();
+    const name = h('input', { class: 'tok-in', 'aria-label': 'Page name', maxlength: '60' });
+    name.value = page.name;
+    name.onchange = () => name.value.trim() && send('page-update', { id: page.id, name: name.value.trim() });
+    const bg = h('input', { class: 'tok-in', 'aria-label': 'Page background', placeholder: 'default', spellcheck: 'false' });
+    bg.value = page.background ?? '';
+    bg.setAttribute('list', 'dl-color');
+    bg.onchange = () => send('page-update', { id: page.id, background: bg.value.trim() });
+    for (const i of [name, bg]) i.onkeydown = (e) => { if (e.key === 'Enter') i.blur(); e.stopPropagation(); };
+    const sw = page.background && CSS.supports('color', page.background) ? h('i', { class: 'tok-sw', style: `background:${page.background}` }) : null;
+    pane.replaceChildren(h('div', { class: 'tk' }, ...datalists(),
+      h('h4', {}, 'Page'),
+      h('label', { class: 'frow' }, h('span', { class: 'flabel' }, 'Name'), name),
+      h('label', { class: 'frow' }, h('span', { class: 'flabel' }, 'Canvas'), sw, bg),
+      h('div', { class: 'empty' }, 'Select a layer on the canvas or in the Layers panel to edit its styles.')));
+  }
+
   function renderArtboard(ab) {
     const num = (label, key, action) => {
       const input = h('input', { class: 'tok-in', 'aria-label': label, inputmode: 'numeric' });
@@ -112,13 +131,20 @@ export function initInspector({ h, getSelected, getDoc, nodeOf, post, api, toast
     name.onkeydown = (e) => { if (e.key === 'Enter') name.blur(); e.stopPropagation(); };
     pane.replaceChildren(h('div', { class: 'tk' },
       h('h4', {}, 'Artboard'), h('label', { class: 'frow' }, h('span', { class: 'flabel' }, 'Name'), name),
+      // Which page the board lives on; changing it moves the board (it then disappears from this page).
+      (() => {
+        const sel = h('select', { class: 'in-sel', 'aria-label': 'Page' }, getPages().map((p) => h('option', { value: p.id }, p.name)));
+        sel.value = ab.page ?? getPages()[0].id;
+        sel.onchange = () => send('move-to-page', { ids: [ab.id], page: sel.value });
+        return h('label', { class: 'frow' }, h('span', { class: 'flabel' }, 'Page'), sel);
+      })(),
       num('W', 'width', 'resize'), num('H', 'height', 'resize'), num('X', 'x', 'move'), num('Y', 'y', 'move')));
   }
 
   function render() {
     const id = getSelected();
     const doc = getDoc();
-    if (!id) { pane.replaceChildren(h('div', { class: 'empty' }, 'Select a layer on the canvas or in the Layers panel to edit its styles.')); return; }
+    if (!id) { renderPage(); return; }
     const board = doc.artboards.find((a) => a.id === id);
     if (board) { renderArtboard(board); return; }
     const el = nodeOf(id);
