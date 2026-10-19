@@ -90,7 +90,7 @@ export class Doc {
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
   _snapshotState(label) {
-    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components) };
+    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components), pages: structuredClone(this.data.pages) };
   }
 
   _checkpoint(label) {
@@ -103,6 +103,7 @@ export class Doc {
     this.data.artboards = entry.artboards;
     this.data.theme = entry.theme;
     this.data.components = entry.components;
+    this.data.pages = entry.pages;
   }
 
   // Step back `steps` mutations. The id counter is deliberately NOT rewound, so an id that was
@@ -243,8 +244,9 @@ export class Doc {
 
   basicInfo() {
     return {
-      artboards: this.data.artboards.map(({ id, name, x, y, width, height }) => ({
-        id, name, x, y, width, height,
+      pages: this.pages,
+      artboards: this.data.artboards.map((a) => ({
+        id: a.id, name: a.name, x: a.x, y: a.y, width: a.width, height: a.height, page: this.pageOf(a),
       })),
     };
   }
@@ -409,6 +411,81 @@ export class Doc {
     return ab;
   }
 
+  // ---- Pages -------------------------------------------------------------------
+  // A project always has at least one page. Boards without a `page` field belong to the first one,
+  // so projects made before pages existed need no migration and the first page needs no stored list.
+
+  get pages() { return this.data.pages?.length ? this.data.pages : [{ id: 'P1', name: 'Page 1' }]; }
+
+  // A board without a `page` field is on the first page.
+  pageOf(ab) { return ab.page ?? this.pages[0].id; }
+
+  _pageId(id) {
+    if (id === undefined || id === null) return this.pages[0].id;
+    if (!this.pages.some((p) => p.id === id)) throw new Error(`Page ${id} not found (pages: ${this.pages.map((p) => `${p.id} "${p.name}"`).join(', ')})`);
+    return id;
+  }
+
+  // Store the implicit first page. Boards that had no `page` field are stamped with it here, so from
+  // now on every board names its page explicitly and deleting or reordering pages cannot move them.
+  _ensurePages() {
+    if (!this.data.pages?.length) {
+      this.data.pages = [{ id: 'P1', name: 'Page 1' }];
+      for (const ab of this.data.artboards) ab.page ??= 'P1';
+    }
+    return this.data.pages;
+  }
+
+  createPage(name = 'Page') {
+    const clean = String(name).trim().slice(0, 60) || 'Page';
+    this._checkpoint('create_page');
+    const pages = this._ensurePages();
+    const n = pages.reduce((m, p) => Math.max(m, Number(p.id.slice(1)) || 0), 0) + 1;
+    const page = { id: `P${n}`, name: clean };
+    pages.push(page);
+    this._commit();
+    return page;
+  }
+
+  updatePage(id, { name, background } = {}) {
+    this._pageId(id);
+    if (background && !/^[a-z0-9#(),.%/ -]{1,60}$/i.test(background)) throw new Error('Invalid background colour');
+    this._checkpoint('update_page');
+    const page = this._ensurePages().find((p) => p.id === id);
+    if (name !== undefined) page.name = String(name).trim().slice(0, 60) || page.name;
+    if (background !== undefined) { if (background) page.background = background; else delete page.background; }
+    this._commit();
+    return page;
+  }
+
+  // Delete a page. Its boards must go somewhere: `moveTo` (default: the first remaining page).
+  deletePage(id, moveTo) {
+    this._pageId(id);
+    const pages = this._ensurePages();
+    if (pages.length === 1) throw new Error('A project needs at least one page');
+    const rest = pages.filter((p) => p.id !== id);
+    const dest = moveTo ? this._pageId(moveTo) : rest[0].id;
+    if (dest === id) throw new Error('Choose a different page to move the boards to');
+    this._checkpoint('delete_page');
+    for (const ab of this.data.artboards) if (ab.page === id) ab.page = dest;
+    this.data.pages = rest;
+    this._commit();
+    return dest;
+  }
+
+  moveToPage(ids, pageId) {
+    const page = this._pageId(pageId);
+    const boards = ids.map((id) => {
+      const ab = this.getArtboard(id);
+      if (!ab) throw new Error(`Artboard ${id} not found`);
+      return ab;
+    });
+    this._checkpoint('move_to_page');
+    this._ensurePages();
+    for (const ab of boards) ab.page = page;
+    this._commit();
+  }
+
   // ---- Components ------------------------------------------------------------
 
   get components() { return this.data.components ?? {}; }
@@ -500,10 +577,11 @@ export class Doc {
 
   // ---- Mutations ----------------------------------------------------------
 
-  createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y } = {}) {
+  createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y, page: pageArg } = {}) {
     // Place new artboards to the right of the rightmost one so they never overlap.
+    const page = this._pageId(pageArg); // validate before the undo checkpoint so a bad page leaves no entry
     this._checkpoint('create_artboard');
-    const right = this.data.artboards.reduce((m, a) => Math.max(m, a.x + a.width), -120);
+    const right = this.data.artboards.filter((a) => this.pageOf(a) === page).reduce((m, a) => Math.max(m, a.x + a.width), -120);
     const ab = {
       id: this._newId('A'),
       name,
@@ -512,6 +590,7 @@ export class Doc {
       width,
       height,
       html: '',
+      ...(this.data.pages?.length ? { page } : {}), // projects that never added a page keep boards field-free
     };
     this.data.artboards.push(ab);
     this._commit();
@@ -623,7 +702,7 @@ export class Doc {
     for (const id of ids) {
       const ab = this.getArtboard(id);
       if (ab) {
-        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height });
+        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, page: this.pageOf(ab) });
         // Strip old ids from the copy so _prepare mints fresh ones.
         copy.html = this._prepare(ab.html.replace(/ data-pid="[^"]*"/g, '')).toString();
         out.push(copy.id);
