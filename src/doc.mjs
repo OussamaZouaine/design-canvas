@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { lintArtboard } from './lint.mjs';
 import { parseStyle, styleToString } from './css.mjs';
 import { normalizeTree } from './normalize.mjs';
-import { applyTokens, emptyTheme, STARTER } from './theme.mjs';
+import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -285,7 +285,9 @@ export class Doc {
   }
 
   // Static lint of an artboard or of one node's subtree. Returns an array of one-line issues.
-  lint(id, opts) {
+  // opts: { grid, mode }. `mode` lints against that mode's token values (default: the base tokens).
+  lint(id, { mode, ...opts } = {}) {
+    opts = { ...opts, tokens: resolveTokens(this.data.theme, mode) };
     const ab = this.getArtboard(id);
     if (ab) return lintArtboard(ab, this._artboardRoot(ab), opts);
     const hit = this._find(id);

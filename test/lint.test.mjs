@@ -69,3 +69,26 @@ test('a negative offset inside a positioned parent is not off-artboard', () => {
   assert.deepEqual(lint('<div style="position:relative"><i style="position:absolute;top:-6px;right:-6px"></i></div>'), []);
   assert.match(lint('<i style="position:absolute;top:-6px"></i>').join(''), /outside the artboard/);
 });
+
+test('var() colours are resolved from the theme and checked per mode', () => {
+  const doc = new Doc(null);
+  doc.setTokens({ 'color-fg': '#bbb', 'color-bg': '#fff' });
+  doc.setTokens({ 'color-fg': '#eee', 'color-bg': '#111' }, { mode: 'dark' });
+  const ab = doc.createArtboard({ name: 'T' });
+  doc.writeHtml(ab.id, '<div style="background:var(--color-bg)"><p style="color:var(--color-fg)">hi</p></div>');
+  assert.match(doc.lint(ab.id).join(''), /low contrast/); // light grey on white
+  assert.deepEqual(doc.lint(ab.id, { mode: 'dark' }), []); // light on dark passes
+});
+
+test('a var() with no token and no fallback is reported; a fallback is used', () => {
+  assert.match(lint('<p style="color:var(--color-nope)">x</p>').join(''), /var\(--color-nope\) is not a defined token/);
+  assert.match(lint('<p style="color:var(--color-nope, #ccc)">x</p>').join(''), /low contrast/);
+});
+
+test('spacing tokens are checked against the grid after resolving', () => {
+  const doc = new Doc(null);
+  doc.setTokens({ 'space-odd': '5px' });
+  const ab = doc.createArtboard({ name: 'T' });
+  doc.writeHtml(ab.id, '<div style="gap:var(--space-odd)"></div>');
+  assert.match(doc.lint(ab.id).join(''), /gap: 5px/);
+});

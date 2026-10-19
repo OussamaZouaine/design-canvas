@@ -274,9 +274,9 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
   }, safe(({ project_id }) => { highlight?.(target(project_id).meta.id, []); return text('ok'); }));
 
   server.registerTool('lint', {
-    description: 'Check an artboard or node for text contrast below WCAG AA, text under 12px, spacing off the grid (4px by default, grid 2 for designs that use half-steps), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only, so overflow/clipping still needs a screenshot.',
-    inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)'), grid: z.union([z.literal(2), z.literal(4)]).optional().describe('Spacing grid in px (default 4).') },
-  }, safe(({ project_id, id, grid }) => text(formatIssues(target(project_id).doc.lint(id, { grid })))));
+    description: 'Check an artboard or node (var(--token) values are resolved; mode checks a token mode) for undefined tokens, text contrast below WCAG AA, text under 12px, spacing off the grid (4px by default, grid 2 for designs that use half-steps), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only, so overflow/clipping still needs a screenshot.',
+    inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)'), grid: z.union([z.literal(2), z.literal(4)]).optional().describe('Spacing grid in px (default 4).'), mode: z.string().optional().describe('Token mode to check, e.g. dark (default: base tokens).') },
+  }, safe(({ project_id, id, grid, mode }) => text(formatIssues(target(project_id).doc.lint(id, { grid, mode })))));
 
   server.registerTool('undo', {
     description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',
