@@ -746,8 +746,12 @@ function setCommentMode(on) {
 }
 $('#comment-mode').onclick = () => { setCommentMode(!commentMode); if (commentMode) toast('Click an element to pin a comment. Esc to stop.'); };
 
+// /p/<id>?comment=<commentId> (from the Comments page): jump to that comment once everything has loaded.
+let deepLink = new URLSearchParams(location.search).get('comment');
 events.addEventListener('comments', (e) => {
   comments = JSON.parse(e.data);
+  const target = deepLink && doc.artboards.length && comments.find((x) => x.id === deepLink);
+  if (target) { deepLink = null; setTimeout(() => focusComment(target), 500); }
   const open = comments.filter((c) => !c.resolved).length;
   $('#c-badge').hidden = !open;
   $('#c-badge').textContent = open;
@@ -769,6 +773,14 @@ function renderCommentList() {
 }
 
 function focusComment(c) {
+  if (view.k < 0.3) { // from the zoomed-out overview: zoom in about the screen centre first, so the pin is readable
+    const w = viewport.clientWidth, vh = viewport.clientHeight, k = 0.6;
+    view.x = w / 2 - ((w / 2 - view.x) / view.k) * k;
+    view.y = vh / 2 - ((vh / 2 - view.y) / view.k) * k;
+    view.k = k;
+    applyView();
+    world.style.transition = ''; // the style write above is applied synchronously, so panTo can measure it
+  }
   if (panTo(c.targetId)) setTimeout(() => openThread(c.id), 0);
   else toast('That element no longer exists.');
 }
