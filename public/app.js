@@ -498,9 +498,105 @@ function drawSelection() {
   drawHover();
   const target = selected && findElement(selected);
   if (!target) { selBox.hidden = true; return; }
+  showHandles(target);
   const r = target.getBoundingClientRect();
   Object.assign(selBox.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
   selBox.hidden = false;
+}
+
+// ---- Resize handles + dragging ---------------------------------------------------------
+// Eight handles ride on the selection box. An artboard can use all of them (they change its size and
+// position). A node that is absolutely positioned can too (width, height, left, top); a node that
+// flows with its siblings only has the east, south and south-east handles, because moving its west or
+// north edge would mean changing its position, which the layout decides. Locked nodes get none.
+const HANDLE_DIRS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+const handleEls = HANDLE_DIRS.map((dir) => {
+  const el = h('i', { class: 'handle', 'data-dir': dir, hidden: true });
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); beginResize(dir, e); });
+  selBox.append(el);
+  return el;
+});
+const isAbs = (el) => ['absolute', 'fixed'].includes(getComputedStyle(el).position);
+function showHandles(target) {
+  const locked = !selected.startsWith('A') && target.closest('[data-locked]');
+  const all = selected.startsWith('A') || isAbs(target);
+  const allowed = locked ? [] : all ? HANDLE_DIRS : ['e', 's', 'se'];
+  for (const el of handleEls) el.hidden = !allowed.includes(el.dataset.dir);
+}
+
+function beginResize(dir, e) {
+  const id = selected;
+  const board = id.startsWith('A') ? doc.artboards.find((a) => a.id === id) : null;
+  const el = board ? null : findElement(id);
+  if (!board && !el) return;
+  const abs = !board && isAbs(el);
+  const start = board
+    ? { x: board.x, y: board.y, w: board.width, h: board.height }
+    : { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+  const min = board ? 40 : 4;
+  const next = { ...start };
+  viewport.setPointerCapture?.(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const move = (ev) => {
+    // Screen pixels to design pixels: everything on the canvas is scaled by the zoom.
+    const dx = (ev.clientX - sx) / view.k, dy = (ev.clientY - sy) / view.k;
+    next.w = start.w; next.h = start.h; next.x = start.x; next.y = start.y;
+    if (dir.includes('e')) next.w = Math.max(min, start.w + dx);
+    if (dir.includes('s')) next.h = Math.max(min, start.h + dy);
+    if (dir.includes('w')) { next.w = Math.max(min, start.w - dx); next.x = start.x + (start.w - next.w); }
+    if (dir.includes('n')) { next.h = Math.max(min, start.h - dy); next.y = start.y + (start.h - next.h); }
+    // Live preview straight on the element; the server version arrives when the drag ends.
+    if (board) {
+      const abEl = abEls.get(board.id);
+      Object.assign(abEl.style, { left: next.x + 'px', top: next.y + 'px', width: next.w + 'px', height: next.h + 'px' });
+    } else {
+      if (dir.includes('e') || dir.includes('w')) el.style.width = next.w + 'px';
+      if (dir.includes('s') || dir.includes('n')) el.style.height = next.h + 'px';
+      if (abs && dir.includes('w')) el.style.left = next.x + 'px';
+      if (abs && dir.includes('n')) el.style.top = next.y + 'px';
+    }
+    drawSelection();
+  };
+  const up = () => {
+    removeEventListener('pointermove', move);
+    removeEventListener('pointerup', up);
+    markUserEdit();
+    const r = (n) => Math.round(n);
+    if (board) {
+      if (next.w !== start.w || next.h !== start.h) post(`${api}/resize`, { id, width: r(next.w), height: r(next.h) });
+      if (next.x !== start.x || next.y !== start.y) post(`${api}/move`, { id, x: r(next.x), y: r(next.y) });
+      return;
+    }
+    const styles = {};
+    if (next.w !== start.w) styles.width = `${r(next.w)}px`;
+    if (next.h !== start.h) styles.height = `${r(next.h)}px`;
+    if (abs && next.x !== start.x) styles.left = `${r(next.x)}px`;
+    if (abs && next.y !== start.y) styles.top = `${r(next.y)}px`;
+    if (Object.keys(styles).length) post(`${api}/style`, { ids: [id], styles }).then(async (res) => { if (!res.ok) toast((await res.json().catch(() => ({}))).error || 'Could not resize'); });
+  };
+  addEventListener('pointermove', move);
+  addEventListener('pointerup', up);
+}
+
+// Drag an absolutely positioned node to move it (left / top). A drag under 3 px counts as a click.
+function startNodeDrag(e, el) {
+  if (!isAbs(el) || el.closest('[data-locked]')) return false;
+  const id = el.dataset.pid;
+  const l0 = el.offsetLeft, t0 = el.offsetTop;
+  let moved = false, dx = 0, dy = 0;
+  startDrag(e, (x, y) => {
+    dx = x; dy = y;
+    if (!moved && Math.hypot(x, y) * view.k < 3) return;
+    moved = true;
+    el.style.left = `${l0 + x}px`;
+    el.style.top = `${t0 + y}px`;
+    drawSelection();
+  }, () => {}, () => {
+    if (!moved) return;
+    markUserEdit();
+    post(`${api}/style`, { ids: [id], styles: { left: `${Math.round(l0 + dx)}px`, top: `${Math.round(t0 + dy)}px` } });
+  }, view.k);
+  return true;
 }
 
 // Dashed boxes around the nodes Claude is working on. Same trick as the selection box: read the
@@ -560,12 +656,17 @@ viewport.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 viewport.addEventListener('mousedown', (e) => { if (commentMode) e.preventDefault(); });
+// Dragging an absolute node captures the pointer, which retargets the click that follows to the viewport.
+// Remember what the pointer went down on so double-click (text editing) still finds its element.
+let lastDown = { node: null, t: 0 };
+let nodeClip = null; // HTML of the node last copied with Ctrl+C
 viewport.addEventListener('pointerdown', (e) => {
   const label = e.target.closest('.label');
   const path = e.composedPath(); // pierces the shadow root to find the real clicked element
   const node = path.find((n) => n.dataset && n.dataset.pid);
   const abEl = e.target.closest('.artboard');
   if (node?.isContentEditable) return; // clicking inside text that is being edited just moves the caret
+  lastDown = { node, t: Date.now() };
 
   // Comment mode: a click pins a comment on the element under the pointer (or the artboard).
   if (commentMode) {
@@ -586,7 +687,7 @@ viewport.addEventListener('pointerdown', (e) => {
     }, () => { ab._x = ab.x; ab._y = ab.y; }, () => post(`${api}/move`, { id: ab.id, x: ab.x, y: ab.y }), view.k);
     return;
   }
-  if (node) { select(node.dataset.pid); return; }
+  if (node) { select(node.dataset.pid); startNodeDrag(e, node); return; }
   select(null);
   // Empty space: pan with the mouse.
   startDrag(e, (dx, dy) => { view.x = view._x + dx; view.y = view._y + dy; applyView(); },
@@ -634,6 +735,12 @@ window.addEventListener('keydown', (e) => {
     markUserEdit();
     post(`${api}/${redo ? 'redo' : 'undo'}`).then(async (r) => { if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Nothing to do'); });
   }
+  // Copy a node's HTML now, paste it later (even on another board or page). Pasting into an artboard
+  // appends; pasting with a node selected puts the copy right after it.
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selected && !selected.startsWith('A') && !getSelection()?.toString()) {
+    const html = layers?.nodeOf(selected)?.outerHTML;
+    if (html) { nodeClip = html; toast('Copied. Paste with Ctrl+V.'); }
+  }
   if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selected) { e.preventDefault(); post(`${api}/duplicate`, { ids: [selected] }); }
 });
 
@@ -643,7 +750,7 @@ window.addEventListener('keydown', (e) => {
 // turns any element into a text field; plaintext-only keeps pasted formatting out.
 viewport.addEventListener('dblclick', (e) => {
   if (commentMode) return;
-  const el = e.composedPath().find((n) => n.dataset && n.dataset.pid);
+  const el = e.composedPath().find((n) => n.dataset && n.dataset.pid) ?? (Date.now() - lastDown.t < 600 ? lastDown.node : null);
   if (!el || el.children.length || !el.textContent.trim() || el.isContentEditable) return;
   startTextEdit(el);
 });
@@ -1339,10 +1446,29 @@ async function addReferenceFile(file) {
   const r = await post(`${api}/reference`, { name: (file.name || 'Pasted image').replace(/\.[^.]+$/, ''), dataUrl, page: activePage });
   toast(r.ok ? 'Added as a reference board' : (await r.json().catch(() => ({}))).error || 'Could not add the image');
 }
+function pasteNode() {
+  const target = selected ?? boardsHere()[0]?.id;
+  if (!nodeClip || !target) return;
+  markUserEdit();
+  post(`${api}/paste`, { html: nodeClip, target, position: selected && !selected.startsWith('A') ? 'after' : 'append' })
+    .then(async (r) => { if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Could not paste'); });
+}
+// Some environments (automation, a few embedded browsers) send Ctrl+V as plain key events without ever
+// firing a paste event. If none arrives shortly after the keystroke, paste the copied node anyway.
+let pasteSeen = false;
+window.addEventListener('keydown', (e) => {
+  if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') || !nodeClip || e.target.closest?.('input, textarea, [contenteditable]')) return;
+  pasteSeen = false;
+  setTimeout(() => { if (!pasteSeen) pasteNode(); }, 150);
+});
 window.addEventListener('paste', (e) => {
+  pasteSeen = true;
   if (e.target.closest?.('input, textarea, [contenteditable]')) return; // pasting text into a field is not ours
   const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
-  if (file) { e.preventDefault(); addReferenceFile(file); }
+  if (file) { e.preventDefault(); addReferenceFile(file); return; }
+  // No image on the system clipboard: paste the node copied in the canvas, if any.
+  const text = e.clipboardData?.getData('text');
+  if (nodeClip && !text?.trim()) { e.preventDefault(); pasteNode(); }
 });
 viewport.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault(); });
 viewport.addEventListener('drop', (e) => {

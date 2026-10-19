@@ -229,6 +229,18 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* ---- Resize handles on the selection box ------------------------------------------ */
+#sel .handle { position: absolute; width: 9px; height: 9px; margin: -5px 0 0 -5px; background: oklch(1 0 0); border: 1.5px solid var(--accent); border-radius: 2px; pointer-events: auto; touch-action: none; }
+#sel .handle[hidden] { display: none; }
+#sel .handle[data-dir="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+#sel .handle[data-dir="n"] { left: 50%; top: 0; cursor: ns-resize; }
+#sel .handle[data-dir="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+#sel .handle[data-dir="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+#sel .handle[data-dir="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+#sel .handle[data-dir="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+#sel .handle[data-dir="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+#sel .handle[data-dir="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
 /* ---- Page bar (header) ---------------------------------------------------------- */
 .pagebar { display: inline-flex; align-items: center; gap: 2px; margin-left: 8px; }
 .pagebar select, .pagebar input { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; max-width: 150px; }

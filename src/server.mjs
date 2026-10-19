@@ -143,7 +143,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -153,6 +153,13 @@ const canvasActions = {
   delete: (p, b) => p.doc.deleteNodes(b.ids),
   duplicate: (p, b) => p.doc.duplicateNodes(b.ids),
   create: (p, b) => p.doc.createArtboard(b),
+  // Ctrl+V of a node copied in the canvas: its HTML goes next to (or into) the target. The old ids are
+  // stripped so the copy gets fresh ones, and writeHtml sanitizes it like any other write.
+  paste: (p, b) => {
+    const html = String(b.html || '').slice(0, 200_000).replace(/ data-pid="[^"]*"/g, '');
+    const created = p.doc.writeHtml(String(b.target), html, b.position === 'after' ? 'after' : 'append');
+    return { ids: created };
+  },
   // The user pasted or dropped an image: { name, dataUrl } becomes a reference and a board showing it.
   reference: (p, b) => {
     const m = /^data:image\/(?:png|jpeg|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(b.dataUrl || ''));
