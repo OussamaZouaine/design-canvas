@@ -105,10 +105,10 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Projects | `list_projects`, `create_project`, `open_project`, `rename_project`, `delete_project` |
 | History | `save_version`, `log_prompt` |
 | Comments | `get_comments`, `reply_comment`, `resolve_comment` |
-| Tokens | `get_design_tokens` |
+| Tokens | `get_design_tokens` (scan what designs use), `get_design_system`, `set_tokens`, `create_foundations` (stored theme: CSS variables with modes) |
 | Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
 | Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `undo` |
-| Verifying | `lint` (contrast, small text, spacing, overflow), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
+| Verifying | `lint` (contrast, small text, spacing, undefined tokens; resolves `var()`), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
 | Output | `export_html`, `export_react` (JSX + Tailwind arbitrary-property classes) |
 
 Typical flow: `list_projects` -> `create_project` -> `create_artboard` -> `write_html` -> `get_screenshot` (check the
