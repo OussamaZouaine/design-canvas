@@ -19,6 +19,11 @@ Feedback: the user can pin comments on elements. Call get_comments at the start 
 Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
 Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.`;
 
+// Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
+const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
+Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt -> get_basic_info -> get_tree -> write_html / update_styles -> lint -> one get_screenshot -> finish_working.
+Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>; check get_comments and get_changes before starting. Call get_guide for the full guide.`;
+
 const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
 
 // Wrap handlers so a thrown error becomes a readable tool error instead of a protocol failure.
@@ -33,8 +38,18 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
 
-export function createMcpServer({ store, ui, requestScreenshot, port }) {
-  const server = new McpServer({ name: 'design-canvas', version: '0.2.0' });
+export function createMcpServer({ store, ui, requestScreenshot, highlight, meter, port }) {
+  const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+
+  // Every tool goes through registerTool, so wrap it once here to meter each result's size
+  // instead of touching 25 handlers. The wrapped handler behaves exactly like the original.
+  const register = server.registerTool.bind(server);
+  server.registerTool = (name, config, handler) =>
+    register(name, config, async (...args) => {
+      const result = await handler(...args);
+      meter?.record(name, result);
+      return result;
+    });
   const url = (id) => `http://localhost:${port}/p/${id}`;
 
   // Resolve which project a call targets: explicit id, else the active one.
@@ -46,9 +61,14 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
     return p;
   };
   // Record a design action in the project's Activity (what Claude did, per artboard).
+  // `anyId` is one id or a list. Besides the Activity entry this also feeds get_changes (journal)
+  // and lights up the touched nodes on the canvas until finish_working or a timeout.
   const log = (meta, doc, tool, anyId, detail) => {
-    const ab = anyId ? doc.artboardOf(anyId) : null;
+    const ids = [].concat(anyId ?? []);
+    const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
     store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
+    doc.record('claude', tool, ids);
+    if (tool !== 'delete_nodes') highlight?.(meta.id, ids);
   };
   const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
 
@@ -211,6 +231,26 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
     inputSchema: { ...pid, node_id: z.string().optional(), depth: z.number().int().min(1).max(10).optional(), query: z.string().min(1).max(100).optional() },
   }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
 
+  server.registerTool('get_changes', {
+    description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
+    inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
+  }, safe(({ project_id, since_version }) => {
+    const { meta, doc } = target(project_id);
+    const from = since_version ?? ui.lastRead.get(meta.id) ?? 0;
+    const changes = doc.changesSince(from, 'user').map((c) => ({
+      version: c.version, action: c.tool, ids: c.ids,
+      // Outline lines only for things that still exist, one line each.
+      now: c.ids.map((id) => { try { return doc.outline(id, { depth: 0 }).split('\n')[0]; } catch { return `${id} (deleted)`; } }),
+    }));
+    ui.lastRead.set(meta.id, doc.version);
+    return text({ version: doc.version, changes: changes.length ? changes : 'none' });
+  }));
+
+  server.registerTool('finish_working', {
+    description: 'Call when you are done with a task: clears the highlight the canvas shows on nodes you were editing.',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => { highlight?.(target(project_id).meta.id, []); return text('ok'); }));
+
   server.registerTool('lint', {
     description: 'Check an artboard or node for text contrast below WCAG AA, text under 12px, odd pixel spacing (off the 2px grid), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only, so overflow/clipping still needs a screenshot.',
     inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)') },
@@ -247,7 +287,7 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
   }, safe(({ project_id, node_ids, styles }) => {
     const { meta, doc } = target(project_id);
     doc.updateStyles(node_ids, styles);
-    log(meta, doc, 'update_styles', node_ids[0]);
+    log(meta, doc, 'update_styles', node_ids);
     return text('ok');
   }));
 
@@ -267,7 +307,7 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
   }, safe(({ project_id, names }) => {
     const { meta, doc } = target(project_id);
     doc.renameNodes(names);
-    log(meta, doc, 'rename_nodes', Object.keys(names)[0]);
+    log(meta, doc, 'rename_nodes', Object.keys(names));
     return text('ok');
   }));
 
@@ -277,7 +317,7 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
   }, safe(({ project_id, ids }) => {
     const { meta, doc } = target(project_id);
     const created = doc.duplicateNodes(ids);
-    log(meta, doc, 'duplicate_nodes', ids[0]);
+    log(meta, doc, 'duplicate_nodes', created);
     return text({ created });
   }));
 
@@ -287,6 +327,7 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
   }, safe(({ project_id, ids }) => {
     const { meta, doc } = target(project_id);
     log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
+    doc.journal.at(-1).ids = ids;
     doc.deleteNodes(ids);
     return text('ok');
   }));

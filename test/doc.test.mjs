@@ -86,3 +86,9 @@ test('outline marks locked nodes and counts hidden children', () => {
   const out = doc.outline(ab.id, { depth: 1 });
   assert.match(out, /locked \[2\]/);
 });
+
+test('repeated drags fold into one journal entry', () => {
+  const { doc } = setup();
+  for (let i = 0; i < 5; i++) doc.record('user', 'move', ['A1']);
+  assert.equal(doc.changesSince(0, 'user').length, 1);
+});

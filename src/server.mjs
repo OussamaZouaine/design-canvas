@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { ProjectStore, ID_RE } from './store.mjs';
 import { createMcpServer } from './mcp.mjs';
+import { Meter } from './meter.mjs';
 import { extractTokens } from './tokens.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
@@ -40,7 +41,10 @@ const ui = {
   selection: new Map(), // projectId -> selected ids
   clients: new Set(), // { res, projectId } for every open SSE stream (projectId null = home page)
   pendingShots: new Map(), // requestId -> { resolve, reject, timer }
+  lastRead: new Map(), // projectId -> journal version Claude last saw through get_changes
+  agentTimers: new Map(), // projectId -> timer that clears the "Claude is editing" highlight
 };
+const meter = new Meter(); // per-tool token estimates, shown by /api/status
 
 // Send the document as a delta. Each client remembers the HTML it last received per artboard;
 // unchanged boards go out with html:null and the browser reuses its copy. A single MCP write
@@ -87,7 +91,15 @@ function requestScreenshot(projectId, artboardId) {
   });
 }
 
-const mcpDeps = { store, ui, requestScreenshot, port: PORT };
+// Light up the nodes Claude just touched in every tab of the project. They clear on
+// finish_working, or on their own after 10 s so a forgotten call never leaves them stuck.
+function highlight(projectId, ids) {
+  clearTimeout(ui.agentTimers.get(projectId));
+  for (const c of ui.clients) if (c.projectId === projectId) send(c.res, 'agent', { ids: ids.slice(0, 40) });
+  if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
+}
+
+const mcpDeps = { store, ui, requestScreenshot, highlight, meter, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -124,6 +136,9 @@ const projectActions = {
   'restore-snapshot': (id, b) => store.restoreSnapshot(id, String(b.snapshotId)),
   activate: (id) => store.setActive(id),
 };
+
+// Canvas actions that change the design (the rest are selection, comments, screenshots).
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create']);
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -231,6 +246,11 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, store.import(await readJson(req)));
       }
 
+      // Server health for the MCP panel: open tabs and where Claude's tokens go.
+      if (parts[1] === 'status' && req.method === 'GET') {
+        return json(res, 200, { ok: true, tabs: [...ui.clients].filter((c) => c.projectId).length, meter: meter.snapshot() });
+      }
+
       // Every comment in every non-trashed project, newest activity first (powers /comments).
       if (parts[1] === 'comments' && req.method === 'GET') {
         const out = [];
@@ -278,7 +298,10 @@ const server = http.createServer(async (req, res) => {
       if (parts[1] === 'p' && ID_RE.test(parts[2] || '') && req.method === 'POST' && canvasActions[parts[3]]) {
         const p = store.get(parts[2]);
         if (!p) return json(res, 404, { error: 'Project not found' });
-        canvasActions[parts[3]](p, await readJson(req));
+        const body = await readJson(req);
+        canvasActions[parts[3]](p, body);
+        // What the user did by hand, so Claude's get_changes can report it.
+        if (USER_EDITS.has(parts[3])) p.doc.record('user', parts[3], body.ids ?? [body.id].filter(Boolean));
         return json(res, 200, { ok: true });
       }
       return json(res, 404, { error: 'Not found' });

@@ -114,6 +114,13 @@ export class Doc {
 
   // Note a change for get_changes. `actor` is 'user' (browser) or 'claude' (MCP).
   record(actor, tool, ids = []) {
+    // Dragging fires many moves for the same board; fold a repeat within 3 s into one entry.
+    const last = this.journal.at(-1);
+    if (last && last.actor === actor && last.tool === tool && Date.now() - last.at < 3000 && last.ids.join() === ids.join() && ['move', 'resize'].includes(tool)) {
+      last.at = Date.now();
+      last.version = ++this.version;
+      return;
+    }
     this.journal.push({ version: ++this.version, actor, tool, ids, at: Date.now() });
     if (this.journal.length > 500) this.journal.shift();
   }
