@@ -173,10 +173,16 @@ export function initLayers({ h, markUserEdit, getDoc, getSelected, select, post,
     return p?.dataset?.pid ?? ab.id;
   }
 
+  // The parsed DOM element for a node id (read-only copy of the stored HTML), for the inspector.
+  function nodeOf(id) {
+    const ab = getDoc().artboards.find((a) => a.id === abOf(id));
+    return ab ? treeOf(ab).querySelector(`[data-pid="${CSS.escape(id)}"]`) : null;
+  }
+
   search.oninput = refresh;
   const button = document.getElementById('open-layers');
   const open = () => { panel.classList.add('open'); panel.inert = false; button.setAttribute('aria-pressed', 'true'); render(); };
   const close = () => { panel.classList.remove('open'); panel.inert = true; button.setAttribute('aria-pressed', 'false'); };
   panel.querySelector('.layers-close').onclick = close;
-  return { refresh, reveal, parentOf, toggle: () => (panel.classList.contains('open') ? close() : open()), isOpen: () => panel.classList.contains('open') };
+  return { refresh, reveal, parentOf, nodeOf, toggle: () => (panel.classList.contains('open') ? close() : open()), isOpen: () => panel.classList.contains('open') };
 }
