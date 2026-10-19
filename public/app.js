@@ -79,13 +79,16 @@ function afterView() {
 
 // ---- Level of detail --------------------------------------------------------
 // With dozens of artboards the browser has to lay out and paint tens of thousands of nodes
-// every frame. We only keep an artboard's HTML mounted in its shadow root when it is (a) near
-// the viewport and (b) big enough on screen to actually read. Everything else shows a cheap
-// placeholder with the artboard's name. The document data is untouched; this is purely a
-// rendering optimisation ("virtualisation" / level of detail).
+// every frame. Figma avoids this with a GPU renderer that draws cached tiles when zoomed out.
+// We can't do that with the DOM, but we can use the same idea: each artboard keeps a cached
+// bitmap snapshot ("thumbnail"). Zoomed out, we show the snapshot (an <img>: one cheap texture);
+// zoomed in, we mount the real HTML so text stays sharp and elements stay selectable.
+//   live DOM  : zoom >= LIVE_K and the board is near the viewport (or Claude is drawing in it)
+//   snapshot  : zoomed out, any board that has a snapshot
+//   placeholder (name only): zoomed out and the snapshot is not ready yet
+const LIVE_K = 0.3;          // below this zoom a board is drawn from its snapshot
 const MOUNT_MARGIN = 500;    // screen px around the viewport inside which boards get mounted
 const UNMOUNT_MARGIN = 1600; // boards only unmount well past that, so small back-and-forth pans don't thrash
-const MIN_SCREEN_W = 150;    // narrower than this on screen = placeholder, unreadable anyway
 const abEls = new Map();     // artboard id -> its DOM element
 const pidIndex = new Map();  // node id (data-pid) -> artboard id, so lookups don't scan every shadow root
 
@@ -109,6 +112,7 @@ function unmountFrame(el) {
 
 function updateVisibility() {
   const vw = viewport.clientWidth, vh = viewport.clientHeight, now = Date.now();
+  const zoomedOut = view.k < LIVE_K;
   for (const ab of doc.artboards) {
     const el = abEls.get(ab.id);
     if (!el) continue;
@@ -116,14 +120,98 @@ function updateVisibility() {
     const left = view.x + ab.x * view.k, top = view.y + ab.y * view.k;
     const w = ab.width * view.k, ht = ab.height * view.k;
     const dist = (m) => left < vw + m && left + w > -m && top < vh + m && top + ht > -m;
-    const readable = w >= MIN_SCREEN_W;
     const mounted = el.querySelector('.frame')._shown != null;
     const pinned = el._pin > now; // Claude is drawing here right now: keep it live
-    if (pinned || (readable && dist(MOUNT_MARGIN))) mountFrame(el, ab);
-    else if (mounted && (!readable || !dist(UNMOUNT_MARGIN))) unmountFrame(el);
+    // Zoomed out we prefer the snapshot, but keep a live board mounted until its snapshot exists.
+    const wantLive = pinned || (dist(MOUNT_MARGIN) && (!zoomedOut || !el._thumbReady));
+    if (wantLive) mountFrame(el, ab);
+    else if (mounted && (zoomedOut || !dist(UNMOUNT_MARGIN))) unmountFrame(el);
   }
   // Placeholder names are counter-scaled so they stay ~15 screen px at any zoom.
   world.style.setProperty('--lod-size', `${Math.min(260, 15 / view.k)}px`);
+}
+
+// ---- Snapshot cache -----------------------------------------------------------
+// Snapshot = the artboard HTML drawn through an SVG <foreignObject> onto a canvas (the same
+// trick the screenshot tool uses). Rendering is queued and runs one at a time in idle time so
+// it never competes with panning. Results are keyed by a hash of the HTML and kept in
+// IndexedDB, so a reload shows every board instantly and only changed boards are redrawn.
+const hashStr = (str) => { // FNV-1a: a fast non-cryptographic hash, good enough as a cache key
+  let hsh = 2166136261;
+  for (let i = 0; i < str.length; i++) { hsh ^= str.charCodeAt(i); hsh = Math.imul(hsh, 16777619); }
+  return (hsh >>> 0).toString(36) + str.length.toString(36);
+};
+let thumbDb = null;
+const idb = () => thumbDb ??= new Promise((resolve) => {
+  try {
+    const rq = indexedDB.open('design-canvas-thumbs', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('t');
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => resolve(null);
+  } catch { resolve(null); } // private mode etc.: just run without the persistent cache
+});
+const idbGet = async (key) => { const db = await idb(); if (!db) return null; return new Promise((r) => { const q = db.transaction('t').objectStore('t').get(key); q.onsuccess = () => r(q.result ?? null); q.onerror = () => r(null); }); };
+const idbPut = async (key, blob) => { const db = await idb(); if (db) try { db.transaction('t', 'readwrite').objectStore('t').put(blob, key); } catch { /* quota: ignore */ } };
+
+const thumbQueue = new Map(); // artboard id -> key still to render
+let thumbBusy = false;
+function wantThumb(ab) {
+  const el = abEls.get(ab.id);
+  const frame = el.querySelector('.frame');
+  frame._hash ??= hashStr(ab.html);
+  const key = `${projectId}:${ab.id}:${frame._hash}`;
+  if (el._thumbKey === key) return;
+  thumbQueue.set(ab.id, key);
+  pumpThumbs();
+}
+function pumpThumbs() {
+  if (thumbBusy || !thumbQueue.size) return;
+  thumbBusy = true;
+  const run = async () => {
+    // Do the board closest to the middle of the screen first.
+    const cx = (viewport.clientWidth / 2 - view.x) / view.k, cy = (viewport.clientHeight / 2 - view.y) / view.k;
+    let best = null, bd = Infinity;
+    for (const [id, key] of thumbQueue) {
+      const ab = doc.artboards.find((a) => a.id === id);
+      if (!ab) { thumbQueue.delete(id); continue; }
+      const d = Math.hypot(ab.x + ab.width / 2 - cx, ab.y + ab.height / 2 - cy);
+      if (d < bd) { bd = d; best = [ab, key]; }
+    }
+    if (best) {
+      const [ab, key] = best;
+      thumbQueue.delete(ab.id);
+      try { await buildThumb(ab, key); } catch { /* an unrenderable board just keeps its placeholder */ }
+    }
+    thumbBusy = false;
+    pumpThumbs();
+  };
+  // Wait for an idle moment, and for the user to stop dragging.
+  const go = () => (Date.now() - lastTouch < 250 ? setTimeout(go, 250) : run());
+  if ('requestIdleCallback' in window) requestIdleCallback(go, { timeout: 1500 }); else setTimeout(go, 50);
+}
+async function buildThumb(ab, key) {
+  const el = abEls.get(ab.id);
+  if (!el) return;
+  let blob = await idbGet(key);
+  if (!blob) {
+    // ~0.7M pixels max (about 2.8 MB decoded) and never above half size: plenty for zoom < 30%.
+    const scale = Math.min(0.5, Math.sqrt(700000 / (ab.width * ab.height)));
+    const canvas = await rasterizeCanvas(ab, scale);
+    blob = await new Promise((r) => canvas.toBlob(r, 'image/webp', 0.82));
+    if (blob) idbPut(key, blob);
+  }
+  if (!blob || !abEls.has(ab.id)) return;
+  // The board may have changed while we were drawing: drop stale results.
+  const frame = el.querySelector('.frame');
+  if (`${projectId}:${ab.id}:${frame._hash}` !== key) return;
+  const img = el.querySelector('.thumb');
+  const old = img.src;
+  img.src = URL.createObjectURL(blob);
+  if (old.startsWith('blob:')) img.decode().finally(() => URL.revokeObjectURL(old)).catch(() => {});
+  el._thumbKey = key;
+  el._thumbReady = true;
+  el.classList.add('has-thumb');
+  updateVisibility(); // a board that was kept live while waiting can now switch to its snapshot
 }
 
 function sizeRing(el) {
@@ -168,8 +256,7 @@ live.onclick = () => {
   view.k = Math.min(1, (w - 120) / ab.width, (h2 - 120) / ab.height);
   view.x = (w - ab.width * view.k) / 2 - ab.x * view.k;
   view.y = (h2 - ab.height * view.k) / 2 - ab.y * view.k;
-  world.style.transition = 'transform 420ms cubic-bezier(0.77, 0, 0.175, 1)';
-  setTimeout(() => (world.style.transition = ''), 460);
+  glide(420);
   applyView();
 };
 
@@ -179,7 +266,7 @@ live.onclick = () => {
 function revealNew(shadow, oldHtml) {
   const oldIds = new Set(oldHtml.match(/data-pid="N\d+"/g) || []);
   const fresh = new Set([...shadow.querySelectorAll('[data-pid]')].filter((n) => !oldIds.has(`data-pid="${n.dataset.pid}"`)));
-  if (!fresh.size || fresh.size > 250) return; // nothing new, or a bulk restore/import: don't animate
+  if (!fresh.size || fresh.size > 250) return []; // nothing new, or a bulk restore/import: don't animate
   const targets = [];
   const pick = (el, depth) => {
     const kids = [...el.children].filter((c) => fresh.has(c));
@@ -197,11 +284,11 @@ function revealNew(shadow, oldHtml) {
       { duration: 280, delay: Math.min(i, 12) * 45, easing: 'cubic-bezier(0.23, 1, 0.32, 1)', fill: 'backwards' },
     );
   });
+  return targets;
 }
 
 // Each artboard's HTML goes in a shadow root so the design's CSS (and our UI's)
 // can't leak into each other. Shadow DOM = style encapsulation built into the browser.
-let pendingFollow = false;
 function render({ animate = false } = {}) {
   const seen = new Set();
   // If a lot of artboards change at once it is a restore/import, not Claude drawing: stay calm.
@@ -220,13 +307,13 @@ function render({ animate = false } = {}) {
         h('div', { class: 'label' }, h('span', { class: 'name' }), h('span', { class: 'status' }, h('i'), 'Designing')),
         h('div', { class: 'ring' }, h('div', { class: 'ring-spin' })),
         h('div', { class: 'frame' }),
+        h('img', { class: 'thumb', alt: '', draggable: 'false' }),
         h('div', { class: 'lod-name' }),
         h('div', { class: 'shimmer' }, 'Claude is designing…'));
       el.querySelector('.frame').attachShadow({ mode: 'open' });
       world.appendChild(el);
       abEls.set(ab.id, el);
       if (showGen) {
-        pendingFollow = true;
         el.classList.add('enter');
         el.addEventListener('animationend', () => el.classList.remove('enter'), { once: true });
       }
@@ -242,13 +329,16 @@ function render({ animate = false } = {}) {
     // Skip the re-parse when nothing changed so dragging stays smooth.
     if (frame._html !== ab.html) {
       frame._html = ab.html;
+      frame._hash = null;
       indexPids(ab);
+      scheduleThumb(ab);
       if (showGen) {
         // Claude is writing here: mount it (even if tiny/offscreen) so the reveal can play.
         el._pin = Date.now() + 4000;
         mountFrame(el, ab);
         touchGen(el);
-        if (!isNew || ab.html) revealNew(frame.shadowRoot, frame._oldHtml ?? '');
+        const fresh = !isNew || ab.html ? revealNew(frame.shadowRoot, frame._oldHtml ?? '') : [];
+        followTo(ab, fresh.at(-1));
       } else if (frame._shown != null) {
         mountFrame(el, ab); // already on screen: refresh in place
       }
@@ -258,7 +348,13 @@ function render({ animate = false } = {}) {
   updateVisibility();
   drawSelection();
   schedulePins();
-  if (pendingFollow) { pendingFollow = false; followNewArtboard(); }
+}
+
+// Re-snapshot a changed board a moment after the last write (a burst of writes = one render).
+function scheduleThumb(ab) {
+  const el = abEls.get(ab.id);
+  clearTimeout(el._thumbT);
+  el._thumbT = setTimeout(() => { const cur = doc.artboards.find((a) => a.id === ab.id); if (cur) wantThumb(cur); }, el._thumbKey ? 700 : 0);
 }
 
 // node id -> artboard id. Built from the HTML text, so it also works for unmounted artboards.
@@ -267,22 +363,56 @@ function indexPids(ab) {
   for (const m of ab.html.matchAll(/data-pid="([^"]+)"/g)) pidIndex.set(m[1], ab.id);
 }
 
-// A new artboard that lands outside the visible area would be drawn where nobody can see it.
-// Glide the view to fit everything, unless the user is actively driving the canvas.
-function followNewArtboard() {
-  if (Date.now() - lastTouch < 4000) return;
-  const last = world.querySelector('.artboard:last-of-type');
-  if (!last) return;
-  const r = last.querySelector('.frame').getBoundingClientRect();
-  const visible = r.left >= 0 && r.top >= 44 && r.right <= innerWidth - (panelOpen() ? 340 : 0) && r.bottom <= innerHeight;
-  if (visible) return;
-  if (!reduceMotion.matches) {
-    // Moving something already on screen: ease-in-out, 420ms. The transition is removed afterwards
-    // so normal panning and zooming stay instant.
-    world.style.transition = 'transform 420ms cubic-bezier(0.77, 0, 0.175, 1)';
-    setTimeout(() => (world.style.transition = ''), 460);
+// ---- Follow Claude ------------------------------------------------------------
+// When Claude writes to an artboard the camera glides there, so you watch the design appear
+// without hunting for it. For a board taller than the screen it centres on the newest content
+// instead of the board's middle, so a long page is followed section by section.
+// It backs off for a few seconds whenever you pan, zoom or click, and can be turned off.
+let follow = true;
+try { follow = localStorage.getItem('dc-follow') !== '0'; } catch { /* storage blocked: default on */ }
+const followBtn = $('#follow');
+followBtn.setAttribute('aria-pressed', String(follow));
+followBtn.onclick = () => {
+  follow = !follow;
+  followBtn.setAttribute('aria-pressed', String(follow));
+  try { localStorage.setItem('dc-follow', follow ? '1' : '0'); } catch { /* ignore */ }
+};
+
+let followAt = 0;
+function followTo(ab, focusEl) {
+  const now = Date.now();
+  if (!follow || now - lastTouch < 2500 || now - followAt < 500) return;
+  const w = viewport.clientWidth - (panelOpen() ? 340 : 0), vh = viewport.clientHeight;
+  // Zoom so the artboard's width fits; never past 100%, never so small it can't be watched.
+  const k = Math.min(1, Math.max(0.2, (w - 160) / ab.width));
+  const curCy = (vh / 2 - view.y) / view.k;
+  let cy = ab.y + ab.height / 2; // short board: centre it
+  if (ab.height * k > vh - 80) { // tall board: centre on the newest content, else keep the current spot
+    cy = curCy;
+    if (focusEl) {
+      const r = focusEl.getBoundingClientRect(); // screen -> world (the viewport starts 44px below the top)
+      cy = (r.top + r.height / 2 - 44 - view.y) / view.k;
+    }
+    cy = Math.min(ab.y + ab.height, Math.max(ab.y, cy));
   }
-  fit();
+  const cx = ab.x + ab.width / 2;
+  const nx = w / 2 - cx * k, ny = vh / 2 - cy * k;
+  // Already framing it well? Don't nudge the camera for every small write.
+  if (Math.abs(view.k - k) / k < 0.3 && Math.abs(view.x - nx) < w * 0.2 && Math.abs(view.y - ny) < vh * 0.2) return;
+  followAt = now;
+  view.k = k; view.x = nx; view.y = ny;
+  glide(560);
+  applyView();
+}
+
+// Animate the next view change (ease-in-out for on-screen movement). The transition is removed
+// afterwards so normal panning and zooming stay instant; repeated calls retarget smoothly.
+let glideT;
+function glide(ms) {
+  if (reduceMotion.matches) return;
+  world.style.transition = `transform ${ms}ms cubic-bezier(0.77, 0, 0.175, 1)`;
+  clearTimeout(glideT);
+  glideT = setTimeout(() => (world.style.transition = ''), ms + 40);
 }
 
 // Outline the selected element. getBoundingClientRect already accounts for the
@@ -462,9 +592,7 @@ events.addEventListener('screenshot', async (e) => {
 // Turn an artboard's HTML into a PNG: wrap it in an SVG <foreignObject>, load that as an
 // image, then draw the image onto a canvas. Limit: only inline styles and data: images
 // survive, since the SVG is rendered in isolation.
-async function rasterize(artboardId) {
-  const ab = doc.artboards.find((a) => a.id === artboardId);
-  if (!ab) throw new Error('Artboard not found');
+async function rasterizeCanvas(ab, scale) {
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   const xhtml = new XMLSerializer().serializeToString(holder); // HTML -> well-formed XML, required by SVG
@@ -472,14 +600,19 @@ async function rasterize(artboardId) {
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   await img.decode();
-  const scale = Math.min(2, 2000 / ab.width); // 2x for sharpness, capped to keep payloads small
   const canvas = document.createElement('canvas');
-  canvas.width = ab.width * scale;
-  canvas.height = ab.height * scale;
+  canvas.width = Math.max(1, Math.round(ab.width * scale));
+  canvas.height = Math.max(1, Math.round(ab.height * scale));
   const ctx = canvas.getContext('2d');
   ctx.scale(scale, scale);
   ctx.drawImage(img, 0, 0);
-  return canvas.toDataURL('image/png');
+  return canvas;
+}
+async function rasterize(artboardId) {
+  const ab = doc.artboards.find((a) => a.id === artboardId);
+  if (!ab) throw new Error('Artboard not found');
+  const scale = Math.min(2, 2000 / ab.width); // 2x for sharpness, capped to keep payloads small
+  return (await rasterizeCanvas(ab, scale)).toDataURL('image/png');
 }
 
 // ---- Project header: name, export ------------------------------------------
