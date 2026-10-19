@@ -38,7 +38,7 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
 
-export function createMcpServer({ store, ui, requestScreenshot, highlight, meter, port }) {
+export function createMcpServer({ store, ui, requestScreenshot, requestComputed, highlight, meter, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
@@ -333,13 +333,34 @@ export function createMcpServer({ store, ui, requestScreenshot, highlight, meter
   }));
 
   server.registerTool('get_screenshot', {
-    description: 'Render an artboard to a PNG so you can review your work. Requires the project to be open in a browser tab.',
-    inputSchema: { ...pid, artboard_id: z.string() },
-  }, safe(async ({ project_id, artboard_id }) => {
+    description: 'Render an artboard (or just one node, via node_id) so you can review your work. Defaults are token-lean: 1x, max 1000 px wide, JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
+    inputSchema: {
+      ...pid,
+      artboard_id: z.string(),
+      node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
+      scale: z.number().min(0.25).max(2).optional(),
+      max_width: z.number().int().min(200).max(2000).optional(),
+      format: z.enum(['jpeg', 'png']).optional(),
+    },
+  }, safe(async ({ project_id, artboard_id, node_id, scale, max_width, format = 'jpeg' }) => {
     const { meta, doc } = target(project_id);
     if (!doc.getArtboard(artboard_id)) throw new Error(`Artboard ${artboard_id} not found`);
-    const dataUrl = await requestScreenshot(meta.id, artboard_id);
-    return { content: [{ type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/png' }] };
+    if (node_id && doc.artboardOf(node_id)?.id !== artboard_id) throw new Error(`Node ${node_id} is not inside ${artboard_id}`);
+    const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: max_width, format });
+    return { content: [{ type: 'image', data: dataUrl.split(',')[1], mimeType: format === 'png' ? 'image/png' : 'image/jpeg' }] };
+  }));
+
+  server.registerTool('get_computed_styles', {
+    description: 'Computed CSS (as the browser resolved it) for nodes, only the properties you ask for, e.g. ["width","height","color","font-size"]. Use it to check real sizes and colours instead of guessing from inline styles. Requires the project open in a browser tab.',
+    inputSchema: {
+      ...pid,
+      node_ids: z.array(z.string()).min(1).max(20),
+      props: z.array(z.string().regex(/^[a-z-]+$/)).min(1).max(20).describe('Kebab-case CSS property names'),
+    },
+  }, safe(async ({ project_id, node_ids, props }) => {
+    const { meta, doc } = target(project_id);
+    for (const id of node_ids) if (!doc.artboardOf(id)) throw new Error(`Node ${id} not found`);
+    return text(await requestComputed(meta.id, node_ids, props));
   }));
 
   server.registerTool('export_html', {
