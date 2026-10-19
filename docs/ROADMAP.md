@@ -44,6 +44,9 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
   editing (double-click), Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z, and a redo stack.
 - Token sync: `link_repo`, `import_tokens` (CSS custom properties from a stylesheet inside the linked repo, classified by
   name and value, unclear ones reported), `export_tokens` (css / tailwind @theme / json), `get_design_tokens` on one node.
+- Pages: header page selector (add, rename, delete), per-page canvas background (Design tab with nothing selected), boards move
+  between pages from the Design tab, the canvas follows Claude to the page it draws on. Tools `create_page`, `update_page`,
+  `delete_page`, `move_to_page`, `set_page`. Stored sparsely: the first page is implicit until a second exists.
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
@@ -52,12 +55,11 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 1. **Manual editing, remaining parts**: resize handles and dragging absolutely positioned nodes on the canvas, drag-reorder
    inside flex parents on the canvas, copy / paste, a toolbar for inserting frames, text, images and components, image upload
    into `assets/`, per-side padding fields and a colour picker. Style fields, in-place text and undo / redo are done.
-2. **Pages** inside a project, `navigate`, dashboard tabs.
-3. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
+2. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-4. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+3. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-5. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
+4. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
 
 ## Deliberate differences to revisit

@@ -319,10 +319,11 @@ const server = http.createServer(async (req, res) => {
         const p = store.get(parts[2]);
         if (!p) return json(res, 404, { error: 'Project not found' });
         const body = await readJson(req);
-        canvasActions[parts[3]](p, body);
+        const result = canvasActions[parts[3]](p, body);
         // What the user did by hand, so Claude's get_changes can report it.
         if (USER_EDITS.has(parts[3])) p.doc.record('user', parts[3], body.ids ?? [body.id].filter(Boolean));
-        return json(res, 200, { ok: true });
+        // Only page creation needs its result back (the browser switches to the new page).
+        return json(res, 200, { ok: true, result: parts[3] === 'page-create' ? result : undefined });
       }
       return json(res, 404, { error: 'Not found' });
     }

@@ -15,6 +15,45 @@ const api = `/api/p/${projectId}`;
 const papi = `/api/projects/${projectId}`;
 
 let doc = { artboards: [] };
+// ---- Pages ------------------------------------------------------------------------
+// A project has pages (separate canvases). Boards without a `page` field are on the first one.
+// Only the active page's boards are shown; the choice is remembered per project in this browser.
+const pagesOf = () => (doc.pages?.length ? doc.pages : [{ id: 'P1', name: 'Page 1' }]);
+const pageOfBoard = (ab) => ab.page ?? pagesOf()[0].id;
+let activePage = null;
+try { activePage = localStorage.getItem(`dc-page:${projectId}`); } catch { /* storage blocked: start on the first page */ }
+const inPage = (ab) => pageOfBoard(ab) === activePage;
+const boardsHere = () => doc.artboards.filter(inPage);
+const currentPage = () => pagesOf().find((p) => p.id === activePage) ?? pagesOf()[0];
+
+// Make sure activePage names a page that exists (it may have been deleted, or never chosen).
+function ensurePage() {
+  if (!pagesOf().some((p) => p.id === activePage)) activePage = pagesOf()[0].id;
+}
+function renderPageBar() {
+  ensurePage();
+  const sel = $('#page');
+  sel.replaceChildren(...pagesOf().map((p) => h('option', { value: p.id }, p.name))); // names are untrusted: option text via textContent
+  sel.value = activePage;
+  $('#page-del').disabled = pagesOf().length < 2;
+  viewport.style.background = currentPage().background || ''; // the page's canvas colour (empty = the default)
+}
+// Switch pages. `fitView` is false when the switch is automatic (Claude drew on another page).
+function setPage(id, { fitView = true } = {}) {
+  if (id === activePage) return;
+  activePage = id;
+  try { localStorage.setItem(`dc-page:${projectId}`, id); } catch { /* ignore */ }
+  select(null);
+  renderPageBar();
+  for (const ab of doc.artboards) abEls.get(ab.id)?.classList.toggle('offpage', !inPage(ab));
+  updateVisibility();
+  $('#count').textContent = `${boardsHere().length} artboard${boardsHere().length === 1 ? '' : 's'}`;
+  $('#hint').hidden = boardsHere().length > 0;
+  layers?.refresh();
+  if (panelOpen() && panelTab === 'design') inspector?.render();
+  if (fitView) fit();
+}
+
 let userEditUntil = 0; // doc changes arriving before this time came from the user's own edit
 const markUserEdit = () => { userEditUntil = Date.now() + 1500; };
 let inspector = null; // the Design tab (style fields for the selected layer)
@@ -133,6 +172,7 @@ function updateVisibility() {
   for (const ab of doc.artboards) {
     const el = abEls.get(ab.id);
     if (!el) continue;
+    if (!inPage(ab)) { if (el.querySelector('.frame')._shown != null) unmountFrame(el); continue; } // other pages cost nothing
     // Screen-space rectangle computed from the data (no layout read, so it's free).
     const left = view.x + ab.x * view.k, top = view.y + ab.y * view.k;
     const w = ab.width * view.k, ht = ab.height * view.k;
@@ -315,6 +355,8 @@ function render({ animate = false } = {}) {
   });
   // Edits the user just made themselves (layers panel, theme tab) are not "Claude designing": no reveal animation, no camera follow.
   const showGen = animate && changed.length <= 3 && Date.now() > userEditUntil;
+  // Claude is drawing on a page we are not looking at: follow it there.
+  if (showGen) { const away = changed.find((a) => !inPage(a)); if (away) setPage(pageOfBoard(away), { fitView: false }); }
 
   for (const ab of doc.artboards) {
     seen.add(ab.id);
@@ -338,6 +380,7 @@ function render({ animate = false } = {}) {
     }
     Object.assign(el.style, { left: ab.x + 'px', top: ab.y + 'px', width: ab.width + 'px', height: ab.height + 'px' });
     el.classList.toggle('empty', !ab.html.trim());
+    el.classList.toggle('offpage', !inPage(ab));
     const label = el.querySelector('.label');
     label.querySelector('.name').textContent = ab.name;
     el.querySelector('.lod-name').textContent = ab.name;
@@ -426,6 +469,9 @@ function followTo(ab, focusEl) {
 
 // Animate the next view change (ease-in-out for on-screen movement). The transition is removed
 // afterwards so normal panning and zooming stay instant; repeated calls retarget smoothly.
+// The camera glide is a CSS transition, so no JS runs while it moves: overlay boxes (selection, hover,
+// Claude's highlight) measured at its start would be left behind. Redraw them when it finishes.
+world.addEventListener('transitionend', (e) => { if (e.target === world) afterView(); });
 let glideT;
 function glide(ms) {
   if (reduceMotion.matches) return;
@@ -631,11 +677,12 @@ $('#fit').onclick = fit;
 
 // Zoom/pan so every artboard is visible.
 function fit() {
-  if (!doc.artboards.length) return;
-  const minX = Math.min(...doc.artboards.map((a) => a.x));
-  const minY = Math.min(...doc.artboards.map((a) => a.y)) - 30;
-  const maxX = Math.max(...doc.artboards.map((a) => a.x + a.width));
-  const maxY = Math.max(...doc.artboards.map((a) => a.y + a.height));
+  const here = boardsHere();
+  if (!here.length) return;
+  const minX = Math.min(...here.map((a) => a.x));
+  const minY = Math.min(...here.map((a) => a.y)) - 30;
+  const maxX = Math.max(...here.map((a) => a.x + a.width));
+  const maxY = Math.max(...here.map((a) => a.y + a.height));
   const w = viewport.clientWidth, h2 = viewport.clientHeight;
   view.k = Math.min(1, (w - 80) / (maxX - minX), (h2 - 80) / (maxY - minY));
   view.x = (w - (maxX - minX) * view.k) / 2 - minX * view.k;
@@ -666,13 +713,15 @@ events.addEventListener('doc', (e) => {
   doc = JSON.parse(e.data);
   // The server only sends HTML that changed (html:null = unchanged); fill the rest from our copy.
   for (const ab of doc.artboards) if (ab.html === null) ab.html = prev.get(ab.id) ?? '';
-  $('#count').textContent = `${doc.artboards.length} artboard${doc.artboards.length === 1 ? '' : 's'}`;
+  ensurePage();
+  renderPageBar();
   render({ animate: !firstDoc });
+  $('#count').textContent = `${boardsHere().length} artboard${boardsHere().length === 1 ? '' : 's'}`;
   layers?.refresh();
   if (panelOpen() && panelTab === 'design') inspector?.refresh();
   applyTheme();
   refreshTheme();
-  $('#hint').hidden = doc.artboards.length > 0;
+  $('#hint').hidden = boardsHere().length > 0;
   // Fit on load, and again when the first artboard ever appears (an empty doc has nothing to fit).
   if (firstDoc || (!hadArtboards && doc.artboards.length)) { firstDoc = false; fit(); }
   if (panelTab === 'tokens' && panelOpen()) refreshSoon('tokens');
@@ -1137,7 +1186,7 @@ document.addEventListener('visibilitychange', claimActive);
 
 // ---- Layers panel ---------------------------------------------------------------
 layers = initLayers({
-  h, markUserEdit, getDoc: () => doc, getSelected: () => selected, select, post, api, toast, abOf,
+  h, markUserEdit, getDoc: () => ({ ...doc, artboards: boardsHere() }), getSelected: () => selected, select, post, api, toast, abOf,
   onHover: (id) => { hoverId = id; drawHover(); },
 });
 $('#open-layers').onclick = () => layers.toggle();
@@ -1145,5 +1194,43 @@ $('#open-layers').onclick = () => layers.toggle();
 // ---- Inspector -------------------------------------------------------------------
 inspector = initInspector({
   h, getSelected: () => selected, getDoc: () => doc, nodeOf: (id) => layers.nodeOf(id),
-  post, api, toast, markUserEdit, getMode: () => themeMode,
+  post, api, toast, markUserEdit, getMode: () => themeMode, getPages: pagesOf, getPage: currentPage,
 });
+
+// ---- Page bar ----------------------------------------------------------------------
+$('#page').onchange = (e) => setPage(e.target.value);
+$('#page-add').onclick = async () => {
+  markUserEdit();
+  const r = await post(`${api}/page-create`, { name: `Page ${pagesOf().length + 1}` });
+  if (!r.ok) { toast((await r.json().catch(() => ({}))).error || 'Could not add a page'); return; }
+  const { result } = await r.json();
+  // The doc event with the new page may arrive after this response, so wait for it before switching.
+  const go = () => { if (pagesOf().some((p) => p.id === result.id)) setPage(result.id); else setTimeout(go, 50); };
+  go();
+};
+$('#page-rename').onclick = () => {
+  const sel = $('#page');
+  const page = currentPage();
+  const input = h('input', { 'aria-label': 'Page name', maxlength: '60' });
+  input.value = page.name;
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    input.replaceWith(sel);
+    if (save && v && v !== page.name) { markUserEdit(); post(`${api}/page-update`, { id: page.id, name: v }); }
+  };
+  input.onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); };
+  input.onblur = () => finish(true);
+  sel.replaceWith(input);
+  input.focus();
+  input.select();
+};
+$('#page-del').onclick = async () => {
+  const page = currentPage();
+  markUserEdit();
+  const r = await post(`${api}/page-delete`, { id: page.id });
+  if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Could not delete the page');
+  else toast(`Deleted “${page.name}”. Its artboards moved to another page (Ctrl+Z undoes this).`);
+};

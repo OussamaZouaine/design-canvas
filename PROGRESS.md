@@ -62,6 +62,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 21. Token sync (2026-10-19): `link_repo`, `import_tokens`, `export_tokens`, node-scoped `get_design_tokens`.
 
+22. Pages (2026-10-19): pages per project, page selector, per-page background, follow Claude across pages; overlay boxes
+    now redraw when the camera glide ends.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.

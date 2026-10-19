@@ -12,6 +12,13 @@
     <!-- The project name is an input so it can be renamed in place -->
     <input id="pname" aria-label="Project name" maxlength="80" spellcheck="false" />
     <span id="count"></span>
+    <!-- Pages: separate canvases inside the project. Only the active page's artboards are shown. -->
+    <span class="pagebar">
+      <select id="page" aria-label="Page"></select>
+      <button id="page-add" class="icon" title="Add a page" aria-label="Add a page">+</button>
+      <button id="page-rename" class="icon" title="Rename this page" aria-label="Rename this page">✎</button>
+      <button id="page-del" class="icon" title="Delete this page (its boards move to another page)" aria-label="Delete this page">✕</button>
+    </span>
     <span class="sep"></span>
     <button id="open-layers" aria-pressed="false" title="Layer tree (L)">Layers</button>
     <button id="open-design" title="Edit the selected layer (I)">Design</button>
