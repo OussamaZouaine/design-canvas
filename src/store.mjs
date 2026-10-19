@@ -147,11 +147,16 @@ export class ProjectStore {
     return this._meta(id);
   }
 
-  update(id, { name, description, normalize }) {
+  update(id, { name, description, normalize, repo }) {
     const meta = this._meta(id);
     if (name !== undefined) meta.name = this._uniqueName(ProjectStore.cleanName(name), id);
     if (description !== undefined) meta.description = String(description).slice(0, 300);
     if (normalize !== undefined) meta.normalize = !!normalize;
+    if (repo !== undefined) {
+      // The linked code folder: tokens are read from files inside it. null / '' unlinks.
+      if (repo && !(fs.existsSync(repo) && fs.statSync(repo).isDirectory())) throw new Error(`Not a folder: ${repo}`);
+      if (repo) meta.repo = path.resolve(repo); else delete meta.repo;
+    }
     meta.updatedAt = Date.now();
     this._saveMeta(id);
     this._emit('meta', { id, meta });

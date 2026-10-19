@@ -60,6 +60,8 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 20. Manual editing (2026-10-19): Design tab inspector, in-place text, undo/redo shortcuts and redo stack.
 
+21. Token sync (2026-10-19): `link_repo`, `import_tokens`, `export_tokens`, node-scoped `get_design_tokens`.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.
