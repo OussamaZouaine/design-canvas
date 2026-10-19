@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects · Design Canvas</title>
+  <link rel="stylesheet" href="/home.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">Design Canvas</div>
+    <input id="search" type="search" placeholder="Search projects" aria-label="Search projects" />
+    <select id="sort" aria-label="Sort projects">
+      <option value="recent">Recently edited</option>
+      <option value="created">Newest first</option>
+      <option value="name">Name A–Z</option>
+    </select>
+    <span class="grow"></span>
+    <button id="import" title="Import a .dcproject.json file">Import</button>
+    <input id="file" type="file" accept=".json,application/json" hidden />
+    <button id="new" class="primary">+ New project</button>
+    <span id="status" class="off">connecting…</span>
+  </header>
+
+  <main>
+    <div class="tabs" role="tablist">
+      <button id="tab-all" class="on" role="tab">Projects <span id="n-all"></span></button>
+      <button id="tab-trash" role="tab">Trash <span id="n-trash"></span></button>
+    </div>
+    <div id="grid"></div>
+    <!-- Shown when there is nothing to list -->
+    <div id="empty" hidden></div>
+  </main>
+
+  <!-- New project dialog (a plain overlay, not window.prompt, so it never blocks the page) -->
+  <div id="dlg" class="overlay" hidden>
+    <form id="form" class="dialog">
+      <h2>New project</h2>
+      <label>Name<input id="f-name" maxlength="80" placeholder="e.g. Checkout redesign" required /></label>
+      <label>Description <small>(optional)</small><input id="f-desc" maxlength="300" placeholder="What are you designing?" /></label>
+      <div class="actions"><button type="button" id="f-cancel">Cancel</button><button class="primary">Create</button></div>
+    </form>
+  </div>
+  <div id="menu" class="menu" hidden></div>
+  <div id="toast" role="status"></div>
+  <script type="module" src="/home.js"></script>
+</body>
+</html>
