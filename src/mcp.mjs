@@ -3,6 +3,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
+import { formatIssues } from './lint.mjs';
 
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
@@ -11,7 +12,7 @@ const GUIDE = `Design Canvas workflow:
 2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
 3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
 4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
-5. Call get_screenshot after meaningful changes and critique it. (Needs the project open in the browser.)
+5. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...). Build a ramp by holding C and H and stepping L.
 Tips: pick a palette, type scale and spacing scale first; use px units; give containers explicit widths; use system fonts (Inter, system-ui) because custom fonts are not loaded.
 Feedback: the user can pin comments on elements. Call get_comments at the start of a task and after finishing; fix what open comments ask, then reply_comment and resolve_comment.
@@ -209,6 +210,11 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
     description: 'Compact outline, one line per node: id, kind (frame/text/image/svg), name, layout, key styles, [n] hidden children. Far cheaper than HTML: read this first, then get_node_info only for the node you will change. node_id is an artboard or node (default: every artboard); query finds nodes by name or text.',
     inputSchema: { ...pid, node_id: z.string().optional(), depth: z.number().int().min(1).max(10).optional(), query: z.string().min(1).max(100).optional() },
   }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
+
+  server.registerTool('lint', {
+    description: 'Check an artboard or node for text contrast below WCAG AA, text under 12px, odd pixel spacing (off the 2px grid), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only, so overflow/clipping still needs a screenshot.',
+    inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)') },
+  }, safe(({ project_id, id }) => text(formatIssues(target(project_id).doc.lint(id)))));
 
   server.registerTool('undo', {
     description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',
