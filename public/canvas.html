@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design Canvas</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <a id="back" href="/" title="All projects">← Projects</a>
+    <!-- The project name is an input so it can be renamed in place -->
+    <input id="pname" aria-label="Project name" maxlength="80" spellcheck="false" />
+    <span id="count"></span>
+    <span class="sep"></span>
+    <button id="new">+ Artboard</button>
+    <button id="fit">Fit</button>
+    <span id="zoom">100%</span>
+    <span class="grow"></span>
+    <button id="comment-mode" aria-pressed="false" title="Pin a comment on an element (C)">Comment <span id="c-badge" hidden></span></button>
+    <button id="open-tokens">Tokens</button>
+    <button id="hist">History</button>
+    <button id="save" title="Save a named checkpoint">Save version</button>
+    <a id="export" class="btn" title="Download this project as a JSON file">Export</a>
+    <!-- Shown only while Claude is writing to an artboard (set from app.js) -->
+    <button id="live" hidden aria-live="polite"><i aria-hidden="true"></i>Designing <b></b></button>
+    <span id="status" class="off">connecting…</span>
+  </header>
+
+  <main id="viewport">
+    <!-- "world" is the pannable/zoomable layer; artboards live inside it -->
+    <div id="world"></div>
+  </main>
+  <div id="hint" hidden>Empty project.<br>Ask Claude to design something, or click <b>+ Artboard</b>.</div>
+  <!-- Selection box lives outside the world so its border stays 2px at any zoom -->
+  <div id="sel" hidden></div>
+  <!-- Comment pins, also outside the world so they keep a constant size -->
+  <div id="pins"></div>
+  <div id="pop" hidden></div>
+
+  <!-- Side drawer: comments, activity, versions, tokens -->
+  <aside id="panel" inert aria-label="Project panel">
+    <div class="panel-head">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="comments">Comments</button>
+        <button role="tab" data-tab="activity">Activity</button>
+        <button role="tab" data-tab="versions">Versions</button>
+        <button role="tab" data-tab="tokens">Tokens</button>
+      </div>
+      <button id="panel-close" class="icon" aria-label="Close panel">×</button>
+    </div>
+    <div class="pane" data-pane="comments"></div>
+    <div class="pane" data-pane="activity"></div>
+    <div class="pane" data-pane="versions"></div>
+    <div class="pane" data-pane="tokens"></div>
+  </aside>
+  <div id="toast" role="status"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
