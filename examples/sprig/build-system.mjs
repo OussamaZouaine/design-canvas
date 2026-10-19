@@ -1,7 +1,7 @@
 // Expanded Sprig design system: eight more sheets covering actions, forms, feedback, navigation,
 // data display, states/edge cases, icons and theme tokens.
 //   node build-system.mjs                 (light)
-//   THEME=dark node build-system.mjs      (dark; the theme-token sheet is light-only because it shows both)
+//   THEME=dark node build-system.mjs      (dark; every sheet, including Theme & tokens)
 // Needs the canvas server running. Re-runnable: it replaces only the sheets it owns.
 import { T, I, ICON_NAMES, LIGHT, DARK, THEME, themeSuffix, contrast, btn, iconBtn, badge, avatar, input, card, toggle, tabs, table, sheet, section, demo, flex } from './ds.mjs';
 import * as sheets2 from './sheets2.mjs';

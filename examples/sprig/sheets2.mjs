@@ -127,8 +127,8 @@ export async function run({ buildSheet }) {
   await buildSheet('DS · States & edge cases', 'States & edge cases', 'What the interface does when there is no data, an error, no permission, too much text, odd numbers, another language or a small screen.', [stEmpty, stPages, stText, stResp], 2380);
   await buildSheet('DS · Icons', 'Icons', 'The icon set and how to use it.', [icSpec, icAll], 1280);
 
-  // ======================= 8. Theme & tokens (light run only: it shows both themes) =======
-  if (!dark) {
+  // ======================= 8. Theme & tokens (built in both themes; the tables always show both palettes) =======
+  {
     const rows = [
       ['Page background', 'bg'], ['Card / surface', 'surface'], ['Sidebar & table header', 'sidebar'], ['Scrim', 'overlay'],
       ['Border', 'line'], ['Border strong', 'lineStrong'], ['Text', 'ink'], ['Text secondary', 'ink2'], ['Text tertiary', 'ink3'],
