@@ -229,6 +229,36 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* ---- Layers panel (left drawer) --------------------------------------------- */
+#layers {
+  position: fixed; top: 44px; left: 0; bottom: 0; width: 280px; z-index: 9;
+  background: var(--chrome); border-right: 1px solid var(--line); display: flex; flex-direction: column;
+  transform: translateX(-100%); visibility: hidden;
+  transition: transform 200ms var(--ease-drawer), visibility 0s linear 200ms;
+}
+#layers.open { transform: none; visibility: visible; transition: transform 260ms var(--ease-drawer), visibility 0s; }
+.layers-search { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.layers-search input { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+.layers-search input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.layers-list { flex: 1; overflow: auto; padding: 4px 0; }
+.lrow { position: relative; display: flex; align-items: center; gap: 4px; height: 28px; padding-right: 6px; cursor: default; font-size: 13px; user-select: none; }
+.lrow.sel { background: var(--accent-soft); color: var(--accent); }
+.lrow.off .lname, .lrow.off .ltext { opacity: 0.45; }
+.lchev { flex: none; width: 16px; height: 16px; padding: 0; background: none; border: 0; color: var(--muted); font-size: 11px; cursor: pointer; }
+.lkind { flex: none; width: 14px; text-align: center; color: var(--muted); font-size: 11px; }
+.lname { flex: none; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ltext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.lname + .lbtn, .ltext + .lbtn { margin-left: auto; }
+.lbtn { flex: none; width: 20px; height: 20px; padding: 0; background: none; border: 0; border-radius: 4px; color: var(--muted); font-size: 11px; cursor: pointer; opacity: 0; }
+.lrow:focus-within .lbtn, .lbtn.on { opacity: 1; }
+@media (hover: hover) and (pointer: fine) { .lrow:hover { background: var(--bg); } .lrow.sel:hover { background: var(--accent-soft); } .lrow:hover .lbtn { opacity: 1; } }
+.lrename { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 4px; padding: 1px 4px; }
+.lrow.drop-before::after, .lrow.drop-after::after { content: ''; position: absolute; left: 6px; right: 6px; height: 2px; background: var(--accent); }
+.lrow.drop-before::after { top: -1px; } .lrow.drop-after::after { bottom: -1px; }
+.lrow.drop-inside { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
+#hover { position: fixed; pointer-events: none; border: 1px solid var(--accent); background: oklch(0.68 0.2 295 / 0.06); z-index: 4; }
+@media (prefers-reduced-motion: reduce) { #layers, #layers.open { transition: opacity 150ms ease, visibility 0s; transform: none; opacity: 0; } #layers.open { opacity: 1; } }
+
 /* Theme tab: one row per token (swatch, name, editable value) */
 .tok { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
 .tok-sw { flex: none; width: 18px; height: 18px; border-radius: 5px; border: 1px solid var(--line); }

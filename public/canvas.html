@@ -13,6 +13,7 @@
     <input id="pname" aria-label="Project name" maxlength="80" spellcheck="false" />
     <span id="count"></span>
     <span class="sep"></span>
+    <button id="open-layers" aria-pressed="false" title="Layer tree (L)">Layers</button>
     <button id="new">+ Artboard</button>
     <button id="fit">Fit</button>
     <span id="zoom">100%</span>
@@ -36,9 +37,18 @@
   <!-- Selection box lives outside the world so its border stays 2px at any zoom -->
   <div id="sel" hidden></div>
   <div id="agent"></div>
+  <!-- Thin box around the layer the pointer is over in the Layers panel -->
+  <div id="hover" hidden></div>
   <!-- Comment pins, also outside the world so they keep a constant size -->
   <div id="pins"></div>
   <div id="pop" hidden></div>
+
+  <!-- Left drawer: the layer tree -->
+  <aside id="layers" inert aria-label="Layers">
+    <div class="panel-head"><b>Layers</b><button class="icon layers-close" aria-label="Close layers">×</button></div>
+    <div class="layers-search"><input type="search" placeholder="Search layers" aria-label="Search layers" spellcheck="false" /></div>
+    <div class="layers-list" role="tree"></div>
+  </aside>
 
   <!-- Side drawer: comments, activity, versions, tokens -->
   <aside id="panel" inert aria-label="Project panel">

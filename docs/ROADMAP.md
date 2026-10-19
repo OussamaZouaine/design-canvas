@@ -37,6 +37,8 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 - Components: `set_component` (variants + `data-slot` text), `insert_component`, `detach_component`, `delete_component`,
   `create_components_sheet`. Instances are stored expanded and re-expanded in place when the master changes (ids and slot
   text kept), shown as one line in `get_tree`.
+- Layers panel (left drawer, `L`): tree of boards and nodes, search, select (canvas selection reveals the row), hover
+  highlight, rename, hide, lock, drag to reorder / reparent (`move_node`, `set_flags` for Claude), Esc selects the parent.
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
@@ -44,16 +46,14 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 
 1. **Theme, remaining parts**: token names shown in an inspector field with a detach option (needs the inspector), and
    `extract_tokens` from a node or a repo CSS file (today `get_design_tokens` scans the whole project).
-2. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
-   `move_node`, `search_nodes` (the outline search covers the read side).
-3. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
+2. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
    resize handles, undo/redo shortcuts in the browser (undo exists only through MCP today).
-4. **Pages** inside a project, `navigate`, dashboard tabs.
-5. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
+3. **Pages** inside a project, `navigate`, dashboard tabs.
+4. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-6. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+5. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-7. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
+6. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
    Tailwind theme and import them back).
 10. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
