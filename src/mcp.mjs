@@ -7,6 +7,7 @@ import { formatIssues } from './lint.mjs';
 import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
+import fs from 'node:fs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 const GUIDE = `Design Canvas workflow:
@@ -42,7 +43,7 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
 
-export function createMcpServer({ store, ui, requestScreenshot, requestComputed, highlight, meter, port }) {
+export function createMcpServer({ store, ui, requestScreenshot, requestComputed, requestCompare, highlight, meter, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
@@ -422,6 +423,38 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     log(meta, doc, 'move_to_page', artboard_ids);
     return text('ok');
   }));
+
+  server.registerTool('add_reference_image', {
+    description: 'Add a picture to rebuild a design from (a screenshot of a page or an app). Give an absolute file path on this machine (PNG, JPEG, GIF or WebP, up to 10 MB). It appears on the canvas as a locked "Reference" board; build your own artboard next to it, then call compare_to_reference to see how close you are.',
+    inputSchema: { ...pid, path: z.string(), name: z.string().max(80).optional(), page_id: z.string().optional() },
+  }, safe(({ project_id, path: file, name, page_id }) => {
+    const { meta, doc } = target(project_id);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error(`File not found: ${file}`);
+    if (fs.statSync(file).size > 10_000_000) throw new Error('Image too large (10 MB max)');
+    const { ref, board } = store.addReference(meta.id, { name: name || file.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''), buffer: fs.readFileSync(file), page: page_id ?? ui.currentPage.get(meta.id) });
+    log(meta, doc, 'add_reference_image', board.id);
+    return text({ reference_id: ref.id, artboard_id: board.id, width: ref.width, height: ref.height });
+  }));
+
+  server.registerTool('compare_to_reference', {
+    description: 'Compare an artboard with a reference image pixel by pixel (both scaled to the same width, at most 800 px). Returns the share of pixels that differ, the worst areas of a 4x4 grid, and a diff image (red = different, faded reference elsewhere). Use it to fix the biggest differences first; stop after 3 rounds or when different is under about 5%. Needs the project open in a browser tab.',
+    inputSchema: { ...pid, artboard_id: z.string(), reference_id: z.string().optional().describe('Default: the most recently added reference.') },
+  }, safe(async ({ project_id, artboard_id, reference_id }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.getArtboard(artboard_id);
+    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    if (ab.generated === 'reference') throw new Error('Pick your own artboard, not a reference board');
+    const ref = reference_id ? doc.references.find((r) => r.id === reference_id) : doc.references.at(-1);
+    if (!ref) throw new Error(doc.references.length ? `Reference ${reference_id} not found` : 'No reference images yet. Call add_reference_image first.');
+    const r = await requestCompare(meta.id, artboard_id, ref.id);
+    const { dataUrl, ...summary } = r;
+    return { content: [{ type: 'text', text: JSON.stringify({ reference_id: ref.id, ...summary }, null, 2) }, { type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/jpeg' }] };
+  }));
+
+  server.registerTool('delete_reference', {
+    description: 'Remove a reference image and its board.',
+    inputSchema: { ...pid, reference_id: z.string() },
+  }, safe(({ project_id, reference_id }) => { const { meta, doc } = target(project_id); doc.deleteReference(reference_id); log(meta, doc, 'delete_reference', []); return text('ok'); }));
 
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',

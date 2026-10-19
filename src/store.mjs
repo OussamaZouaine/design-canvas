@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Doc } from './doc.mjs';
+import { imageInfo, EXT, MAX_IMAGE_BYTES } from './images.mjs';
 
 // Ids arrive over HTTP and end up in file paths, so only accept our own format.
 // This is what stops a request like /api/projects/..%2F..%2Fsecret from escaping data/.
@@ -211,6 +212,34 @@ export class ProjectStore {
     copy.normalize = !!src.normalize; // a copy of an un-normalized design must not start rewriting its markup
     this._saveMeta(copy.id);
     return copy;
+  }
+
+  // ---- reference images ----------------------------------------------------
+  // Pictures to rebuild from live in data/projects/<id>/refs/R<n>.<ext>; the doc keeps their metadata.
+
+  addReference(id, { name, buffer, page }) {
+    if (!buffer?.length) throw new Error('Empty image');
+    if (buffer.length > MAX_IMAGE_BYTES) throw new Error('Image too large (10 MB max)');
+    const info = imageInfo(buffer); // trusts the bytes, not the file name or a claimed type
+    if (!info) throw new Error('Not a PNG, JPEG, GIF or WebP image');
+    if (!info.width || !info.height || info.width * info.height > 60_000_000) throw new Error('Image dimensions are not supported');
+    const doc = this._doc(id);
+    const ref = doc.addReference({ name, ...info });
+    const dir = path.join(this._dir(id), 'refs');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${ref.id}.${EXT[info.mime]}`), buffer);
+    const board = doc.createReferenceBoard(ref, `/api/p/${id}/ref/${ref.id}`, page);
+    return { ref, board };
+  }
+
+  // Absolute path of a reference file, or null. The id must match our own format, so it can never
+  // be turned into a path outside refs/.
+  refFile(id, refId) {
+    if (!/^R\d+$/.test(refId)) return null;
+    const ref = this._doc(id).references.find((r) => r.id === refId);
+    if (!ref) return null;
+    const file = path.join(this._dir(id), 'refs', `${refId}.${EXT[ref.mime]}`);
+    return fs.existsSync(file) ? { file, mime: ref.mime } : null;
   }
 
   // ---- export / import ----------------------------------------------------

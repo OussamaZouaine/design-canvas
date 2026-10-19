@@ -93,6 +93,7 @@ function askBrowser(projectId, event, payload) {
   });
 }
 const requestScreenshot = (projectId, artboardId, opts = {}) => askBrowser(projectId, 'screenshot', { artboardId, ...opts });
+const requestCompare = (projectId, artboardId, refId) => askBrowser(projectId, 'compare', { artboardId, refId });
 const requestComputed = (projectId, nodeIds, props) => askBrowser(projectId, 'computed', { nodeIds, props });
 
 // Light up the nodes Claude just touched in every tab of the project. They clear on
@@ -103,7 +104,7 @@ function highlight(projectId, ids) {
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
-const mcpDeps = { store, ui, requestScreenshot, requestComputed, highlight, meter, port: PORT };
+const mcpDeps = { store, ui, requestScreenshot, requestComputed, requestCompare, highlight, meter, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -142,7 +143,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -152,6 +153,13 @@ const canvasActions = {
   delete: (p, b) => p.doc.deleteNodes(b.ids),
   duplicate: (p, b) => p.doc.duplicateNodes(b.ids),
   create: (p, b) => p.doc.createArtboard(b),
+  // The user pasted or dropped an image: { name, dataUrl } becomes a reference and a board showing it.
+  reference: (p, b) => {
+    const m = /^data:image\/(?:png|jpeg|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(b.dataUrl || ''));
+    if (!m) throw new Error('Not an image');
+    const { board } = store.addReference(p.meta.id, { name: String(b.name || 'Pasted image'), buffer: Buffer.from(m[1], 'base64'), page: b.page });
+    return { id: board.id };
+  },
   // Layers panel: reorder / reparent a node, and the hidden + locked toggles.
   'move-node': (p, b) => p.doc.moveNode(String(b.id), String(b.target), b.position),
   // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
@@ -309,6 +317,13 @@ const server = http.createServer(async (req, res) => {
       if (parts[1] === 'p' && ID_RE.test(parts[2] || '') && req.method === 'GET') {
         const p = store.get(parts[2]);
         if (!p) return json(res, 404, { error: 'Project not found' });
+        if (parts[3] === 'ref' && parts[4]) {
+          const f = store.refFile(p.meta.id, parts[4]);
+          if (!f) return json(res, 404, { error: 'Reference not found' });
+          res.writeHead(200, { 'Content-Type': f.mime, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+          fs.createReadStream(f.file).pipe(res);
+          return;
+        }
         if (parts[3] === 'tokens') return json(res, 200, extractTokens(p.doc.data.artboards));
         if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id));
         return json(res, 404, { error: 'Not found' });
@@ -323,7 +338,7 @@ const server = http.createServer(async (req, res) => {
         // What the user did by hand, so Claude's get_changes can report it.
         if (USER_EDITS.has(parts[3])) p.doc.record('user', parts[3], body.ids ?? [body.id].filter(Boolean));
         // Only page creation needs its result back (the browser switches to the new page).
-        return json(res, 200, { ok: true, result: parts[3] === 'page-create' ? result : undefined });
+        return json(res, 200, { ok: true, result: ['page-create', 'reference'].includes(parts[3]) ? result : undefined });
       }
       return json(res, 404, { error: 'Not found' });
     }

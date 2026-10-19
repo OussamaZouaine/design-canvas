@@ -65,6 +65,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 22. Pages (2026-10-19): pages per project, page selector, per-page background, follow Claude across pages; overlay boxes
     now redraw when the camera glide ends.
 
+23. References (2026-10-19): reference images (tool, paste, drop), compare_to_reference with diff image; fixed a regression that
+    broke all screenshots (hidden rule), threshold 6%.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.

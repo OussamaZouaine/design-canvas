@@ -754,6 +754,76 @@ function applyTheme() {
   }
 }
 
+// Claude asked how close an artboard is to a reference picture. Both are drawn at the same width
+// (at most 800 px, plenty for layout and cheap to compare), then every pixel pair is measured.
+// A pixel counts as "different" when its colour distance is over 6%. The result also reports the
+// 4x4 grid cells that differ most, so a fix can start where it matters, plus a diff picture.
+events.addEventListener('compare', async (e) => {
+  const { id, artboardId, refId } = JSON.parse(e.data);
+  try {
+    await post(`${api}/reply`, { id, result: await compareToReference(artboardId, refId) });
+  } catch (err) {
+    await post(`${api}/reply`, { id, error: String(err.message || err) });
+  }
+});
+
+async function compareToReference(artboardId, refId) {
+  const ab = doc.artboards.find((a) => a.id === artboardId);
+  const ref = (doc.references ?? []).find((r) => r.id === refId);
+  if (!ab || !ref) throw new Error('Artboard or reference not found');
+  const W = Math.min(800, ref.width);
+  const mine = await rasterizeCanvas(ab, W / ab.width);
+  const img = new Image();
+  img.src = `${api}/ref/${encodeURIComponent(refId)}`;
+  await img.decode();
+  const refH = Math.round((ref.height * W) / ref.width);
+  const theirs = document.createElement('canvas');
+  theirs.width = W; theirs.height = refH;
+  const tctx = theirs.getContext('2d');
+  tctx.fillStyle = '#fff'; tctx.fillRect(0, 0, W, refH);
+  tctx.drawImage(img, 0, 0, W, refH);
+
+  const H = Math.min(mine.height, refH); // compare the area both pictures cover
+  const a = mine.getContext('2d').getImageData(0, 0, W, H).data;
+  const b = tctx.getImageData(0, 0, W, H).data;
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  const octx = out.getContext('2d');
+  const diff = octx.createImageData(W, H);
+  const cells = Array.from({ length: 16 }, () => ({ bad: 0, n: 0 }));
+  let bad = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const d = (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 765;
+      const cell = cells[Math.min(3, Math.floor((y / H) * 4)) * 4 + Math.min(3, Math.floor((x / W) * 4))];
+      cell.n++;
+      const lum = 0.3 * b[i] + 0.59 * b[i + 1] + 0.11 * b[i + 2];
+      const faded = 255 - (255 - lum) * 0.35; // the reference as a pale grey backdrop
+      if (d > 0.06) {
+        bad++; cell.bad++;
+        const k = Math.min(1, 0.45 + d); // stronger colour distance, stronger red
+        diff.data[i] = 255 * k + faded * (1 - k); diff.data[i + 1] = faded * (1 - k); diff.data[i + 2] = faded * (1 - k);
+      } else { diff.data[i] = diff.data[i + 1] = diff.data[i + 2] = faded; }
+      diff.data[i + 3] = 255;
+    }
+  }
+  octx.putImageData(diff, 0, 0);
+  const names = ['top', 'upper-middle', 'lower-middle', 'bottom'];
+  const cols = ['left', 'centre-left', 'centre-right', 'right'];
+  const worst = cells.map((c, i) => ({ area: `${names[Math.floor(i / 4)]} ${cols[i % 4]}`, different: Math.round((c.bad / Math.max(1, c.n)) * 100) }))
+    .sort((p, q) => q.different - p.different).slice(0, 3);
+  const taller = Math.max(mine.height, refH), shorter = Math.min(mine.height, refH);
+  return {
+    different_pct: Math.round((bad / (W * H)) * 1000) / 10,
+    compared_px: `${W}x${H}`,
+    worst_areas: worst,
+    // Boards of different heights only overlap; say so, because the rest could not be compared.
+    height_mismatch: taller - shorter > taller * 0.05 ? `artboard is ${Math.round(mine.height / (W / ab.width))}px tall at its own scale, reference is ${Math.round(refH * (ab.width / W))}px` : undefined,
+    dataUrl: out.toDataURL('image/jpeg', 0.8),
+  };
+}
+
 // Claude asked for computed styles. Only a laid-out DOM knows real values (resolved colours,
 // used widths), so read them from the live node, mounting its board first if needed.
 events.addEventListener('computed', async (e) => {
@@ -776,6 +846,22 @@ events.addEventListener('computed', async (e) => {
 // image, then draw the image onto a canvas. Limit: only inline styles and data: images
 // survive, since the SVG is rendered in isolation.
 async function rasterizeCanvas(ab, scale, crop = { x: 0, y: 0, w: ab.width, h: ab.height }) {
+  // A reference board is just a picture. The SVG route below cannot load http images, so draw it directly.
+  if (ab.generated === 'reference') {
+    const img = new Image();
+    img.src = `${api}/ref/${encodeURIComponent(ab.ref)}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(crop.w * scale));
+    canvas.height = Math.max(1, Math.round(crop.h * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const k = Math.min((ab.width * scale) / img.naturalWidth, (ab.height * scale) / img.naturalHeight); // object-fit: contain
+    const w = img.naturalWidth * k, h2 = img.naturalHeight * k;
+    ctx.drawImage(img, ((ab.width * scale - w) / 2) - crop.x * scale, ((ab.height * scale - h2) / 2) - crop.y * scale, w, h2);
+    return canvas;
+  }
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   // HTML -> well-formed XML (required by SVG), minus the holder div we wrapped it in. The [hidden] rule is added
@@ -1236,3 +1322,30 @@ $('#page-del').onclick = async () => {
   if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Could not delete the page');
   else toast(`Deleted “${page.name}”. Its artboards moved to another page (Ctrl+Z undoes this).`);
 };
+
+// ---- Reference images: paste or drop a picture ---------------------------------------------
+// A screenshot to rebuild from. It is sent to the server, which stores the file and adds a locked
+// board that shows it; Claude can then compare its own board against it (compare_to_reference).
+async function addReferenceFile(file) {
+  if (!file.type.startsWith('image/')) { toast('That is not an image'); return; }
+  if (file.size > 10_000_000) { toast('Images up to 10 MB, please'); return; }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+  markUserEdit(); // the new board is the user's own, not Claude drawing
+  const r = await post(`${api}/reference`, { name: (file.name || 'Pasted image').replace(/\.[^.]+$/, ''), dataUrl, page: activePage });
+  toast(r.ok ? 'Added as a reference board' : (await r.json().catch(() => ({}))).error || 'Could not add the image');
+}
+window.addEventListener('paste', (e) => {
+  if (e.target.closest?.('input, textarea, [contenteditable]')) return; // pasting text into a field is not ours
+  const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
+  if (file) { e.preventDefault(); addReferenceFile(file); }
+});
+viewport.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault(); });
+viewport.addEventListener('drop', (e) => {
+  const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
+  if (file) { e.preventDefault(); addReferenceFile(file); }
+});
