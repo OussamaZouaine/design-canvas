@@ -1,0 +1,62 @@
+# Design Canvas
+
+A small local, Paper-like design canvas that Claude drives over MCP. Built from scratch (nothing decompiled).
+Claude generates HTML designs onto an infinite pan/zoom canvas; the user watches them appear live, comments on
+elements, and Claude reads and answers those comments. Local only, no database (JSON files).
+
+**Read `PROGRESS.md` first** for what has been done, current state and what to do next.
+
+## Run
+- `npm start` (= `node src/server.mjs`) serves http://localhost:3777. Stop it with a normal kill so it flushes `data/`.
+- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateless). Registered in Claude Code as `design-canvas`.
+  After changing MCP tool schemas, Claude Code must be restarted to see them.
+- A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
+- Pages: `/` projects home, `/p/<id>` canvas, `/comments` all comments.
+
+## Layout
+- `src/server.mjs` HTTP routes, SSE (`/events`, `/events?project=<id>`), delta doc sync, comments API.
+- `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there.
+- `src/store.mjs` `ProjectStore`: projects, snapshots (versions), activity log, comments, active project.
+- `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
+- `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
+- `public/` browser UI: `index.html`+`home.*`, `canvas.html`+`app.js`+`style.css`, `comments.*`.
+- `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
+- `data/` runtime data (gitignored): `projects/<id>/{doc,meta,activity,comments}.json`, `snapshots/`, `state.json`.
+
+## Conventions (follow these)
+- **Colours are OKLCH everywhere** (UI CSS, generated designs, tokens). Hex only as authored input that gets converted.
+- **Motion rules:** curves `--ease-out cubic-bezier(0.23,1,0.32,1)`, `--ease-in-out cubic-bezier(0.77,0,0.175,1)`,
+  `--ease-drawer cubic-bezier(0.32,0.72,0,1)`; animate transform/opacity only; never `transition: all`;
+  press scale 0.96; hover styles gated by `(hover:hover) and (pointer:fine)`; always a `prefers-reduced-motion`
+  variant; no animation for frequent actions (shortcuts, pan, zoom, selection).
+- **Security:** bind 127.0.0.1 only, Host allowlist (DNS rebinding), JSON-only POSTs, project id regex `^p_[a-f0-9]{8}$`,
+  sanitize all HTML, and render untrusted text (names, comments) with `textContent`, never `innerHTML`.
+- The user's global rules apply: purposeful "why" comments in code; commit messages without any Claude attribution;
+  small focused commits (one per concern, never one giant commit).
+
+## Architecture notes that are easy to get wrong
+- **Rendering / performance (public/app.js):** every artboard is a shadow-DOM frame. Level of detail: live HTML is
+  mounted only when zoom >= `LIVE_K` (0.3) and the board is near the viewport (or Claude is drawing in it);
+  below that a cached bitmap snapshot (`<img.thumb>`) is shown. Snapshots are rendered one at a time in idle time
+  via SVG foreignObject and cached in IndexedDB keyed by a hash of the HTML. `pidIndex` maps node id -> artboard
+  so lookups never scan every shadow root. Pan/zoom heavy work is coalesced in one rAF (`afterView`).
+- **Delta sync:** the server sends each client only artboards whose HTML changed (`html: null` = unchanged); the
+  client refills from its previous doc. If an artboard ever shows blank, a reload fixes it (one unexplained blank
+  screenshot was seen once and not reproduced).
+- **Live "Claude is designing":** `touchGen` ring + header pill `#live`; **Follow** toggle (`followTo`) glides the camera
+  to the artboard being written (centres on newest content for tall boards); backs off 2.5s after user input.
+- **Active project:** the browser claims it via POST `/activate` on load/visibility, not on SSE reconnect.
+- **Artboard ids change when artboards are deleted and recreated** (build scripts do this). Comments pinned to the old
+  ids become orphaned (shown as "replaced or deleted" on `/comments`).
+- Static files are served `no-cache`, so a reload picks up UI edits. Restart the server for `src/` changes.
+
+## Sprig design system project (`examples/sprig`)
+Built from a user-supplied Sprig Home screenshot. Project name `Sprig design system` (id `p_aced47a7`, data is local
+and not in git). Scripts talk to the running server and are idempotent (delete same-named artboards, then recreate):
+```
+node build.mjs && node build-more.mjs && node build-system.mjs && node build-density.mjs     # light
+THEME=dark node build.mjs && THEME=dark node build-more.mjs && THEME=dark node build-system.mjs && THEME=dark node build-density.mjs
+```
+`ds.mjs` holds the `LIGHT`/`DARK` palettes, icons and component helpers (components read colour *roles*, never raw
+values). Layout: light rows at y=0/1200/2400, dark mirror 6600px lower with a " · Dark" suffix. Spec in
+`examples/sprig/DESIGN-SYSTEM.md`. Status text must use the `*Ink` tokens (AA-safe), not the plain status colours.
