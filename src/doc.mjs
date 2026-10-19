@@ -612,6 +612,59 @@ export class Doc {
     return out;
   }
 
+  // Move a node next to or inside another node, keeping its ids. position: before | after (siblings
+  // of the target) or start | end (first / last child of the target). Works across artboards.
+  moveNode(id, targetId, position = 'end') {
+    if (!['before', 'after', 'start', 'end'].includes(position)) throw new Error('position must be before, after, start or end');
+    if (id === targetId) throw new Error('A node cannot be moved onto itself');
+    const src = this._find(id);
+    if (!src) throw new Error(`Node ${id} not found`);
+    this._assertUnlocked(src.el, id);
+    const inside = position === 'start' || position === 'end';
+    const targetIsBoard = !!this.getArtboard(targetId);
+    if (targetIsBoard && !inside) throw new Error('Use position start or end to move a node into an artboard');
+    // The target must not be the node itself or live inside it, or the node would swallow itself.
+    if (!targetIsBoard) {
+      const tgt = this._find(targetId);
+      if (!tgt) throw new Error(`Target ${targetId} not found`);
+      if (src.el.querySelector(`[data-pid="${targetId}"]`)) throw new Error('Cannot move a node into its own descendant');
+      if (inside) this._assertUnlocked(tgt.el, targetId);
+    }
+    const html = src.el.toString();
+    this._checkpoint('move_node');
+    src.el.remove();
+    this._save(src.ab, src.root);
+    if (targetIsBoard) {
+      const ab = this.getArtboard(targetId);
+      ab.html = position === 'start' ? html + ab.html : ab.html + html;
+    } else {
+      const tgt = this._find(targetId); // re-find: the source artboard was just re-saved
+      const where = { before: 'beforebegin', after: 'afterend', start: 'afterbegin', end: 'beforeend' }[position];
+      tgt.el.insertAdjacentHTML(where, html);
+      this._save(tgt.ab, tgt.root);
+    }
+    this._commit();
+  }
+
+  // Toggle the two flags the layers panel exposes: hidden (not drawn) and data-locked (not editable).
+  setFlags(ids, { hidden, locked }) {
+    for (const id of ids) {
+      const hit = this._find(id);
+      if (!hit) throw new Error(`Node ${id} not found`);
+      // Unlocking must work on a locked node, so only check the lock when we are not changing it.
+      if (locked === undefined) this._assertUnlocked(hit.el, id);
+    }
+    this._checkpoint('set_flags');
+    for (const id of ids) {
+      const hit = this._find(id);
+      const set = (attr, on) => (on ? hit.el.setAttribute(attr, '') : hit.el.removeAttribute(attr));
+      if (hidden !== undefined) set('hidden', hidden);
+      if (locked !== undefined) set('data-locked', locked);
+      this._save(hit.ab, hit.root);
+    }
+    this._commit();
+  }
+
   moveArtboard(id, x, y) {
     const ab = this.getArtboard(id);
     if (!ab) return;

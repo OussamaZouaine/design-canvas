@@ -141,7 +141,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme']);
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags']);
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -151,6 +151,9 @@ const canvasActions = {
   delete: (p, b) => p.doc.deleteNodes(b.ids),
   duplicate: (p, b) => p.doc.duplicateNodes(b.ids),
   create: (p, b) => p.doc.createArtboard(b),
+  // Layers panel: reorder / reparent a node, and the hidden + locked toggles.
+  'move-node': (p, b) => p.doc.moveNode(String(b.id), String(b.target), b.position),
+  flags: (p, b) => p.doc.setFlags(b.ids ?? [b.id], { hidden: b.hidden, locked: b.locked }),
   theme: (p, b) => p.doc.setTokens(b.tokens, { mode: b.mode, preset: b.preset }), // the Theme tab edits one value at a time
   selection: (p, b) => ui.selection.set(p.meta.id, (b.ids || []).slice(0, 50)),
   // Comments (author is always 'user' here: Claude uses the MCP tools)
