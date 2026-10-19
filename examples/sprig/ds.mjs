@@ -23,6 +23,9 @@ export const LIGHT = {
   // status (foreground + tinted background)
   success: '#1E9E6A', successBg: '#E3F6EE', warn: '#B87400', warnBg: '#FDF1D6',
   danger: '#D64545', dangerBg: '#FCE8E8', info: '#3B6FE0', infoBg: '#E6EEFD',
+  // AA-safe text variants (>= 4.8:1 on the tint and on white). Use these for any text or icon at 12-16px;
+  // the plain status colours stay for fills, borders, dots and large text.
+  successInk: '#177851', warnInk: '#955E00', dangerInk: '#B63B3B', infoInk: '#3462C5',
 };
 
 // Dark keeps the warm neutral hue (~80) and lifts accents so they stay readable on dark surfaces.
@@ -36,6 +39,8 @@ export const DARK = {
   yellow: 'oklch(0.78 0.13 95)', mint: 'oklch(0.45 0.05 180)', orange: 'oklch(0.76 0.15 75)', freeBg: 'oklch(0.32 0.06 80)', freeInk: 'oklch(0.86 0.1 85)',
   success: 'oklch(0.76 0.15 155)', successBg: 'oklch(0.29 0.06 155)', warn: 'oklch(0.82 0.14 80)', warnBg: 'oklch(0.31 0.06 80)',
   danger: 'oklch(0.72 0.17 25)', dangerBg: 'oklch(0.3 0.07 25)', info: 'oklch(0.77 0.12 255)', infoBg: 'oklch(0.29 0.06 255)',
+  // dark status colours already pass AA, so the ink variants are the same values
+  successInk: 'oklch(0.76 0.15 155)', warnInk: 'oklch(0.82 0.14 80)', dangerInk: 'oklch(0.72 0.17 25)', infoInk: 'oklch(0.77 0.12 255)',
 };
 
 export const THEME = process.env.THEME === 'dark' ? 'dark' : 'light';
@@ -149,7 +154,7 @@ export const btn = (label, kind = 'primary', icon = '', opts = {}) => {
     primary: `background:${state === 'hover' ? C.primaryHover : C.primary};color:${C.onPrimary};border:1px solid ${C.primary}`,
     secondary: `background:${state === 'hover' ? C.sidebar : C.surface};color:${C.ink};border:1px solid ${state === 'hover' ? C.lineStrong : C.line}`,
     ghost: `background:${state === 'hover' ? C.navActive : 'transparent'};color:${C.ink};border:1px solid transparent`,
-    danger: `background:${C.surface};color:${C.danger};border:1px solid ${C.dangerBg}`,
+    danger: `background:${C.surface};color:${C.dangerInk};border:1px solid ${C.dangerBg}`,
     'danger-solid': `background:${C.danger};color:${C.onPrimary === '#FFFFFF' ? '#FFFFFF' : C.bg};border:1px solid ${C.danger}`,
     link: `background:transparent;color:${C.link};border:1px solid transparent;text-decoration:underline`,
   }[kind];
@@ -166,8 +171,8 @@ export const iconBtn = (icon, kind = 'secondary', size = 'md', label = '') => {
 };
 export const badge = (label, tone = 'neutral', opts = {}) => {
   const t = {
-    neutral: [C.chip, C.ink2], success: [C.successBg, C.success], warn: [C.warnBg, C.warn],
-    danger: [C.dangerBg, C.danger], info: [C.infoBg, C.info], free: [C.freeBg, C.freeInk], ai: [C.aiBg, C.accent],
+    neutral: [C.chip, C.ink2], success: [C.successBg, C.successInk], warn: [C.warnBg, C.warnInk],
+    danger: [C.dangerBg, C.dangerInk], info: [C.infoBg, C.infoInk], free: [C.freeBg, C.freeInk], ai: [C.aiBg, C.accent],
     solid: [C.primary, C.onPrimary],
   }[tone];
   const dot = opts.dot ? `<i style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px"></i>` : '';

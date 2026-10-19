@@ -60,7 +60,7 @@ const mono = "font-family:Consolas,'SF Mono',monospace";
 const muted = `color:${C.ink2}`;
 const h18 = (t, extra = '') => `<div style="font-size:18px;font-weight:500;${extra}">${t}</div>`;
 const chip = (t, bg = C.chip, fg = C.ink2) => `<span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-size:12px;font-weight:500;background:${bg};color:${fg}">${t}</span>`;
-const kpi = (label, val, delta, up = true) => card(`<div style="font-size:13px;${muted};margin-bottom:8px">${label}</div><div style="font-size:30px;font-weight:500;letter-spacing:-.5px;margin-bottom:6px">${val}</div><div style="font-size:13px;color:${up ? C.success : C.danger}">${up ? '▲' : '▼'} ${delta} <span style="color:${C.ink3}">vs last 30 days</span></div>`);
+const kpi = (label, val, delta, up = true) => card(`<div style="font-size:13px;${muted};margin-bottom:8px">${label}</div><div style="font-size:30px;font-weight:500;letter-spacing:-.5px;margin-bottom:6px">${val}</div><div style="font-size:13px;color:${up ? C.successInk : C.dangerInk}">${up ? '▲' : '▼'} ${delta} <span style="color:${C.ink3}">vs last 30 days</span></div>`);
 
 // ======================= 1. Behavior =============================================
 const pts = [32, 38, 35, 46, 52, 49, 61, 58, 70, 66, 78, 74, 88, 84, 96];
@@ -73,7 +73,7 @@ const chart = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="di
   <polyline points="${line}" fill="none" stroke="${C.primary}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
   <circle cx="${xy.at(-1)[0]}" cy="${xy.at(-1)[1]}" r="5" fill="${C.primary}" stroke="${C.surface}" stroke-width="2"/>
 </svg>`;
-const step = (label, pct, n, drop) => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span>${label}</span><span style="${muted};font-variant-numeric:tabular-nums">${n} · ${pct}%</span></div><div style="height:24px;border-radius:8px;background:${C.chip}"><div style="height:24px;width:${pct}%;border-radius:8px;background:${C.primary}"></div></div>${drop ? `<div style="font-size:12px;color:${C.danger};margin-top:4px">−${drop}% drop-off</div>` : ''}</div>`;
+const step = (label, pct, n, drop) => `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:6px"><span>${label}</span><span style="${muted};font-variant-numeric:tabular-nums">${n} · ${pct}%</span></div><div style="height:24px;border-radius:8px;background:${C.chip}"><div style="height:24px;width:${pct}%;border-radius:8px;background:${C.primary}"></div></div>${drop ? `<div style="font-size:12px;color:${C.dangerInk};margin-top:4px">−${drop}% drop-off</div>` : ''}</div>`;
 const behavior = shell('Behavior',
   pageTitle('Behavior', btn('Last 30 days', 'secondary') + btn('Save view', 'secondary')) +
   tabs(['Overview', 'Funnels', 'Retention', 'User paths'], 0) +
@@ -165,7 +165,7 @@ const upgrade = shell('Upgrade',
    ${plan('Pro', '$149', '/ month', feat('Unlimited studies') + feat('25,000 responses / month') + feat('Heatmaps, surveys, replays') + feat('Slack and Segment'), 'Upgrade to Pro', 'primary', { hi: true, tag: 'Most popular' })}
    ${plan('Enterprise', 'Custom', '', feat('Unlimited responses') + feat('SSO and audit logs') + feat('Dedicated support') + feat('Custom data retention'), 'Contact sales', 'secondary')}
   </div>
-  <div style="margin-top:28px;background:${C.sidebar};border:1px solid ${C.line};border-radius:16px;padding:20px 28px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;gap:32px;font-size:15px"><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.success}">${I.check(18)}</span>No credit card to start</span><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.success}">${I.check(18)}</span>14-day Pro trial</span><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.success}">${I.check(18)}</span>Cancel anytime</span></div>${btn('Compare all features', 'secondary')}</div>`);
+  <div style="margin-top:28px;background:${C.sidebar};border:1px solid ${C.line};border-radius:16px;padding:20px 28px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;gap:32px;font-size:15px"><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.successInk}">${I.check(18)}</span>No credit card to start</span><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.successInk}">${I.check(18)}</span>14-day Pro trial</span><span style="display:flex;gap:8px;align-items:center"><span style="color:${C.successInk}">${I.check(18)}</span>Cancel anytime</span></div>${btn('Compare all features', 'secondary')}</div>`);
 
 // ---- run ----------------------------------------------------------------------
 await page('Behavior', behavior);

@@ -53,10 +53,23 @@ Dark artboards sit 6600px below the light ones with a " · Dark" suffix. Compone
 (`LIGHT` / `DARK` palettes), never raw values. Dark keeps the warm neutral hue (~80 in OKLCH), inverts the primary action
 and lifts accents for contrast.
 
-## Known accessibility gaps (from the computed contrast table)
-- Light theme: status text on its tint (success, warning, danger, info) is 3.0 to 4.0:1: fine for large text, below AA for 12px badges.
-  Suggested fix: add darker `*Ink` tokens for small status text.
+## Status ink tokens (AA-safe text)
+Status colours are split by job. `success / warn / danger / info` stay for fills, borders, dots and large text.
+`successInk / warnInk / dangerInk / infoInk` are for any text or icon at 12-16px:
+
+| token | light | contrast on its tint | on white |
+|---|---|---|---|
+| successInk | #177851 | 4.86:1 | 5.47:1 |
+| warnInk | #955E00 | 4.83:1 | 5.41:1 |
+| dangerInk | #B63B3B | 4.85:1 | 5.71:1 |
+| infoInk | #3462C5 | 4.87:1 | 5.68:1 |
+
+In dark mode the status colours already pass AA, so the ink tokens equal them. Badges, hints, alerts, KPI deltas and tags
+use the ink tokens.
+
+## Remaining accessibility notes
 - Tertiary text (`ink3`) is 3.3:1 on white: use for placeholders/disabled only.
+- `lineStrong` is a decorative border (1.4:1 light, 2:1 dark); never the only cue for a control boundary.
 
 ## Data table density
 `node build-density.mjs` (and `THEME=dark node build-density.mjs`) adds "DS · Data table density" at the end of the system row. Compact 36px / Comfortable 48px / Spacious 64px rows; only row height, padding, gap, type size and avatar size change. The sheet covers cell types, row states (hover, selected, focus, disabled, grouped, zebra) and skeletons per density.
