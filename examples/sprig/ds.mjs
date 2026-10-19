@@ -13,7 +13,7 @@ export const LIGHT = {
   // borders
   line: '#ECEAE6', lineStrong: '#DAD7D2',
   // text
-  ink: '#1F1F1F', ink2: '#5F5E5B', ink3: '#8E8D89', onPrimary: '#FFFFFF',
+  ink: '#1F1F1F', ink2: '#5F5E5B', ink3: '#686763', onPrimary: '#FFFFFF',
   // interactive
   navActive: '#E9E7E4', primary: '#2A2A2A', primaryHover: '#000000', chip: '#EFEEEC',
   focus: 'oklch(0.62 0.19 262)', link: 'oklch(0.5 0.19 262)',
@@ -32,7 +32,7 @@ export const LIGHT = {
 export const DARK = {
   bg: 'oklch(0.19 0.004 80)', surface: 'oklch(0.225 0.005 80)', sidebar: 'oklch(0.155 0.004 80)', overlay: 'oklch(0.05 0 0 / 0.6)',
   line: 'oklch(0.3 0.005 80)', lineStrong: 'oklch(0.4 0.006 80)',
-  ink: 'oklch(0.96 0.004 80)', ink2: 'oklch(0.76 0.008 80)', ink3: 'oklch(0.6 0.008 80)', onPrimary: 'oklch(0.2 0.005 80)',
+  ink: 'oklch(0.96 0.004 80)', ink2: 'oklch(0.76 0.008 80)', ink3: 'oklch(0.68 0.008 80)', onPrimary: 'oklch(0.2 0.005 80)',
   navActive: 'oklch(0.28 0.006 80)', primary: 'oklch(0.95 0.004 80)', primaryHover: 'oklch(1 0 0)', chip: 'oklch(0.28 0.006 80)',
   focus: 'oklch(0.72 0.15 262)', link: 'oklch(0.76 0.13 262)',
   aiBg: 'oklch(0.255 0.045 305)', aiBorder: 'oklch(0.34 0.06 305)', accent: 'oklch(0.76 0.14 285)', accentSoft: 'oklch(0.52 0.11 290)',
@@ -155,13 +155,13 @@ export const btn = (label, kind = 'primary', icon = '', opts = {}) => {
     secondary: `background:${state === 'hover' ? C.sidebar : C.surface};color:${C.ink};border:1px solid ${state === 'hover' ? C.lineStrong : C.line}`,
     ghost: `background:${state === 'hover' ? C.navActive : 'transparent'};color:${C.ink};border:1px solid transparent`,
     danger: `background:${C.surface};color:${C.dangerInk};border:1px solid ${C.dangerBg}`,
-    'danger-solid': `background:${C.danger};color:${C.onPrimary === '#FFFFFF' ? '#FFFFFF' : C.bg};border:1px solid ${C.danger}`,
+    'danger-solid': `background:${C.dangerInk};color:${C.onPrimary === '#FFFFFF' ? '#FFFFFF' : C.bg};border:1px solid ${C.dangerInk}`,
     link: `background:transparent;color:${C.link};border:1px solid transparent;text-decoration:underline`,
   }[kind];
   const ring = state === 'focus' ? `;box-shadow:0 0 0 2px ${C.surface},0 0 0 4px ${C.focus}` : '';
   const press = state === 'pressed' ? ';transform:scale(0.96)' : '';
   const dis = disabled ? ';opacity:.45' : '';
-  return `<div style="display:inline-flex;align-items:center;justify-content:center;gap:8px;height:${h}px;padding:0 ${px}px;border-radius:8px;font-size:${fs}px;font-weight:450;white-space:nowrap;box-sizing:border-box;${k}${ring}${press}${dis}">${icon}${label}${iconRight}</div>`;
+  return `<div style="display:inline-flex;align-items:center;justify-content:center;gap:8px;height:${h}px;padding:0 ${px}px;border-radius:8px;font-size:${fs}px;font-weight:450;white-space:nowrap;box-sizing:border-box;${k}${ring}${press}${dis}"${disabled ? ' aria-disabled="true"' : ''}>${icon}${label}${iconRight}</div>`;
 };
 // Square icon-only button (same heights as text buttons so they line up in a row)
 export const iconBtn = (icon, kind = 'secondary', size = 'md', label = '') => {
@@ -176,16 +176,16 @@ export const badge = (label, tone = 'neutral', opts = {}) => {
     solid: [C.primary, C.onPrimary],
   }[tone];
   const dot = opts.dot ? `<i style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:6px"></i>` : '';
-  return `<span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:500;background:${t[0]};color:${t[1]}">${dot}${label}</span>`;
+  return `<span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:500;background:${t[0]};color:${t[1]}">${dot}${label}</span>`;
 };
 export const avatar = (initials, size = 32, bg = C.chip, fg = C.ink2) =>
-  `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:${fg};display:flex;align-items:center;justify-content:center;font-size:${Math.max(10, Math.round(size * 0.38))}px;font-weight:500;flex-shrink:0">${initials}</div>`;
+  `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:${fg};display:flex;align-items:center;justify-content:center;font-size:${Math.max(12, Math.round(size * 0.38))}px;font-weight:500;flex-shrink:0">${initials}</div>`;
 export const input = (placeholder, icon = '', width = '100%') =>
   `<div style="display:flex;align-items:center;gap:8px;height:40px;padding:0 14px;width:${width};box-sizing:border-box;background:${C.surface};border:1px solid ${C.line};border-radius:8px;font-size:15px;color:${C.ink3}">${icon}${placeholder}</div>`;
 export const card = (inner, pad = 20, extra = '') =>
   `<div style="background:${C.surface};border:1px solid ${C.line};border-radius:16px;padding:${pad}px;${extra}">${inner}</div>`;
 export const toggle = (on, disabled = false) =>
-  `<div style="width:36px;height:20px;border-radius:999px;background:${on ? C.primary : C.lineStrong};position:relative;flex-shrink:0;${disabled ? 'opacity:.45' : ''}"><div style="position:absolute;top:2px;${on ? 'right' : 'left'}:2px;width:16px;height:16px;border-radius:50%;background:${on ? C.onPrimary : C.surface}"></div></div>`;
+  `<div style="width:36px;height:20px;border-radius:999px;background:${on ? C.primary : C.lineStrong};position:relative;flex-shrink:0;${disabled ? 'opacity:.45' : ''}"${disabled ? ' aria-disabled="true"' : ''}><div style="position:absolute;top:2px;${on ? 'right' : 'left'}:2px;width:16px;height:16px;border-radius:50%;background:${on ? C.onPrimary : C.surface}"></div></div>`;
 export const tabs = (items, active) =>
   `<div style="display:flex;gap:24px;border-bottom:1px solid ${C.line}">${items.map((t, i) =>
     `<div style="padding:10px 0;font-size:15px;color:${i === active ? C.ink : C.ink2};font-weight:${i === active ? 500 : 400};border-bottom:2px solid ${i === active ? C.ink : 'transparent'};margin-bottom:-1px">${t}</div>`).join('')}</div>`;

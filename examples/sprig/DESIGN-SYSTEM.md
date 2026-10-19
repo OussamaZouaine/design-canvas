@@ -15,7 +15,7 @@ Run it with the canvas server up: `node build.mjs` (it clears the canvas first).
 | surface | #FFFFFF | page, cards |
 | sidebar | #FAF9F7 | sidebar, table header |
 | line / lineStrong | #ECEAE6 / #DAD7D2 | borders, toggle off |
-| ink / ink2 / ink3 | #1F1F1F / #5F5E5B / #8E8D89 | text, descriptions, placeholders |
+| ink / ink2 / ink3 | #1F1F1F / #5F5E5B / #686763 | text, descriptions, placeholders |
 | navActive | #E9E7E4 | selected nav row |
 | primary | #2A2A2A | buttons, toggle on |
 | aiBg / aiBorder / accent | #F7F2FC / #EBE1F6 / #5B3FD0 | AI banner |
@@ -68,7 +68,9 @@ In dark mode the status colours already pass AA, so the ink tokens equal them. B
 use the ink tokens.
 
 ## Remaining accessibility notes
-- Tertiary text (`ink3`) is 3.3:1 on white: use for placeholders/disabled only.
+- Tertiary text (`ink3`) is 5.5:1 on white and about 4.5:1 on the chip fill, so it passes AA; it is just quieter than `ink2`.
+- Disabled controls carry `aria-disabled="true"` (and decorative numerals `aria-hidden`), which the `lint` tool treats as exempt from contrast.
+- Lint Sprig with `grid: 2`: the system uses half-steps (6, 10, 14) on purpose.
 - `lineStrong` is a decorative border (1.4:1 light, 2:1 dark); never the only cue for a control boundary.
 
 ## Data table density

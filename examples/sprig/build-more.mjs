@@ -59,7 +59,7 @@ async function page(name, html) {
 const mono = "font-family:Consolas,'SF Mono',monospace";
 const muted = `color:${C.ink2}`;
 const h18 = (t, extra = '') => `<div style="font-size:18px;font-weight:500;${extra}">${t}</div>`;
-const chip = (t, bg = C.chip, fg = C.ink2) => `<span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:6px;font-size:12px;font-weight:500;background:${bg};color:${fg}">${t}</span>`;
+const chip = (t, bg = C.chip, fg = C.ink2) => `<span style="display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;background:${bg};color:${fg}">${t}</span>`;
 const kpi = (label, val, delta, up = true) => card(`<div style="font-size:13px;${muted};margin-bottom:8px">${label}</div><div style="font-size:30px;font-weight:500;letter-spacing:-.5px;margin-bottom:6px">${val}</div><div style="font-size:13px;color:${up ? C.successInk : C.dangerInk}">${up ? '▲' : '▼'} ${delta} <span style="color:${C.ink3}">vs last 30 days</span></div>`);
 
 // ======================= 1. Behavior =============================================
@@ -105,7 +105,7 @@ const events = shell('Events',
   ]));
 
 // ======================= 3. Attributes ===========================================
-const typeChip = (t) => ({ String: chip('String', C.infoBg, C.info), Number: chip('Number', C.successBg, C.success), Boolean: chip('Boolean', C.warnBg, C.warn), Date: chip('Date', C.aiBg, C.accent) })[t];
+const typeChip = (t) => ({ String: chip('String', C.infoBg, C.infoInk), Number: chip('Number', C.successBg, C.successInk), Boolean: chip('Boolean', C.warnBg, C.warnInk), Date: chip('Date', C.aiBg, C.accent) })[t];
 const at = (name, type, src, used, upd) => [`<div style="${mono};font-size:14px">${name}</div>`, typeChip(type), src, `${used} ${used === 1 ? 'study' : 'studies'}`, upd];
 const attributes = shell('Attributes',
   pageTitle('Attributes', btn('Import', 'secondary') + btn('New attribute', 'primary', I.plus(18))) +
@@ -138,7 +138,7 @@ const results = shell('Studies',
       ${card(`<div style="font-size:13px;${muted};margin-bottom:4px">Question 1 · Rating</div>${h18('How satisfied are you with onboarding?', 'margin-bottom:14px')}${dist}`, 20)}
       ${card(`<div style="font-size:13px;${muted};margin-bottom:4px">Question 2 · Multiple choice</div>${h18('What nearly stopped you from finishing?', 'margin-bottom:14px')}${choice}`, 20)}
     </div>
-    ${card(`${h18('Latest responses', 'margin-bottom:8px')}${quote('BB', 'Brian B.', 'Loved the setup flow, but pricing was hard to find.', '14 min ago', C.infoBg, C.info)}${quote('JS', 'Jenny S.', 'Segment integration saved us hours.', '1 hour ago', C.successBg, C.success)}${quote('MK', 'Maya K.', 'Needed Slack alerts, could not find where.', '3 hours ago', C.warnBg, C.warn)}${quote('LT', 'Leo T.', 'Smooth. Five stars.', 'Yesterday', C.aiBg, C.accent)}`, 24)}
+    ${card(`${h18('Latest responses', 'margin-bottom:8px')}${quote('BB', 'Brian B.', 'Loved the setup flow, but pricing was hard to find.', '14 min ago', C.infoBg, C.infoInk)}${quote('JS', 'Jenny S.', 'Segment integration saved us hours.', '1 hour ago', C.successBg, C.successInk)}${quote('MK', 'Maya K.', 'Needed Slack alerts, could not find where.', '3 hours ago', C.warnBg, C.warnInk)}${quote('LT', 'Leo T.', 'Smooth. Five stars.', 'Yesterday', C.aiBg, C.accent)}`, 24)}
   </div>`);
 
 // ======================= 5. Settings =============================================
@@ -152,7 +152,7 @@ const settings = shell('Settings',
   `<div style="display:flex;gap:32px"><div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:4px">${subnav}</div><div style="flex:1;display:flex;flex-direction:column;gap:16px">
     ${card(`${h18('Workspace', 'margin-bottom:16px')}<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">${field('Workspace name', 'ASMobbin')}${field('Default timezone', 'UTC−05:00 · New York')}</div>${field('Allowed domains', 'asmobbin.com', 'Studies only run on these domains.')}<div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px"><div><div style="font-size:15px">Collect session replays</div><div style="font-size:13px;${muted}">Record anonymised sessions for Replay studies.</div></div>${toggle(true)}</div>`, 24)}
     ${card(`${h18('Environments', 'margin-bottom:8px')}${envRow('Production', 'env_prod_8f2a91c4d7')}${envRow('Development', 'env_dev_31b7e0a96c')}`, 24)}
-    ${card(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">${h18('Team')}${btn('Invite', 'secondary', I.plus(18))}</div>${member('AS', 'Alex Stone', 'alex@asmobbin.com', 'Owner', 'free', C.chip, C.ink2)}${member('JP', 'Jordan Park', 'jordan@asmobbin.com', 'Admin', 'info', C.infoBg, C.info)}`, 24)}
+    ${card(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">${h18('Team')}${btn('Invite', 'secondary', I.plus(18))}</div>${member('AS', 'Alex Stone', 'alex@asmobbin.com', 'Owner', 'free', C.chip, C.ink2)}${member('JP', 'Jordan Park', 'jordan@asmobbin.com', 'Admin', 'info', C.infoBg, C.infoInk)}`, 24)}
   </div></div>`);
 
 // ======================= 6. Upgrade ==============================================
