@@ -94,7 +94,7 @@ const components = doc('Components', 'Every component below is composed from the
       demo('Toggle · Off / On', flex(toggle(false), toggle(true))))}
     ${sec('Badges & avatars', 'Pills 22px tall, tinted background with matching ink.',
       demo('Status', flex(badge('Free', 'free'), badge('Live', 'success'), badge('Draft'), badge('Paused', 'warn'), badge('Error', 'danger'), badge('New', 'info'), badge('AI', 'ai'))) +
-      demo('Avatars', flex(avatar('AS', 28), avatar('JP', 32, C.infoBg, C.info), avatar('MK', 40, C.successBg, C.success))))}
+      demo('Avatars', flex(avatar('AS', 28), avatar('JP', 32, C.infoBg, C.infoInk), avatar('MK', 40, C.successBg, C.successInk))))}
     ${sec('Tabs', 'Underline style, 2px ink indicator.', demo('', tabs(['All', 'Surveys', 'Replays', 'Heatmaps'], 0)))}
   </div>
   <div>
@@ -129,7 +129,7 @@ const homeMain = `<div style="font-size:28px;font-weight:500;letter-spacing:-.4p
    [1, 'Install the SDK', 'Choose from popular installation methods such as JS SDK, Segment, and Google Tag Manager.', 'View install guides', C.accentSoft,
     `<div style="display:flex;gap:14px;align-items:center"><div style="width:52px;height:52px;border-radius:12px;background:#F7DF1E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px">JS</div><div style="width:52px;height:52px;border-radius:12px;background:#2BC27C"></div><div style="width:52px;height:52px;border-radius:12px;background:${C.surface};color:#4A86F7;display:flex;align-items:center;justify-content:center">${I.sparkle(28)}</div></div>`],
    [2, 'Create a study', 'Create a Replay, Heatmap, Survey, or Feedback study from scratch or with our customizable templates.', 'Create a study', C.yellow,
-    `<div style="width:170px;background:${C.surface};border-radius:10px;padding:12px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><b>Replays</b><div style="color:${C.ink2};margin:6px 0">brian.brava@email.com</div><div style="color:${C.ink2}">User 6701fba721</div></div>`],
+    `<div style="width:170px;background:${C.surface};border-radius:10px;padding:12px;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.1)"><b>Replays</b><div style="color:${C.ink2};margin:6px 0">brian.brava@email.com</div><div style="color:${C.ink2}">User 6701fba721</div></div>`],
    [3, 'Add events and attributes', 'Target your study at the right users at the right time in your product with events and attributes.', 'Add events', C.mint,
     `<div style="background:${C.surface};border:1px solid ${C.line};border-radius:8px;padding:10px 14px;font-size:12px">Completed Onboarding</div>`],
  ].map(([n, t, d, cta, bg, art]) => `<div style="display:flex;background:${C.surface};border:1px solid ${C.line};border-radius:20px;overflow:hidden;height:150px"><div style="width:232px;flex-shrink:0;background:${bg};display:flex;align-items:center;justify-content:center">${art}</div><div style="padding:20px 32px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><div style="width:28px;height:28px;border-radius:50%;background:${C.chip};display:flex;align-items:center;justify-content:center;font-size:13px;color:${C.ink2}">${n}</div><div style="font-size:18px;font-weight:500">${t}</div></div><div style="font-size:15px;color:${C.ink2};margin-bottom:14px">${d}</div>${btn(cta, 'secondary')}</div></div>`).join('')}
@@ -151,7 +151,7 @@ const studiesMain = pageTitle('Studies', btn('New Study', 'primary', I.plus(18))
   ].map((r) => [`<div style="font-weight:500">${r[0]}</div>`, ...r.slice(1)]));
 
 const kpi = (label, val, delta, up = true) => card(`<div style="font-size:13px;color:${C.ink2};margin-bottom:8px">${label}</div><div style="font-size:30px;font-weight:500;letter-spacing:-.5px;margin-bottom:6px">${val}</div><div style="font-size:13px;color:${up ? C.successInk : C.dangerInk}">${up ? '▲' : '▼'} ${delta} <span style="color:${C.ink3}">vs last 30 days</span></div>`);
-const bars = [42, 58, 51, 74, 66, 88, 79, 94, 72, 85, 97, 90].map((h, i) => `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:8px"><div style="width:100%;height:${h * 2}px;background:${i === 10 ? C.primary : C.lineStrong};border-radius:6px 6px 0 0"></div><span style="font-size:11px;color:${C.ink3}">${['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][i]}</span></div>`).join('');
+const bars = [42, 58, 51, 74, 66, 88, 79, 94, 72, 85, 97, 90].map((h, i) => `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:8px"><div style="width:100%;height:${h * 2}px;background:${i === 10 ? C.primary : C.lineStrong};border-radius:6px 6px 0 0"></div><span style="font-size:12px;color:${C.ink3}">${['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'][i]}</span></div>`).join('');
 const dashMain = pageTitle('Dashboards', btn('Last 30 days', 'secondary') + btn('New dashboard', 'primary', I.plus(18))) +
   `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px">${kpi('Responses', '12,480', '12.4%')}${kpi('Completion rate', '68%', '3.1%')}${kpi('Avg. satisfaction', '4.3 / 5', '0.2')}${kpi('Drop-off', '21%', '1.8%', false)}</div>
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px">
@@ -166,18 +166,18 @@ const person = (init, name, email, plan, last, bg, fg) => [
 const usersMain = pageTitle('Users', btn('Export', 'secondary') + btn('Add attribute', 'primary', I.plus(18))) +
   `<div style="display:flex;gap:12px;margin-bottom:20px">${input('Search by name, email or user ID', I.search(18), '420px')}${btn('Attributes', 'secondary', I.filter(18))}</div>` +
   table('2.2fr 1fr 1.2fr 1fr 40px', ['User', 'Plan', 'Last seen', 'Segment', ''], [
-    person('BB', 'Brian Brava', 'brian.brava@email.com', 'Pro', '14 minutes ago', C.infoBg, C.info),
-    person('JS', 'Jenny Spaziano', 'jennyspaziano951@email.com', 'Free', '1 hour ago', C.successBg, C.success),
+    person('BB', 'Brian Brava', 'brian.brava@email.com', 'Pro', '14 minutes ago', C.infoBg, C.infoInk),
+    person('JS', 'Jenny Spaziano', 'jennyspaziano951@email.com', 'Free', '1 hour ago', C.successBg, C.successInk),
     person('U6', 'User 6701fba721', 'No email', 'Free', '3 hours ago', C.chip, C.ink2),
-    person('MK', 'Maya Khan', 'maya@northwind.io', 'Pro', 'Yesterday', C.warnBg, C.warn),
+    person('MK', 'Maya Khan', 'maya@northwind.io', 'Pro', 'Yesterday', C.warnBg, C.warnInk),
     person('LT', 'Leo Tran', 'leo@tran.dev', 'Pro', '2 days ago', C.aiBg, C.accent),
     person('U7', 'User a7ceed82f6', 'No email', 'Free', '1 week ago', C.chip, C.ink2),
-    person('SO', 'Sara Okafor', 'sara@acme.co', 'Pro', '2 weeks ago', C.dangerBg, C.danger),
+    person('SO', 'Sara Okafor', 'sara@acme.co', 'Pro', '2 weeks ago', C.dangerBg, C.dangerInk),
   ]);
 
 const typeCard = (icon, title, desc, tint) => card(`<div style="width:44px;height:44px;border-radius:12px;background:${tint};display:flex;align-items:center;justify-content:center;margin-bottom:16px">${icon}</div><div style="font-size:18px;font-weight:500;margin-bottom:6px">${title}</div><div style="font-size:15px;color:${C.ink2};line-height:22px">${desc}</div>`, 24);
 const thumbBg = { Survey: C.accentSoft, Replay: C.yellow, Heatmap: C.mint, Feedback: C.freeBg };
-const tpl = (title, tag) => `<div style="border:1px solid ${C.line};border-radius:16px;overflow:hidden;background:${C.surface}"><div style="height:96px;background:${thumbBg[tag]};display:flex;align-items:center;justify-content:center"><div style="width:150px;background:${C.surface};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:7px"><div style="height:7px;width:70%;background:${C.line};border-radius:4px"></div><div style="height:7px;width:95%;background:${C.chip};border-radius:4px"></div><div style="height:7px;width:55%;background:${C.chip};border-radius:4px"></div></div></div><div style="padding:16px"><div style="font-weight:500;margin-bottom:6px">${title}</div>${badge(tag)}</div></div>`;
+const tpl = (title, tag) => `<div style="border:1px solid ${C.line};border-radius:16px;overflow:hidden;background:${C.surface}"><div style="height:96px;background:${thumbBg[tag]};display:flex;align-items:center;justify-content:center"><div style="width:150px;background:${C.surface};border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px"><div style="height:7px;width:70%;background:${C.line};border-radius:4px"></div><div style="height:7px;width:95%;background:${C.chip};border-radius:4px"></div><div style="height:7px;width:55%;background:${C.chip};border-radius:4px"></div></div></div><div style="padding:16px"><div style="font-weight:500;margin-bottom:6px">${title}</div>${badge(tag)}</div></div>`;
 const createMain = pageTitle('Create a study', btn('Cancel', 'ghost')) +
   `<div style="font-size:15px;color:${C.ink2};margin:-12px 0 24px">Pick a study type to start from scratch, or begin with a template.</div>
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:36px">
