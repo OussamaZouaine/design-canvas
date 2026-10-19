@@ -49,15 +49,17 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
   `delete_page`, `move_to_page`, `set_page`. Stored sparsely: the first page is implicit until a second exists.
 - Reference images: `add_reference_image` (path), paste or drop a picture on the canvas, a locked Reference board beside your
   work, `compare_to_reference` (pixel diff at up to 800 px: different %, worst 4x4 areas, diff picture).
+- Canvas editing: eight resize handles on the selection (artboards and absolutely positioned nodes use all; flowing nodes use
+  east, south and south-east), drag to move absolute nodes, Ctrl/Cmd+C and V for nodes (across boards and pages).
 - Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`: classes and `<style>`
   dropped, redundant styles stripped, border-box, inputs and textareas become frames, attribute-less spans unwrapped.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
 ## Not done, in suggested order
 
-1. **Manual editing, remaining parts**: resize handles and dragging absolutely positioned nodes on the canvas, drag-reorder
-   inside flex parents on the canvas, copy / paste, a toolbar for inserting frames, text, images and components, image upload
-   into `assets/`, per-side padding fields and a colour picker. Style fields, in-place text and undo / redo are done.
+1. **Manual editing, remaining parts**: dragging to reorder inside flex parents on the canvas (the Layers panel does it), a
+   toolbar for inserting frames, text, images and components, image upload into `assets/`, per-side padding fields and a
+   colour picker. Resize handles, dragging absolute nodes, copy / paste, style fields, in-place text and undo / redo are done.
 2. **References, remaining part**: `capture_url` (copy a live page as an artboard). It needs a headless browser; the open tab
    cannot fetch cross-origin pages, so it stays out until a Chrome dependency is acceptable. Reference images, paste / drop and
    `compare_to_reference` are done.

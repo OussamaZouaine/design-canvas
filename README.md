@@ -111,7 +111,7 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Pages | `create_page`, `update_page`, `delete_page`, `move_to_page`, `set_page`; `create_artboard` takes `page_id` |
 | References | `add_reference_image`, `compare_to_reference`, `delete_reference`; paste or drop an image on the canvas |
 | Components | `set_component`, `insert_component`, `detach_component`, `delete_component`, `create_components_sheet` |
-| Editing in the app | Design tab (`I`): style fields with token suggestions; double-click text to edit; Ctrl+Z / Ctrl+Shift+Z; Layers panel (`L`) |
+| Editing in the app | Drag handles to resize, drag absolute layers to move, Ctrl+C / Ctrl+V layers. Design tab (`I`): style fields with token suggestions; double-click text to edit; Ctrl+Z / Ctrl+Shift+Z; Layers panel (`L`) |
 | Layers | `move_node`, `set_flags` (hidden / locked); in the app: Layers panel (`L`) |
 | Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `undo` |
 | Verifying | `lint` (contrast, small text, spacing, undefined tokens; resolves `var()`), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
