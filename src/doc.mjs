@@ -4,6 +4,8 @@
 import { parse, HTMLElement } from 'node-html-parser';
 import fs from 'node:fs';
 import { lintArtboard } from './lint.mjs';
+import { parseStyle, styleToString } from './css.mjs';
+import { normalizeTree } from './normalize.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -11,22 +13,13 @@ const FORBIDDEN_TAGS = ['script', 'iframe', 'object', 'embed', 'link', 'meta', '
 
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 
-// Parse "a:b; c:d" into an ordered Map so edits keep declaration order.
-function parseStyle(str = '') {
-  const map = new Map();
-  for (const decl of str.split(';')) {
-    const i = decl.indexOf(':');
-    if (i > 0) map.set(decl.slice(0, i).trim(), decl.slice(i + 1).trim());
-  }
-  return map;
-}
-const styleToString = (map) => [...map].map(([k, v]) => `${k}: ${v}`).join('; ');
-
 export class Doc {
   constructor(file) {
     this.file = file;
     this.data = { counter: 0, artboards: [] };
     this.listeners = new Set();
+    // Set by the store: returns true when this project normalizes HTML on write (see normalize.mjs).
+    this.normalize = () => false;
     // In-memory only (not saved): the last states Claude/the user can step back to.
     this.undoStack = [];
     // Who changed what, newest last. `version` grows by one per entry, so a reader can ask
@@ -83,7 +76,7 @@ export class Doc {
       for (const m of String(ab.html).matchAll(/data-pid="N(\d+)"/g)) max = Math.max(max, Number(m[1]));
     }
     this.data.counter = max;
-    for (const ab of this.data.artboards) ab.html = this._prepare(String(ab.html)).toString();
+    for (const ab of this.data.artboards) ab.html = this._prepare(String(ab.html), false).toString();
   }
 
   // ---- Undo + change journal ----------------------------------------------
@@ -144,7 +137,8 @@ export class Doc {
 
   // Sanitize and stamp every element with a stable data-pid so tools can
   // target individual nodes later (like Paper's node ids).
-  _prepare(html) {
+  // `normalize` defaults to the project's setting; imports pass false so a file's own markup is kept.
+  _prepare(html, normalize = this.normalize()) {
     const root = parse(html, { comment: false });
     // <x-clone node-id="N5"> is replaced by a copy of that node, so Claude can repeat a card
     // without resending its markup. The copy loses its ids and gets fresh ones below.
@@ -169,6 +163,7 @@ export class Doc {
       }
     };
     walk(root);
+    if (normalize) normalizeTree(root);
     return root;
   }
 
