@@ -4,6 +4,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
 import { formatIssues } from './lint.mjs';
+import { artboardToReact } from './export.mjs';
 
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
@@ -361,6 +362,15 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     const { meta, doc } = target(project_id);
     for (const id of node_ids) if (!doc.artboardOf(id)) throw new Error(`Node ${id} not found`);
     return text(await requestComputed(meta.id, node_ids, props));
+  }));
+
+  server.registerTool('export_react', {
+    description: 'Return an artboard as a React component (JSX). Each inline style becomes one Tailwind arbitrary-property class, so it renders like the canvas; replace them with your own utilities or tokens afterwards. Needs Tailwind in the target app.',
+    inputSchema: { ...pid, artboard_id: z.string() },
+  }, safe(({ project_id, artboard_id }) => {
+    const ab = target(project_id).doc.getArtboard(artboard_id);
+    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    return text(artboardToReact(ab));
   }));
 
   server.registerTool('export_html', {
