@@ -419,11 +419,25 @@ function glide(ms) {
 // Outline the selected element. getBoundingClientRect already accounts for the
 // world transform, so the box lands in the right place at any pan/zoom.
 function drawSelection() {
+  drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
   const target = selected && findElement(selected);
   if (!target) { selBox.hidden = true; return; }
   const r = target.getBoundingClientRect();
   Object.assign(selBox.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
   selBox.hidden = false;
+}
+
+// Dashed boxes around the nodes Claude is working on. Same trick as the selection box: read the
+// on-screen rect, so it stays right at any pan/zoom. Boxes are reused to avoid DOM churn.
+let agentIds = [];
+function drawAgent() {
+  const host = $('#agent');
+  const rects = agentIds.map((id) => findElement(id)?.getBoundingClientRect()).filter(Boolean);
+  while (host.children.length > rects.length) host.lastChild.remove();
+  rects.forEach((r, i) => {
+    const box = host.children[i] || host.appendChild(document.createElement('i'));
+    Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  });
 }
 
 // Look an element up through the pid index instead of scanning every shadow root.
@@ -581,6 +595,7 @@ events.addEventListener('doc', (e) => {
   if (firstDoc || (!hadArtboards && doc.artboards.length)) { firstDoc = false; fit(); }
   if (panelTab === 'tokens' && panelOpen()) refreshSoon('tokens');
 });
+events.addEventListener('agent', (e) => { agentIds = JSON.parse(e.data).ids; drawAgent(); });
 events.addEventListener('screenshot', async (e) => {
   const { id, artboardId } = JSON.parse(e.data);
   try {
