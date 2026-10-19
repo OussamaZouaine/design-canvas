@@ -15,6 +15,8 @@ artboards; the user watches them appear live and can pin comments on elements.
 2. **Tokens.** `get_design_system`: if the project has tokens, use `var(--color-primary)`, `var(--space-4)` etc. instead of raw
    values. With none and a new design system wanted, `set_tokens` with preset `starter`, then `create_foundations`.
    `lint` resolves tokens and can check `mode: dark`.
+   **Components.** Compose screens from `insert_component` (with `slots`) rather than writing buttons, cards and inputs by hand;
+   create missing ones with `set_component` (variants as HTML using `var(--tokens)`, `data-slot` for text) and `create_components_sheet`.
 3. **Read cheaply.** `get_tree` first (one line per node). Use `get_node_info` only on the node you
    will change. Call `get_design_tokens` before adding to an existing design and reuse its values.
 4. **Build in small steps.** `create_artboard`, then `write_html` one visual group at a time

@@ -53,6 +53,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 17. Theme (2026-10-19): per-project tokens with modes, MCP tab and Theme tab in the side panel, `create_foundations`,
     `lint` resolving `var()`.
 
+18. Components (2026-10-19): `set_component` / `insert_component`, instances re-expanded when the master changes, generated
+    Components sheet.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.
