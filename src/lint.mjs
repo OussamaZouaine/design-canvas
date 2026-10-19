@@ -83,7 +83,7 @@ const MAX_LINES = 40;
 
 // Lint everything under `rootEl` (a parsed artboard or one node). `ab` supplies the size that
 // widths and offsets are checked against.
-export function lintArtboard(ab, rootEl) {
+export function lintArtboard(ab, rootEl, { grid = 4 } = {}) {
   const issues = [];
   const add = (el, msg) => issues.push(`${el.getAttribute('data-pid')} ${msg}`);
 
@@ -139,13 +139,13 @@ export function lintArtboard(ab, rootEl) {
         if ((left !== null && left < 0) || (top !== null && top < 0)) add(child, 'absolutely positioned outside the artboard (negative offset)');
       }
 
-      // Odd pixel spacing (5px, 9px) is almost always a guess. We check a 2px grid, not 4px:
-      // half-steps like 6/10/14 are deliberate in the Sprig system and a 4px rule was mostly noise.
+      // Spacing off the grid (default 4px, the plan's scale) usually means a guess. Designs that
+      // use half-steps on purpose (Sprig: 6, 10, 14) lint with grid 2 instead of getting noise.
       for (const prop of ['gap', 'padding', 'margin', 'row-gap', 'column-gap']) {
         const v = st.get(prop);
         if (!v || /var\(|%|auto|calc/.test(v)) continue;
-        const odd = v.split(/\s+/).map(px).some((n) => n !== null && n !== 0 && Math.abs(n) % 2 !== 0);
-        if (odd) add(child, `${prop}: ${v} is not on the 2px spacing grid`);
+        const off = v.split(/\s+/).map(px).some((n) => n !== null && n !== 0 && Math.abs(n) % grid !== 0);
+        if (off) add(child, `${prop}: ${v} is not on the ${grid}px spacing grid`);
       }
 
       walk(child, ctx);

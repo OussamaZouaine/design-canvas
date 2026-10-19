@@ -36,9 +36,17 @@ test('skips gradients it cannot evaluate', () => {
 test('flags small text, placeholder copy, wide boxes and odd spacing', () => {
   const out = lint('<div style="width:900px; padding:5px"><p style="font-size:10px">Lorem ipsum</p></div>').join('\n');
   assert.match(out, /wider than the artboard/);
-  assert.match(out, /not on the 2px spacing grid/);
+  assert.match(out, /not on the 4px spacing grid/);
   assert.match(out, /small text 10px/);
   assert.match(out, /placeholder copy/);
+});
+
+test('the spacing grid is configurable', () => {
+  const doc = new Doc(null);
+  const ab = doc.createArtboard({ name: 'T' });
+  doc.writeHtml(ab.id, '<div style="gap:6px"></div>');
+  assert.match(doc.lint(ab.id).join(''), /4px spacing grid/);
+  assert.deepEqual(doc.lint(ab.id, { grid: 2 }), []);
 });
 
 test('large text only needs 3:1', () => {
