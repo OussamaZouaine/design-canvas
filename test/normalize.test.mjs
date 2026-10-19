@@ -63,3 +63,27 @@ test('import sanitizing does not normalize', () => {
   assert.match(doc.data.artboards[0].html, /class="keep"/);
   assert.doesNotMatch(doc.data.artboards[0].html, /box-sizing/);
 });
+
+test('inputs and textareas become frames showing their value or placeholder', () => {
+  const { doc, ab } = board();
+  const html = write(doc, ab, '<input type="text" placeholder="Search" style="width: 200px"><input value="a<b"><input type="hidden" name="x"><textarea>Notes</textarea>');
+  assert.doesNotMatch(html, /<input|<textarea/);
+  assert.match(html, /data-name="Input"[^>]*>Search</);
+  assert.match(html, /<div data-name="Input"[^>]*data-pid=/); // created nodes get ids too
+  assert.match(html, /a&lt;b/);
+  assert.match(html, /Notes/);
+  assert.match(html, /display: inline-flex/);
+  assert.doesNotMatch(html, /type="hidden"|name="x"/);
+});
+
+test('attribute-less spans are unwrapped but styled ones keep their formatting', () => {
+  const { doc, ab } = board();
+  const html = write(doc, ab, '<p>Hello <span>big</span> <span style="color: red">red</span> world</p>');
+  assert.match(html, /Hello big /);
+  assert.match(html, /<span[^>]*style="color: red"/);
+});
+
+test('inputs are left alone when the project does not normalize', () => {
+  const { doc, ab } = board(false);
+  assert.match(write(doc, ab, '<input placeholder="x">'), /<input/);
+});

@@ -195,6 +195,8 @@ export class Doc {
       x.replaceWith(...parse(expand(comp.variants[variant], name, variant, { slots })).childNodes);
     }
     for (const tag of FORBIDDEN_TAGS) root.querySelectorAll(tag).forEach((n) => n.remove());
+    // Normalize BEFORE the id walk below: it replaces and unwraps nodes, and whatever it creates must get an id too.
+    if (normalize) normalizeTree(root);
     const walk = (el) => {
       for (const child of el.childNodes) {
         if (!(child instanceof HTMLElement)) continue;
@@ -210,7 +212,6 @@ export class Doc {
       }
     };
     walk(root);
-    if (normalize) normalizeTree(root);
     return root;
   }
 
