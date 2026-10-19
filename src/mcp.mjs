@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
 import { formatIssues } from './lint.mjs';
 import { artboardToReact } from './export.mjs';
+import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 
 const GUIDE = `Design Canvas workflow:
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
@@ -232,6 +233,26 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     inputSchema: { ...pid, node_id: z.string().optional(), depth: z.number().int().min(1).max(10).optional(), query: z.string().min(1).max(100).optional() },
   }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
 
+  server.registerTool('get_design_system', {
+    description: 'The design tokens as "name: value" lines (modes listed as "name [dark]: value"). Reference them in designs as var(--name). Empty until set_tokens is used; section limits to one family (color, space, radius, size, font, ...).',
+    inputSchema: { ...pid, section: z.enum(FAMILIES).optional() },
+  }, safe(({ project_id, section }) => text(describe(target(project_id).doc.theme, section) || 'No tokens yet. Call set_tokens (preset "starter" loads a ready scale).')));
+
+  server.registerTool('set_tokens', {
+    description: 'Create or change design tokens (CSS custom properties). Names start with a family: ' + FAMILIES.join(', ') + ', e.g. color-primary, space-4, radius-md. Values are CSS (colours as oklch()). null deletes a token. mode "dark" writes overrides for that mode only. preset "starter" first loads a ready scale (semantic colours, 4px spacing, radii, type) into an empty theme. Designs use var(--color-primary), so changing a token restyles every board that uses it.',
+    inputSchema: {
+      ...pid,
+      tokens: z.record(z.string(), z.union([z.string(), z.null()])).optional(),
+      mode: z.string().optional(),
+      preset: z.literal('starter').optional(),
+    },
+  }, safe(({ project_id, tokens = {}, mode, preset }) => {
+    const { meta, doc } = target(project_id);
+    const changed = doc.setTokens(tokens, { mode, preset });
+    log(meta, doc, 'set_tokens', []);
+    return text({ changed, total: Object.keys(doc.theme.tokens).length });
+  }));
+
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
@@ -368,19 +389,26 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     description: 'Return an artboard as a React component (JSX). Each inline style becomes one Tailwind arbitrary-property class, so it renders like the canvas; replace them with your own utilities or tokens afterwards. Needs Tailwind in the target app.',
     inputSchema: { ...pid, artboard_id: z.string() },
   }, safe(({ project_id, artboard_id }) => {
-    const ab = target(project_id).doc.getArtboard(artboard_id);
+    const { doc } = target(project_id);
+    const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
-    return text(artboardToReact(ab));
+    return text(artboardToReact(ab, doc.theme));
   }));
 
   server.registerTool('export_html', {
     description: 'Return a standalone HTML document for an artboard, ready to save or hand to a codebase.',
     inputSchema: { ...pid, artboard_id: z.string() },
   }, safe(({ project_id, artboard_id }) => {
-    const ab = target(project_id).doc.getArtboard(artboard_id);
+    const { doc } = target(project_id);
+    const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
     const clean = ab.html.replace(/ data-pid="[^"]*"/g, '');
-    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title></head>\n<body style="margin:0"><div style="position:relative;width:${ab.width}px;min-height:${ab.height}px">${clean}</div></body></html>`);
+    // Tokens become :root custom properties; a "dark" mode (if any) follows the OS setting.
+    const { tokens, modes } = doc.theme;
+    const css = Object.keys(tokens).length
+      ? `<style>:root{${toCssDeclarations(tokens)}}${modes.dark ? `@media (prefers-color-scheme:dark){:root{${toCssDeclarations(modes.dark)}}}` : ''}</style>`
+      : '';
+    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title>${css}</head>\n<body style="margin:0"><div style="position:relative;width:${ab.width}px;min-height:${ab.height}px">${clean}</div></body></html>`);
   }));
 
   return server;
