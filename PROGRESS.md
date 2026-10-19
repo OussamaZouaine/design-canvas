@@ -38,13 +38,19 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 - Zoomed-out snapshots are slightly soft on high-DPI screens below 30% zoom (`LIVE_K`, snapshot scale cap 0.5).
 - `elementLabel` in `public/app.js` mounts an artboard to read an element's text; acceptable, could be avoided.
 - `ink3` (tertiary text) is 3.3:1 on white: placeholders only. `lineStrong` is decorative (1.4:1 light).
+- New tools (`get_tree`, `lint`, `undo`, `get_changes`, `export_react`...) need a Claude Code restart to appear in a session started earlier.
 - The MCP `create_artboard` x/y arguments need a Claude Code restart to appear in a session started before they were added.
 
+15. Build-plan adoption (2026-10-19): `get_tree`, write modes + `<x-clone>`, locked nodes, `undo`, `get_changes`, `lint`,
+    lean screenshots + `get_computed_styles`, `finish_working` highlight, token metering + `/api/status`, Origin check,
+    `export_react`, Claude Code plugin + skill, unit tests. Details and what is left: `docs/ROADMAP.md`.
+
 ## Next ideas (none are committed to; ask the user)
+- Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.
 - Per-user density preference demo, responsive previews, static-site export, pick-the-cover for a project.
 - Keep comment ids stable across rebuilds (re-target by artboard name) so rebuilds do not orphan comments.
-- Tests: there are none yet; the store, doc sanitizer and tokens extraction are the best first targets.
+- Tests: `pnpm test` covers doc, lint, export and meter; the store, sanitizer and tokens extraction are still untested.
 
 ## How to resume in a new session
 1. Read `CLAUDE.md` and this file. 2. `git log --oneline | head -20` and `git status`. 3. `pnpm start`, open
