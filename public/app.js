@@ -516,6 +516,7 @@ viewport.addEventListener('pointerdown', (e) => {
   const path = e.composedPath(); // pierces the shadow root to find the real clicked element
   const node = path.find((n) => n.dataset && n.dataset.pid);
   const abEl = e.target.closest('.artboard');
+  if (node?.isContentEditable) return; // clicking inside text that is being edited just moves the caret
 
   // Comment mode: a click pins a comment on the element under the pointer (or the artboard).
   if (commentMode) {
@@ -576,8 +577,50 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.key.toLowerCase() === 'l' && !e.metaKey && !e.ctrlKey && !e.altKey) layers?.toggle();
   if (e.key.toLowerCase() === 'c' && !e.metaKey && !e.ctrlKey && !e.altKey && $('#pop').hidden) setCommentMode(!commentMode);
+  // Undo / redo go through the server so they cover Claude's changes and the theme too.
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && ['z', 'y'].includes(e.key.toLowerCase())) {
+    e.preventDefault();
+    const redo = e.key.toLowerCase() === 'y' || e.shiftKey;
+    markUserEdit();
+    post(`${api}/${redo ? 'redo' : 'undo'}`).then(async (r) => { if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'Nothing to do'); });
+  }
   if ((e.metaKey || e.ctrlKey) && e.key === 'd' && selected) { e.preventDefault(); post(`${api}/duplicate`, { ids: [selected] }); }
 });
+
+// Edit text in place: double-click a text element, type, click away or press Enter to save
+// (Escape cancels). Only leaf elements qualify: setting text on a node with children would replace them.
+// The element is edited right inside its shadow root with contenteditable, a browser feature that
+// turns any element into a text field; plaintext-only keeps pasted formatting out.
+viewport.addEventListener('dblclick', (e) => {
+  if (commentMode) return;
+  const el = e.composedPath().find((n) => n.dataset && n.dataset.pid);
+  if (!el || el.children.length || !el.textContent.trim() || el.isContentEditable) return;
+  startTextEdit(el);
+});
+function startTextEdit(el) {
+  const id = el.dataset.pid, before = el.textContent;
+  let cancelled = false;
+  try { el.contentEditable = 'plaintext-only'; } catch { el.contentEditable = 'true'; }
+  if (!el.isContentEditable) el.contentEditable = 'true'; // browsers without plaintext-only ignore it silently
+  el.focus();
+  getSelection().selectAllChildren(el);
+  const onKey = (ev) => {
+    ev.stopPropagation(); // typing must never reach the canvas shortcuts (L, C, Delete...)
+    if (ev.key === 'Escape') { cancelled = true; ev.preventDefault(); el.blur(); }
+    else if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); el.blur(); }
+  };
+  el.addEventListener('keydown', onKey);
+  el.addEventListener('blur', () => {
+    el.removeEventListener('keydown', onKey);
+    el.removeAttribute('contenteditable');
+    const text = el.textContent;
+    if (cancelled || text === before) { el.textContent = before; return; }
+    markUserEdit();
+    post(`${api}/text`, { id, text }).then(async (r) => {
+      if (!r.ok) { el.textContent = before; toast((await r.json().catch(() => ({}))).error || 'Could not save the text'); }
+    });
+  }, { once: true });
+}
 
 $('#new').onclick = () => post(`${api}/create`, { name: 'Artboard', width: 1440, height: 900 });
 $('#fit').onclick = fit;
