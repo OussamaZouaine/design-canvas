@@ -283,14 +283,14 @@ export class Doc {
   }
 
   // Static lint of an artboard or of one node's subtree. Returns an array of one-line issues.
-  lint(id) {
+  lint(id, opts) {
     const ab = this.getArtboard(id);
-    if (ab) return lintArtboard(ab, this._artboardRoot(ab));
+    if (ab) return lintArtboard(ab, this._artboardRoot(ab), opts);
     const hit = this._find(id);
     if (!hit) throw new Error(`Node ${id} not found`);
     // lintArtboard walks a container's children, so hand it a stand-in container holding just
     // this node. (Inherited colour/background above the node are not known here.)
-    return lintArtboard(hit.ab, { childNodes: [hit.el] });
+    return lintArtboard(hit.ab, { childNodes: [hit.el] }, opts);
   }
 
   nodeInfo(id) {
