@@ -58,6 +58,8 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 19. Layers (2026-10-19): Layers panel, `move_node`, `set_flags`, hidden/locked toggles, Esc selects parent.
 
+20. Manual editing (2026-10-19): Design tab inspector, in-place text, undo/redo shortcuts and redo stack.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.

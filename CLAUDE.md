@@ -53,6 +53,8 @@ elements, and Claude reads and answers those comments. Local only, no database (
 - **Components:** masters live in `doc.data.components` (`src/components.mjs`). Instances are stored *expanded* in the artboard
   HTML with `data-component`/`data-variant`; `setComponent` re-expands them in place (root id and `data-slot` text kept).
   Hand edits inside an instance are replaced by the master on the next master edit; `detach_component` opts out.
+- **Inspector:** `public/inspector.js` (Design tab) reads the selected node's inline style from the parsed HTML and sends
+  `style` actions (one property each, one undo step). Fields suggest `var(--token)` values from the theme.
 - **Layers panel:** `public/layers.js` (left drawer) builds the tree from each artboard's HTML with DOMParser and sends
   rename / flags / move-node actions. Edits the user makes there call `markUserEdit()` so the canvas does not play the
   "Claude is designing" reveal and camera follow for them. `hidden` works because the shadow root and screenshot wrapper
