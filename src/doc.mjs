@@ -3,6 +3,7 @@
 // this class, so the two can never drift apart.
 import { parse, HTMLElement } from 'node-html-parser';
 import fs from 'node:fs';
+import { lintArtboard } from './lint.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -277,6 +278,17 @@ export class Doc {
       walk(hit.el, q ? 0 : 1);
     }
     return lines.join('\n');
+  }
+
+  // Static lint of an artboard or of one node's subtree. Returns an array of one-line issues.
+  lint(id) {
+    const ab = this.getArtboard(id);
+    if (ab) return lintArtboard(ab, this._artboardRoot(ab));
+    const hit = this._find(id);
+    if (!hit) throw new Error(`Node ${id} not found`);
+    // lintArtboard walks a container's children, so hand it a stand-in container holding just
+    // this node. (Inherited colour/background above the node are not known here.)
+    return lintArtboard(hit.ab, { childNodes: [hit.el] });
   }
 
   nodeInfo(id) {
