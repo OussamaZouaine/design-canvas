@@ -10,7 +10,7 @@ const GUIDE = `Design Canvas workflow:
 1. get_basic_info to see the project's artboards.
 2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
 3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
-4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting.
+4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
 5. Call get_screenshot after meaningful changes and critique it. (Needs the project open in the browser.)
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...). Build a ramp by holding C and H and stepping L.
 Tips: pick a palette, type scale and spacing scale first; use px units; give containers explicit widths; use system fonts (Inter, system-ui) because custom fonts are not loaded.
@@ -191,18 +191,29 @@ export function createMcpServer({ store, ui, requestScreenshot, port }) {
 
   server.registerTool('write_html', {
     description:
-      'Add HTML into an artboard or inside an existing node (target_id). mode "append" adds after existing children; "replace" swaps them. Inline styles only. Returns ids of the new top-level nodes.',
+      'Add HTML into an artboard or next to a node (target_id). mode: append (default, last child), prepend (first child), replace (swap children), before / after (siblings of a node). <x-clone node-id="N5"></x-clone> inside the html inserts a copy of that node without resending its markup. Inline styles only. Returns ids of the new top-level nodes.',
     inputSchema: {
       ...pid,
       target_id: z.string().describe('Artboard id (A#) or node id (N#)'),
       html: z.string().max(200_000),
-      mode: z.enum(['append', 'replace']).optional(),
+      mode: z.enum(['append', 'prepend', 'replace', 'before', 'after']).optional(),
     },
   }, safe(({ project_id, target_id, html, mode }) => {
     const { meta, doc } = target(project_id);
     const created = doc.writeHtml(target_id, html, mode);
     log(meta, doc, 'write_html', target_id);
     return text({ created });
+  }));
+
+  server.registerTool('undo', {
+    description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',
+    inputSchema: { ...pid, steps: z.number().int().min(1).max(20).optional() },
+  }, safe(({ project_id, steps = 1 }) => {
+    const { meta, doc } = target(project_id);
+    const reverted = doc.undo(steps);
+    if (!reverted.length) return text('Nothing to undo');
+    store.logAction(meta.id, { tool: 'undo', detail: reverted.join(', ') });
+    return text({ reverted });
   }));
 
   server.registerTool('get_tree_summary', {
