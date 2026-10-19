@@ -778,7 +778,34 @@ async function loadTokens() {
   ));
 }
 
-const loaders = { comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens };
+// MCP tab: is Claude talking to this server, how to connect it, and which tools cost the most
+// tokens this session (estimates from the server's meter). Polled while the tab is open because
+// tool calls come from Claude Code, not from this page, so there is no event to wait for.
+let mcpPoll;
+async function loadMcp() {
+  clearInterval(mcpPoll);
+  mcpPoll = setInterval(() => { if (panelOpen() && panelTab === 'mcp') loadMcp(); else clearInterval(mcpPoll); }, 3000);
+  let s;
+  try { s = await (await fetch('/api/status')).json(); } catch { pane('mcp').textContent = 'Server not reachable.'; return; }
+  const setup = `claude mcp add --transport http design-canvas ${location.origin}/mcp --scope user`;
+  const m = s.meter, maxTok = Math.max(...m.tools.map((t) => t.tokens), 1);
+  const recent = m.lastCallAt && Date.now() - m.lastCallAt < 120_000;
+  pane('mcp').replaceChildren(h('div', { class: 'tk' },
+    h('div', { class: 'kv' }, h('span', {}, 'Server'), h('span', {}, `running · ${s.tabs} tab${s.tabs === 1 ? '' : 's'} open`)),
+    h('div', { class: 'kv' }, h('span', {}, 'Claude'), h('span', {}, m.lastCallAt ? `${recent ? 'active' : 'idle'} · last call ${ago(m.lastCallAt)}` : 'no calls yet')),
+    h('h4', {}, 'Connect'),
+    h('div', { class: 'code' }, setup),
+    h('div', { class: 'exports' }, h('button', { class: 'sm primary', onclick: async () => { try { await navigator.clipboard.writeText(setup); toast('Copied setup command'); } catch { toast('Copy failed: select it manually'); } } }, 'Copy command')),
+    h('h4', {}, `Tool results this session · ~${m.totalTokens.toLocaleString()} tokens`),
+    m.tools.length ? m.tools.map((t) => h('div', { class: 'kv', style: 'align-items:center' },
+      h('span', { style: 'width:130px;overflow:hidden;text-overflow:ellipsis' }, t.name),
+      h('div', { class: 'bar', style: `width:${Math.max(4, (t.tokens / maxTok) * 110)}px` }),
+      h('span', {}, `${t.tokens.toLocaleString()} · ×${t.calls}${t.errors ? ` · ${t.errors} err` : ''}`)))
+      : h('div', { class: 'empty' }, 'No tool calls yet. Estimates: text bytes ÷ 4, images by 28px patches.'),
+  ));
+}
+
+const loaders = { comments: () => renderCommentList(), activity: loadActivity, versions: loadVersions, tokens: loadTokens, mcp: loadMcp };
 
 // ---- Comments ---------------------------------------------------------------
 
