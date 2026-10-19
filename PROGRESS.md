@@ -7,7 +7,7 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 - App works end to end: projects home, canvas, MCP tools, comments, history, tokens, generation animation, follow camera.
 - Sprig design system project has 46 artboards (light + dark): foundations, components, 14 pages, 9 system sheets
   (buttons, forms, feedback, navigation, data display, states, icons, theme & tokens, data table density).
-- Dev server is **stopped**; start with `npm start`. No git remote configured, nothing pushed.
+- Dev server is **stopped**; start with `pnpm start`. No git remote configured, nothing pushed.
 - Git history is on `main`, small commits per concern (`git log --oneline`).
 
 ## What was built, in order
@@ -47,5 +47,5 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 - Tests: there are none yet; the store, doc sanitizer and tokens extraction are the best first targets.
 
 ## How to resume in a new session
-1. Read `CLAUDE.md` and this file. 2. `git log --oneline | head -20` and `git status`. 3. `npm start`, open
+1. Read `CLAUDE.md` and this file. 2. `git log --oneline | head -20` and `git status`. 3. `pnpm start`, open
 http://localhost:3777. 4. Ask the user what to do next if the request is not clear.
