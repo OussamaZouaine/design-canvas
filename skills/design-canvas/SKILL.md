@@ -12,15 +12,18 @@ artboards; the user watches them appear live and can pin comments on elements.
 
 1. **Orient.** `list_projects` (reuse a matching project, else `create_project`), `log_prompt`,
    `get_comments` and `get_changes` (what the user pinned or edited by hand), `get_basic_info`.
-2. **Read cheaply.** `get_tree` first (one line per node). Use `get_node_info` only on the node you
+2. **Tokens.** `get_design_system`: if the project has tokens, use `var(--color-primary)`, `var(--space-4)` etc. instead of raw
+   values. With none and a new design system wanted, `set_tokens` with preset `starter`, then `create_foundations`.
+   `lint` resolves tokens and can check `mode: dark`.
+3. **Read cheaply.** `get_tree` first (one line per node). Use `get_node_info` only on the node you
    will change. Call `get_design_tokens` before adding to an existing design and reuse its values.
-3. **Build in small steps.** `create_artboard`, then `write_html` one visual group at a time
+4. **Build in small steps.** `create_artboard`, then `write_html` one visual group at a time
    (header, hero, card row). Repeat blocks with `<x-clone node-id="N5"></x-clone>` instead of
    resending markup. Refine with `update_styles` / `set_text_content`, not a rewrite.
-4. **Verify.** `lint` (text, cheap) -> fix -> one `get_screenshot` (crop with `node_id` when only one
+5. **Verify.** `lint` (text, cheap) -> fix -> one `get_screenshot` (crop with `node_id` when only one
    part changed) -> `get_computed_styles` if a size or colour looks wrong. Stop after 3 rounds or
    when lint says `clean`.
-5. **Finish.** `reply_comment` + `resolve_comment` for each comment handled, then `finish_working`.
+6. **Finish.** `reply_comment` + `resolve_comment` for each comment handled, then `finish_working`.
    A bad change can be reverted with `undo`.
 
 ## Design rules

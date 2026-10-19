@@ -50,6 +50,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
     lint spacing grid parameter (default 4, Sprig uses 2), and the Sprig contrast/size findings fixed at the source
     (`ink3` darkened, status text on `*Ink`, 12px minimum, disabled states marked) and rebuilt.
 
+17. Theme (2026-10-19): per-project tokens with modes, MCP tab and Theme tab in the side panel, `create_foundations`,
+    `lint` resolving `var()`.
+
 ## Next ideas (none are committed to; ask the user)
 - Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
 - More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.
