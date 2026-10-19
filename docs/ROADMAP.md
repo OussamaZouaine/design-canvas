@@ -41,18 +41,16 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 
 1. **Theme, remaining parts**: token names shown in an inspector field with a detach option (needs the inspector), and
    `extract_tokens` from a node or a repo CSS file (today `get_design_tokens` scans the whole project).
-2. **Components**: masters with variants, `insert_component`, `create_component`; edit a master and every instance
-   updates. Builds on `<x-clone>`, but live linking needs a `data-component` reference.
-3. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
+2. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
    `move_node`, `search_nodes` (the outline search covers the read side).
-4. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
+3. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
    resize handles, undo/redo shortcuts in the browser (undo exists only through MCP today).
-5. **Pages** inside a project, `navigate`, dashboard tabs.
-6. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
+4. **Pages** inside a project, `navigate`, dashboard tabs.
+5. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-7. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+6. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-8. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
+7. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
    Tailwind theme and import them back).
 10. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
