@@ -25,6 +25,7 @@ export class Doc {
     this.normalize = () => false;
     // In-memory only (not saved): the last states Claude/the user can step back to.
     this.undoStack = [];
+    this.redoStack = [];
     // Who changed what, newest last. `version` grows by one per entry, so a reader can ask
     // "what changed since version N" instead of re-reading whole artboards.
     this.journal = [];
@@ -66,6 +67,7 @@ export class Doc {
   replace(data) {
     this.data = data;
     this.undoStack = []; // history belongs to the old document
+    this.redoStack = [];
     this._commit();
   }
 
@@ -87,27 +89,53 @@ export class Doc {
   // Remember the current artboards before a mutation. Artboard objects are shallow-copied
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
+  _snapshotState(label) {
+    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components) };
+  }
+
   _checkpoint(label) {
-    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components) });
+    this.undoStack.push(this._snapshotState(label));
     if (this.undoStack.length > 50) this.undoStack.shift();
+    this.redoStack = []; // a fresh change forks history: what was undone can no longer be redone
+  }
+
+  _restore(entry) {
+    this.data.artboards = entry.artboards;
+    this.data.theme = entry.theme;
+    this.data.components = entry.components;
   }
 
   // Step back `steps` mutations. The id counter is deliberately NOT rewound, so an id that was
   // handed out once is never reused for a different node.
-  undo(steps = 1) {
+  // `actor` says who asked, for get_changes: Claude through MCP, the user through Ctrl+Z in the browser.
+  undo(steps = 1, actor = 'claude') {
     const reverted = [];
     for (let i = 0; i < steps && this.undoStack.length; i++) {
       const entry = this.undoStack.pop();
-      this.data.artboards = entry.artboards;
-      this.data.theme = entry.theme;
-      this.data.components = entry.components;
+      this.redoStack.push(this._snapshotState(entry.label)); // the state we are leaving, so redo can return to it
+      this._restore(entry);
       reverted.push(entry.label);
     }
     if (reverted.length) {
-      this.record('claude', 'undo', []);
+      this.record(actor, 'undo', []);
       this._commit();
     }
     return reverted;
+  }
+
+  redo(steps = 1, actor = 'user') {
+    const redone = [];
+    for (let i = 0; i < steps && this.redoStack.length; i++) {
+      const entry = this.redoStack.pop();
+      this.undoStack.push(this._snapshotState(entry.label));
+      this._restore(entry);
+      redone.push(entry.label);
+    }
+    if (redone.length) {
+      this.record(actor, 'redo', []);
+      this._commit();
+    }
+    return redone;
   }
 
   // Note a change for get_changes. `actor` is 'user' (browser) or 'claude' (MCP).

@@ -92,3 +92,22 @@ test('repeated drags fold into one journal entry', () => {
   for (let i = 0; i < 5; i++) doc.record('user', 'move', ['A1']);
   assert.equal(doc.changesSince(0, 'user').length, 1);
 });
+
+test('redo returns to the state undo left, and a new change clears it', () => {
+  const { doc, ab, card } = setup();
+  doc.updateStyles([card], { color: 'blue' });
+  const blue = doc.getArtboard(ab.id).html;
+  doc.undo();
+  assert.deepEqual(doc.redo(), ['update_styles']);
+  assert.equal(doc.getArtboard(ab.id).html, blue);
+  doc.undo();
+  doc.updateStyles([card], { color: 'green' });
+  assert.deepEqual(doc.redo(), []); // history forked
+});
+
+test('undo and redo record who asked', () => {
+  const { doc, card } = setup();
+  doc.updateStyles([card], { color: 'blue' });
+  doc.undo(1, 'user');
+  assert.equal(doc.changesSince(0, 'user').at(-1).tool, 'undo');
+});

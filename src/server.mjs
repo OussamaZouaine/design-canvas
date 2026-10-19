@@ -141,7 +141,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags']);
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -153,6 +153,11 @@ const canvasActions = {
   create: (p, b) => p.doc.createArtboard(b),
   // Layers panel: reorder / reparent a node, and the hidden + locked toggles.
   'move-node': (p, b) => p.doc.moveNode(String(b.id), String(b.target), b.position),
+  // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
+  style: (p, b) => p.doc.updateStyles(b.ids, b.styles),
+  text: (p, b) => p.doc.setText(String(b.id), String(b.text)),
+  undo: (p) => { if (!p.doc.undo(1, 'user').length) throw new Error('Nothing to undo'); },
+  redo: (p) => { if (!p.doc.redo(1, 'user').length) throw new Error('Nothing to redo'); },
   flags: (p, b) => p.doc.setFlags(b.ids ?? [b.id], { hidden: b.hidden, locked: b.locked }),
   theme: (p, b) => p.doc.setTokens(b.tokens, { mode: b.mode, preset: b.preset }), // the Theme tab edits one value at a time
   selection: (p, b) => ui.selection.set(p.meta.id, (b.ids || []).slice(0, 50)),
