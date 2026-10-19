@@ -49,7 +49,8 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
   `delete_page`, `move_to_page`, `set_page`. Stored sparsely: the first page is implicit until a second exists.
 - Reference images: `add_reference_image` (path), paste or drop a picture on the canvas, a locked Reference board beside your
   work, `compare_to_reference` (pixel diff at up to 800 px: different %, worst 4x4 areas, diff picture).
-- Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`.
+- Opt-in HTML normalization on write (`src/normalize.mjs`), switched per project with `rename_project`: classes and `<style>`
+  dropped, redundant styles stripped, border-box, inputs and textareas become frames, attribute-less spans unwrapped.
 - Unit tests (`pnpm test`) for the doc model, lint, normalization, export and meter.
 
 ## Not done, in suggested order
@@ -60,9 +61,7 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 2. **References, remaining part**: `capture_url` (copy a live page as an artboard). It needs a headless browser; the open tab
    cannot fetch cross-origin pages, so it stays out until a Chrome dependency is acceptable. Reference images, paste / drop and
    `compare_to_reference` are done.
-3. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
-   class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-4. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
+3. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
 
 ## Deliberate differences to revisit

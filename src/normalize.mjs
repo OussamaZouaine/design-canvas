@@ -2,7 +2,7 @@
 // on (new projects do; older ones such as Sprig keep their markup untouched). It mirrors how Paper
 // treats pasted HTML: only inline styles survive, and redundant declarations are stripped, so
 // two ways of writing the same thing end up as the same stored markup.
-import { HTMLElement } from 'node-html-parser';
+import { parse, HTMLElement } from 'node-html-parser';
 import { parseStyle, styleToString } from './css.mjs';
 
 // Declarations that only mean something on a flex or grid container.
@@ -40,9 +40,41 @@ export function normalizeElement(el) {
   else el.removeAttribute('style');
 }
 
+const escapeText = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Form controls become plain frames with a text child (like Paper's paste): the design shows what the
+// field looks like, and no live control (which could submit or take focus) ends up on the canvas.
+function inputToFrame(input) {
+  const type = (input.getAttribute('type') || 'text').toLowerCase();
+  if (type === 'hidden') { input.remove(); return; }
+  const frame = parse('<div></div>').firstChild;
+  frame.setAttribute('data-name', input.getAttribute('data-name') || 'Input');
+  const st = parseStyle(input.getAttribute('style'));
+  if (!st.has('display')) { st.set('display', 'inline-flex'); if (!st.has('align-items')) st.set('align-items', 'center'); }
+  frame.setAttribute('style', styleToString(st));
+  // What the field shows: its value, else its placeholder; checkboxes and radios have no text.
+  const text = ['checkbox', 'radio'].includes(type) ? '' : input.getAttribute('value') || input.getAttribute('placeholder') || '';
+  frame.set_content(escapeText(text));
+  input.replaceWith(frame);
+}
+
 // Remove <style> blocks (selector CSS) from a parsed fragment, then normalize every element.
 export function normalizeTree(root) {
   root.querySelectorAll('style').forEach((n) => n.remove());
+  root.querySelectorAll('input').forEach(inputToFrame);
+  root.querySelectorAll('textarea').forEach((t) => {
+    const frame = parse('<div></div>').firstChild;
+    frame.setAttribute('data-name', t.getAttribute('data-name') || 'Textarea');
+    if (t.getAttribute('style')) frame.setAttribute('style', t.getAttribute('style'));
+    frame.set_content(escapeText(t.text || t.getAttribute('placeholder') || ''));
+    t.replaceWith(frame);
+  });
+  // A <span> with no real attributes only wraps text: unwrap it so a text block is one text node. Spans that
+  // carry a style or other attribute keep their formatting (that would be lost by flattening).
+  for (const span of root.querySelectorAll('span').reverse()) {
+    // (Normalization runs before ids are stamped, but an x-clone copy can still carry none either way.)
+    if (Object.keys(span.attributes).every((a) => a === 'data-pid')) span.replaceWith(...span.childNodes);
+  }
   const walk = (el) => {
     for (const child of el.childNodes) {
       if (!(child instanceof HTMLElement)) continue;
