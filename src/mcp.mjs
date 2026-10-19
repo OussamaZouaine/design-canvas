@@ -207,12 +207,14 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
       name: z.string().optional(),
       width: z.number().min(40).max(5000).optional(),
       height: z.number().min(40).max(10000).optional(),
+      page_id: z.string().optional().describe('Page for the new board (default: the page chosen with set_page, else the first).'),
       x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
       y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
     },
   }, safe(({ project_id, ...a }) => {
     const { meta, doc } = target(project_id);
-    const ab = doc.createArtboard(a);
+    const { page_id, ...rest } = a;
+    const ab = doc.createArtboard({ ...rest, page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'create_artboard', ab.id);
     return text(ab);
   }));
@@ -369,6 +371,57 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     description: 'The project tokens as text you can paste into a codebase: css (:root plus [data-theme] blocks for modes), tailwind (an @theme block) or json.',
     inputSchema: { ...pid, format: z.enum(['css', 'tailwind', 'json']).optional() },
   }, safe(({ project_id, format = 'css' }) => text(exportTokens(target(project_id).doc.theme, format))));
+
+  server.registerTool('create_page', {
+    description: 'Add a page (a separate canvas inside the project, for example one per flow or per breakpoint). Returns its id. New artboards go to the page chosen with set_page.',
+    inputSchema: { ...pid, name: z.string().min(1).max(60) },
+  }, safe(({ project_id, name }) => {
+    const { meta, doc } = target(project_id);
+    const page = doc.createPage(name);
+    log(meta, doc, 'create_page', []);
+    return text(page);
+  }));
+
+  server.registerTool('set_page', {
+    description: 'Choose the page that new artboards are created on (until you change it again). get_basic_info lists the pages.',
+    inputSchema: { ...pid, page_id: z.string() },
+  }, safe(({ project_id, page_id }) => {
+    const { meta, doc } = target(project_id);
+    doc._pageId(page_id); // throws a helpful error for an unknown page
+    ui.currentPage.set(meta.id, page_id);
+    return text(`New artboards will go to ${page_id}`);
+  }));
+
+  server.registerTool('update_page', {
+    description: 'Rename a page and/or set its canvas background colour (e.g. oklch(0.2 0 0); empty string clears it).',
+    inputSchema: { ...pid, page_id: z.string(), name: z.string().max(60).optional(), background: z.string().max(60).optional() },
+  }, safe(({ project_id, page_id, name, background }) => {
+    const { meta, doc } = target(project_id);
+    const page = doc.updatePage(page_id, { name, background });
+    log(meta, doc, 'update_page', []);
+    return text(page);
+  }));
+
+  server.registerTool('delete_page', {
+    description: 'Delete a page. Its artboards are moved to move_boards_to (default: the first remaining page), never deleted.',
+    inputSchema: { ...pid, page_id: z.string(), move_boards_to: z.string().optional() },
+  }, safe(({ project_id, page_id, move_boards_to }) => {
+    const { meta, doc } = target(project_id);
+    const dest = doc.deletePage(page_id, move_boards_to);
+    if (ui.currentPage.get(meta.id) === page_id) ui.currentPage.delete(meta.id);
+    log(meta, doc, 'delete_page', []);
+    return text({ deleted: page_id, boards_moved_to: dest });
+  }));
+
+  server.registerTool('move_to_page', {
+    description: 'Move artboards to another page.',
+    inputSchema: { ...pid, artboard_ids: z.array(z.string()).min(1), page_id: z.string() },
+  }, safe(({ project_id, artboard_ids, page_id }) => {
+    const { meta, doc } = target(project_id);
+    doc.moveToPage(artboard_ids, page_id);
+    log(meta, doc, 'move_to_page', artboard_ids);
+    return text('ok');
+  }));
 
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',

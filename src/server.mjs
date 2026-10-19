@@ -42,6 +42,7 @@ const ui = {
   clients: new Set(), // { res, projectId } for every open SSE stream (projectId null = home page)
   pendingShots: new Map(), // requestId -> { resolve, reject, timer }
   lastRead: new Map(), // projectId -> journal version Claude last saw through get_changes
+  currentPage: new Map(), // projectId -> page id that create_artboard targets by default
   agentTimers: new Map(), // projectId -> timer that clears the "Claude is editing" highlight
 };
 const meter = new Meter(); // per-tool token estimates, shown by /api/status
@@ -141,7 +142,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -158,6 +159,11 @@ const canvasActions = {
   text: (p, b) => p.doc.setText(String(b.id), String(b.text)),
   undo: (p) => { if (!p.doc.undo(1, 'user').length) throw new Error('Nothing to undo'); },
   redo: (p) => { if (!p.doc.redo(1, 'user').length) throw new Error('Nothing to redo'); },
+  // Pages (the page selector in the header)
+  'page-create': (p, b) => p.doc.createPage(String(b.name || 'Page')),
+  'page-update': (p, b) => p.doc.updatePage(String(b.id), { name: b.name, background: b.background }),
+  'page-delete': (p, b) => p.doc.deletePage(String(b.id), b.moveTo),
+  'move-to-page': (p, b) => p.doc.moveToPage(b.ids, String(b.page)),
   flags: (p, b) => p.doc.setFlags(b.ids ?? [b.id], { hidden: b.hidden, locked: b.locked }),
   theme: (p, b) => p.doc.setTokens(b.tokens, { mode: b.mode, preset: b.preset }), // the Theme tab edits one value at a time
   selection: (p, b) => ui.selection.set(p.meta.id, (b.ids || []).slice(0, 50)),
