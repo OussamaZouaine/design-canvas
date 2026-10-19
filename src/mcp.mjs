@@ -253,6 +253,16 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     return text({ changed, total: Object.keys(doc.theme.tokens).length });
   }));
 
+  server.registerTool('create_foundations', {
+    description: 'Create (or refresh) the read-only "Foundations" artboard generated from the tokens: colour swatches per mode, type scale, spacing, radius and shadow samples. It updates itself whenever tokens change. Requires tokens (set_tokens).',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.createFoundations();
+    log(meta, doc, 'create_foundations', ab.id);
+    return text({ artboard_id: ab.id, width: ab.width, height: ab.height });
+  }));
+
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },

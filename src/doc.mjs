@@ -7,6 +7,7 @@ import { lintArtboard } from './lint.mjs';
 import { parseStyle, styleToString } from './css.mjs';
 import { normalizeTree } from './normalize.mjs';
 import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
+import { foundationsHtml } from './foundations.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -329,8 +330,35 @@ export class Doc {
     applyTokens(next, partial, mode);
     this._checkpoint('set_tokens');
     this.data.theme = next;
+    this._refreshFoundations();
     this._commit();
     return Object.keys(partial);
+  }
+
+  // The Foundations artboard is generated from the tokens (swatches, type, spacing...). It is
+  // marked `generated` so token edits can refresh it, and its root is data-locked so nobody
+  // hand-edits something that the next token change would overwrite.
+  _refreshFoundations() {
+    for (const ab of this.data.artboards) {
+      if (ab.generated !== 'foundations') continue;
+      const { html, height } = foundationsHtml(this.theme);
+      ab.html = this._prepare(html, false).toString();
+      ab.height = height;
+    }
+  }
+
+  createFoundations() {
+    if (!Object.keys(this.theme.tokens).length) throw new Error('No tokens yet. Call set_tokens first (preset "starter" loads a ready scale).');
+    let ab = this.data.artboards.find((a) => a.generated === 'foundations');
+    if (!ab) {
+      ab = this.createArtboard({ name: 'Foundations', width: 1200, height: 900 }); // checkpoints itself
+      ab.generated = 'foundations';
+    } else {
+      this._checkpoint('create_foundations');
+    }
+    this._refreshFoundations();
+    this._commit();
+    return ab;
   }
 
   // ---- Mutations ----------------------------------------------------------
