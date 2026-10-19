@@ -38,12 +38,12 @@ Claude Code  --MCP (HTTP)-->  Node server (127.0.0.1:3777)  --SSE-->  Browser ca
 
 ## Quick start
 ```
-npm install
-npm start                      # serves http://localhost:3777
+pnpm install
+pnpm start                      # serves http://localhost:3777
 claude mcp add --transport http design-canvas http://localhost:3777/mcp
 ```
 Then open http://localhost:3777 in a browser and ask Claude to design something. Set `PORT` to use a different port, e.g.
-`PORT=4000 npm start` (register the matching MCP URL too).
+`PORT=4000 pnpm start` (register the matching MCP URL too).
 
 Stop the server with a normal kill (Ctrl+C) so it can flush pending writes to `data/`. After the MCP tool schemas change,
 restart Claude Code so it sees the new arguments.

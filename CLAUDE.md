@@ -7,7 +7,7 @@ elements, and Claude reads and answers those comments. Local only, no database (
 **Read `PROGRESS.md` first** for what has been done, current state and what to do next.
 
 ## Run
-- `npm start` (= `node src/server.mjs`) serves http://localhost:3777. Stop it with a normal kill so it flushes `data/`.
+- `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777. Stop it with a normal kill so it flushes `data/`.
 - MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateless). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
