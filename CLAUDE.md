@@ -18,6 +18,10 @@ elements, and Claude reads and answers those comments. Local only, no database (
 - `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there.
 - `src/store.mjs` `ProjectStore`: projects, snapshots (versions), activity log, comments, active project.
 - `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
+- `src/lint.mjs` static lint (`lint` tool); `src/export.mjs` React+Tailwind export; `src/meter.mjs` per-tool token estimates
+  (`/api/status`). `test/` holds `node:test` tests: run `pnpm test` before committing.
+- `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
+- `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
 - `public/` browser UI: `index.html`+`home.*`, `canvas.html`+`app.js`+`style.css`, `comments.*`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
@@ -45,6 +49,10 @@ elements, and Claude reads and answers those comments. Local only, no database (
   screenshot was seen once and not reproduced).
 - **Live "Claude is designing":** `touchGen` ring + header pill `#live`; **Follow** toggle (`followTo`) glides the camera
   to the artboard being written (centres on newest content for tall boards); backs off 2.5s after user input.
+- **Doc history:** `Doc` keeps an in-memory undo stack (50 steps, not saved to disk) and a change journal (`record`,
+  `changesSince`) that backs `get_changes`. Nodes with `data-locked` refuse edits. `write_html` expands `<x-clone node-id>`.
+- **Browser round-trips:** screenshots and `get_computed_styles` need real layout, so the server asks an open tab over SSE
+  (`askBrowser`) and the tab answers via POST `/reply`.
 - **Active project:** the browser claims it via POST `/activate` on load/visibility, not on SSE reconnect.
 - **Artboard ids change when artboards are deleted and recreated** (build scripts do this). Comments pinned to the old
   ids become orphaned (shown as "replaced or deleted" on `/comments`).

@@ -106,9 +106,10 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | History | `save_version`, `log_prompt` |
 | Comments | `get_comments`, `reply_comment`, `resolve_comment` |
 | Tokens | `get_design_tokens` |
-| Reading the design | `get_basic_info`, `get_selection`, `get_tree_summary`, `get_node_info`, `get_screenshot` |
-| Editing | `create_artboard`, `write_html`, `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes` |
-| Output | `export_html` |
+| Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
+| Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `undo` |
+| Verifying | `lint` (contrast, small text, spacing, overflow), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
+| Output | `export_html`, `export_react` (JSX + Tailwind arbitrary-property classes) |
 
 Typical flow: `list_projects` -> `create_project` -> `create_artboard` -> `write_html` -> `get_screenshot` (check the
 result) -> refine with `update_styles` / `set_text_content` -> `get_comments` and reply.
@@ -133,6 +134,7 @@ Back up by copying the `data/` folder. Project ids look like `p_a1b2c3d4`.
 
 ## Security
 - The server binds to `127.0.0.1` only and rejects foreign `Host` headers (DNS-rebinding protection).
+- Requests carrying a foreign `Origin` header are refused (a web page cannot drive the API through your browser).
 - POST bodies must be JSON; project ids are validated against `^p_[a-f0-9]{8}$`.
 - Generated HTML is stripped of scripts, iframes, forms and event handlers before it is stored or rendered.
 - Untrusted text (project names, comments) is rendered with `textContent`, never `innerHTML`.
@@ -143,13 +145,19 @@ src/
   server.mjs     HTTP routes, SSE, delta doc sync, comments API
   mcp.mjs        MCP tools and the guide text
   store.mjs      ProjectStore: projects, snapshots, activity, comments, active project
-  doc.mjs        Doc: one project's artboards, HTML sanitizing, data-pid ids, atomic saves
+  doc.mjs        Doc: one project's artboards, HTML sanitizing, data-pid ids, atomic saves, undo, change journal
+  lint.mjs       static design lint (WCAG contrast incl. OKLCH, spacing, size checks)
+  export.mjs     artboard -> React + Tailwind
+  meter.mjs      per-tool token estimates (served at /api/status)
   tokens.mjs     OKLCH design-token extraction (css / json / tailwind)
 public/
   index.html + home.*       projects home
   canvas.html + app.js + style.css   the canvas
   comments.*                all-comments page
 examples/sprig/             scripts that build the Sprig design system
+test/                       node:test unit tests (`pnpm test`)
+skills/, .claude-plugin/, .mcp.json   Claude Code plugin: design skill + MCP config
+docs/ROADMAP.md             build plan adapted to this codebase, with status
 data/                       runtime data (gitignored)
 ```
 
