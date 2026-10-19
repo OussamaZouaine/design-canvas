@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import { lintArtboard } from './lint.mjs';
 import { parseStyle, styleToString } from './css.mjs';
 import { normalizeTree } from './normalize.mjs';
+import { applyTokens, emptyTheme, STARTER } from './theme.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -85,7 +86,7 @@ export class Doc {
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
   _checkpoint(label) {
-    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })) });
+    this.undoStack.push({ label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme) });
     if (this.undoStack.length > 50) this.undoStack.shift();
   }
 
@@ -96,6 +97,7 @@ export class Doc {
     for (let i = 0; i < steps && this.undoStack.length; i++) {
       const entry = this.undoStack.pop();
       this.data.artboards = entry.artboards;
+      this.data.theme = entry.theme;
       reverted.push(entry.label);
     }
     if (reverted.length) {
@@ -307,6 +309,26 @@ export class Doc {
       childIds: el.childNodes.filter((c) => c instanceof HTMLElement).map((c) => c.getAttribute('data-pid')),
       html: el.toString(),
     };
+  }
+
+  // ---- Theme (design tokens) ------------------------------------------------
+
+  get theme() { return this.data.theme ?? emptyTheme(); }
+
+  // Merge token values (null removes one). `mode` writes overrides for that mode instead of the base.
+  // `preset: 'starter'` first loads the built-in scale (only into a theme that has no tokens yet).
+  setTokens(partial = {}, { mode, preset } = {}) {
+    // Build on a copy and validate everything before touching the document: all or nothing.
+    const next = structuredClone(this.data.theme ?? emptyTheme());
+    if (preset === 'starter' && !Object.keys(next.tokens).length) {
+      applyTokens(next, STARTER.tokens);
+      for (const [m, t] of Object.entries(STARTER.modes)) applyTokens(next, t, m);
+    }
+    applyTokens(next, partial, mode);
+    this._checkpoint('set_tokens');
+    this.data.theme = next;
+    this._commit();
+    return Object.keys(partial);
   }
 
   // ---- Mutations ----------------------------------------------------------

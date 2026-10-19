@@ -26,3 +26,12 @@ test('artboard becomes JSX without canvas bookkeeping', () => {
   assert.match(jsx, /strokeWidth="2"/);
   assert.doesNotMatch(jsx, /data-pid|data-name/);
 });
+
+test('theme tokens are declared on the React wrapper', () => {
+  const doc = new Doc(null);
+  const ab = doc.createArtboard({ name: 'Home', width: 100, height: 50 });
+  doc.writeHtml(ab.id, '<p style="color: var(--color-fg)">x</p>');
+  const jsx = artboardToReact(doc.getArtboard(ab.id), { tokens: { 'color-fg': 'oklch(0.2 0 0)', 'space-2': '8px' }, modes: {} });
+  assert.match(jsx, /\[--color-fg:oklch\(0\.2_0_0\)\]/);
+  assert.match(jsx, /\[--space-2:8px\]/);
+});

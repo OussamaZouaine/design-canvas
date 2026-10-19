@@ -2,6 +2,7 @@
 // arbitrary-property class, so the output looks identical to the canvas without us having to
 // guess a design-system mapping (a human can then swap them for real utilities or tokens).
 import { parse, HTMLElement, TextNode } from 'node-html-parser';
+import { toCssDeclarations } from './theme.mjs';
 
 const VOID = new Set(['img', 'br', 'hr', 'input', 'meta', 'link', 'source', 'wbr']);
 
@@ -61,11 +62,14 @@ export function componentName(name) {
   return /^[A-Za-z]/.test(n) ? n : 'Artboard' + n;
 }
 
-export function artboardToReact(ab) {
+// `theme` is optional: when the project has tokens they are declared on the wrapper, so var(--...)
+// references inside the design keep resolving without a separate stylesheet.
+export function artboardToReact(ab, theme) {
   const root = parse(ab.html, { comment: false });
   const body = root.childNodes.map((c) => render(c, 2)).filter(Boolean).join('\n');
   // Wrapper gives the board its design size; children are laid out inside it as on the canvas.
-  const wrap = `[position:relative] [width:${ab.width}px] [min-height:${ab.height}px]`;
+  const tokenClasses = styleToClasses(toCssDeclarations(theme?.tokens ?? {}));
+  const wrap = [`[position:relative] [width:${ab.width}px] [min-height:${ab.height}px]`, ...tokenClasses].join(' ');
   return `export function ${componentName(ab.name)}() {
   return (
     <div className="${wrap}">
