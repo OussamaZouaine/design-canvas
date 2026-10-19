@@ -171,6 +171,15 @@ const server = http.createServer(async (req, res) => {
   const hostOk = [`localhost:${PORT}`, `127.0.0.1:${PORT}`].includes(req.headers.host);
   if (!hostOk) { res.writeHead(403).end('Forbidden host'); return; }
 
+  // Browsers always send Origin on cross-site requests and on fetch POSTs. A foreign one means
+  // another website is driving our API from the user's browser, so refuse it. (No Origin =
+  // curl or the MCP client, which is fine: those are not a browser acting for a web page.)
+  const origin = req.headers.origin;
+  if (origin && ![`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`].includes(origin)) {
+    res.writeHead(403).end('Forbidden origin');
+    return;
+  }
+
   try {
     // --- MCP endpoint (stateless: fresh server + transport per request) ---
     if (url.pathname === '/mcp') {
