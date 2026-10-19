@@ -320,6 +320,26 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     return text({ artboard_id: ab.id, height: ab.height });
   }));
 
+  server.registerTool('move_node', {
+    description: 'Move a node (keeping its ids) before / after another node, or into it as first (start) or last (end) child. target_id may be an artboard with start or end. Reorders layers.',
+    inputSchema: { ...pid, node_id: z.string(), target_id: z.string(), position: z.enum(['before', 'after', 'start', 'end']).optional().describe('Default end (last child of the target).') },
+  }, safe(({ project_id, node_id, target_id, position }) => {
+    const { meta, doc } = target(project_id);
+    doc.moveNode(node_id, target_id, position);
+    log(meta, doc, 'move_node', node_id);
+    return text('ok');
+  }));
+
+  server.registerTool('set_flags', {
+    description: 'Hide / show nodes (hidden) or lock / unlock them (locked: nobody can edit a locked node or what is inside it until it is unlocked).',
+    inputSchema: { ...pid, node_ids: z.array(z.string()).min(1), hidden: z.boolean().optional(), locked: z.boolean().optional() },
+  }, safe(({ project_id, node_ids, hidden, locked }) => {
+    const { meta, doc } = target(project_id);
+    doc.setFlags(node_ids, { hidden, locked });
+    log(meta, doc, 'set_flags', node_ids);
+    return text('ok');
+  }));
+
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
