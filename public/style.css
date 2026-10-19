@@ -229,6 +229,8 @@ button.icon:active { transform: scale(0.94); }
 .sw small { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .kv { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; font-variant-numeric: tabular-nums; }
 .kv span:last-child { color: var(--muted); }
+/* Copy-paste command box in the MCP tab */
+.code { font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; user-select: all; }
 .bar { height: 6px; border-radius: 3px; background: var(--accent); }
 .exports { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
 

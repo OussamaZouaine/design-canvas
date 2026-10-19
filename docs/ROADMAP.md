@@ -28,7 +28,7 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
   spacing, boxes wider than the artboard, negative absolute offsets, images without alt, lorem ipsum.
 - Token-lean `get_screenshot` (1x JPEG, 1000px max, crop by `node_id`) and `get_computed_styles`.
 - `finish_working` plus a dashed highlight on nodes Claude is editing.
-- Per-tool token estimates (`/api/status`) and short server `instructions`.
+- Per-tool token estimates (`/api/status`), an MCP tab in the side panel (server state, setup command, tokens per tool), and short server `instructions`.
 - `Origin` check on every request (DNS rebinding was already covered by the Host check).
 - `export_react` (JSX + Tailwind arbitrary-property classes).
 - Claude Code plugin: `.claude-plugin/`, `.mcp.json`, `skills/design-canvas/SKILL.md`.
@@ -37,21 +37,20 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 
 ## Not done, in suggested order
 
-1. **MCP panel in the UI** showing `/api/status` (tabs connected, tokens per tool). The endpoint exists; no UI yet.
-2. **Theme editor + modes**: edit tokens in the app and recompile CSS variables, light/dark modes, token names
+1. **Theme editor + modes**: edit tokens in the app and recompile CSS variables, light/dark modes, token names
    shown in the inspector. Needs a real `theme` object in the doc (today tokens are only extracted).
-3. **Components**: masters with variants, `insert_component`, `create_component`; edit a master and every instance
+2. **Components**: masters with variants, `insert_component`, `create_component`; edit a master and every instance
    updates. Builds on `<x-clone>`, but live linking needs a `data-component` reference.
-4. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
+3. **Layers panel + canvas selection of nested nodes** (click / double-click / Esc to parent), drag to reorder,
    `move_node`, `search_nodes` (the outline search covers the read side).
-5. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
+4. **Manual editing**: inspector (layout, auto layout, radius, fill, stroke, typography), in-place text editing,
    resize handles, undo/redo shortcuts in the browser (undo exists only through MCP today).
-6. **Pages** inside a project, `navigate`, dashboard tabs.
-7. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
+5. **Pages** inside a project, `navigate`, dashboard tabs.
+6. **References**: `capture_url` (needs a headless browser; the open tab cannot fetch cross-origin pages),
    `add_reference_image`, `compare_to_reference` (pixel diff, would live in the browser).
-8. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
+7. **Normalization, remaining parts**: flattening text blocks into one text node and turning inputs into frames. The
    class/`<style>` drop, redundant-style stripping and border-box are done (opt-in per project).
-9. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
+8. **Token sync with a repo path** (`extract_tokens` from a CSS file, `repo` in project meta, export tokens to CSS /
    Tailwind theme and import them back).
 10. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).

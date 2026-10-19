@@ -25,6 +25,7 @@ export class Meter {
   constructor() {
     this.startedAt = Date.now();
     this.tools = new Map(); // name -> { calls, tokens, errors }
+    this.lastCallAt = null; // MCP is stateless (no open connection), so recent activity is the only "connected" signal
   }
 
   record(name, result) {
@@ -33,10 +34,11 @@ export class Meter {
     t.tokens += estimateTokens(result);
     if (result?.isError) t.errors++;
     this.tools.set(name, t);
+    this.lastCallAt = Date.now();
   }
 
   snapshot() {
     const tools = [...this.tools].map(([name, t]) => ({ name, ...t })).sort((a, b) => b.tokens - a.tokens);
-    return { since: this.startedAt, totalTokens: tools.reduce((n, t) => n + t.tokens, 0), tools };
+    return { since: this.startedAt, lastCallAt: this.lastCallAt, totalTokens: tools.reduce((n, t) => n + t.tokens, 0), tools };
   }
 }
