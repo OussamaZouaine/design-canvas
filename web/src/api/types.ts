@@ -39,10 +39,14 @@ export interface Artboard {
 
 export interface Page { id: string; name: string; background?: string }
 
+// Design tokens: CSS custom property values, plus named modes that override some of them.
+export interface ThemeData { tokens: Record<string, string>; modes?: Record<string, Record<string, string>> }
+
 export interface DocData {
   counter: number;
   artboards: Artboard[];
   pages?: Page[];
+  theme?: ThemeData;
   // components, tokens, references, ... are added to the type when the phase that uses them needs them.
   [key: string]: unknown;
 }
