@@ -67,7 +67,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - [x] **Phase 6 - Side panels.** Comments (pins, popovers, threads, comment mode) + Activity, Versions, Theme (modes), Tokens, MCP tabs.
 - [x] **Phase 7 - Figma/Paper polish (partly: see log).** Floating toolbar tools wired (frame, text, image, comment, hand), context menus, rulers/size label,
   empty states, loading skeletons, a11y pass (focus, roles, `inert`), reduced-motion, 50+ board performance check with the React profiler.
-- [ ] **Phase 8 - Cut-over and cleanup.** Serve the new app at `/`, `/p/:id`, `/comments`; remove `public/` and `?legacy`; update
+- [x] **Phase 8 - Cut-over and cleanup.** Serve the new app at `/`, `/p/:id`, `/comments`; remove `public/` and `?legacy`; update
   `CLAUDE.md` layout/run sections, `README`, plugin skill if UI names changed; run full manual pass; tag the commit.
 
 ## Rules for every phase
@@ -245,3 +245,9 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
 - **Server contract change (additive):** `POST /api/p/:id/create` now returns `result: {id}` and `paste` returns `result: {ids}` (needed to select the new board / node).
 - Verified on a scratch server (3790, purged): F-drag made a 600x400 board and selected it, T-click inserted text and opened it for editing, menu items + Esc, H-drag pans.
 - NOT done: rulers, 50+ board React-profiler pass (Sprig has 46 boards; only Phase 3 rendering was checked), Layers panel context menu, `inert` (panels unmount instead). Move to Phase 8 or a later polish session.
+
+**Phase 8 (2026-10-21):** Cut-over done.
+- `src/server.mjs` serves `web/dist` at `/` (real files as is, extension-less paths get `index.html`, missing files with an extension 404, 503 with a hint if not built). `/p/<bad or trashed id>` still redirects to `/`.
+- Vite `base` is `/` and the TanStack router has no basepath. `/next/` and `?legacy` are gone; `public/` deleted (history keeps it).
+- Dev: `pnpm dev:web` now lives at http://localhost:5173/ (not /next/). Verified on a scratch server (3790): `/`, `/comments`, assets 200, bad project 302, `pnpm test` 86 pass.
+- Left from Phase 7 (optional polish): rulers, 50+ board profiler pass, Layers context menu. Also the queued Paper-style zoomed-out selection proposal (Phase 3 log).

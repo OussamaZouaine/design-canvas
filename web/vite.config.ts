@@ -9,8 +9,6 @@ import { defineConfig } from 'vite';
 const API = 'http://127.0.0.1:3777';
 
 export default defineConfig({
-  // The app lives under /next/ until Phase 8 cut-over, so asset URLs must be prefixed.
-  base: '/next/',
   plugins: [
     react(),
     // React Compiler: auto-memoizes components, so we do not write useMemo/useCallback by hand.

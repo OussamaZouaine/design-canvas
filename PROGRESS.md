@@ -9,7 +9,7 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
   (buttons, forms, feedback, navigation, data display, states, icons, theme & tokens, data table density).
 - Plan status: every phase of the build plan that fits the Node stack is done (see `docs/ROADMAP.md`). Tools, panels (Layers,
   Design, Theme, MCP), pages, components, references, token sync, normalization, lint, export are all in. 86 unit tests pass.
-- Dev server is **stopped** (restart it to load `src/` changes; a running 3777 server from before 2026-10-20 lacks the newest tools); start with `pnpm start`. No git remote configured, nothing pushed.
+- Dev server is **stopped** (restart it to load `src/` changes); run `pnpm build:web` then `pnpm start`. No git remote configured, nothing pushed.
 - Git history is on `main`, small commits per concern (`git log --oneline`).
 
 ## What was built, in order
@@ -77,7 +77,7 @@ Order is a suggestion; the user decides.
 1. **Use it for real** (no code): run Claude Code against the canvas on a real task (Trove), note what is slow, token-hungry or
    wrong, then turn that into issues here. The plan itself said to stop after Phase 3 and do this.
 2. **React rewrite: APPROVED 2026-10-20, in progress.** Follow `docs/REACT-REWRITE.md` (phases 0-8, one session per phase;
-   React 19 + React Compiler + Vite, Figma/Paper-like UI, canvas stays imperative, server unchanged). Do this before items 4-6. Phases 0-7 done (Phase 7 left rulers + profiler pass, see its log); next is Phase 8 (cut-over and cleanup). Also queued: a research session on Paper-style zoomed-out selection (see the Phase 3 log).
+   React 19 + React Compiler + Vite, Figma/Paper-like UI, canvas stays imperative, server unchanged). Do this before items 4-6. Phases 0-8 done (cut-over 2026-10-21: web/dist served at /, public/ deleted; Phase 7 left rulers + profiler pass, see its log). Also queued: a research session on Paper-style zoomed-out selection (see the Phase 3 log).
 3. **Desktop app (later)**: the Go/Wails path from the plan only makes sense if the server is rewritten in Go. Otherwise wrap the
    Node server (Electron or Tauri, or Wails with a Node sidecar). Open question for the user: is the Go rewrite itself a goal?
 4. **Roadmap leftovers** (`docs/ROADMAP.md`): insert toolbar (frame/text/image/component), canvas drag-reorder inside flex parents,

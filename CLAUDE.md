@@ -7,10 +7,11 @@ elements, and Claude reads and answers those comments. Local only, no database (
 **Read `PROGRESS.md` first** for what has been done, current state and what to do next (it has a "Next work, split into sessions"
 list: pick one area per session, keep sessions short, and update PROGRESS.md / ROADMAP.md before ending a session).
 
-**A React rewrite of `public/` into `web/` is under way: follow `docs/REACT-REWRITE.md` (phase checklist, decisions, layout).**
+**The UI is a React app in `web/` (the rewrite of the old `public/` finished in Phase 8; plan and per-phase notes in `docs/REACT-REWRITE.md`).**
 
 ## Run
-- `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777. Stop it with a normal kill so it flushes `data/`.
+- `pnpm build:web` once (and after any `web/` change), then `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777 (the server serves `web/dist`; without a build it answers 503). Stop it with a normal kill so it flushes `data/`.
+- UI dev: `pnpm dev:web` (Vite on http://localhost:5173 with HMR, proxies /api /events /mcp /reply to the 3777 server, which must be running).
 - MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateless). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
@@ -27,7 +28,7 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
 - `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
 - `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
-- `public/` browser UI: `index.html`+`home.*`, `canvas.html`+`app.js`+`style.css`, `comments.*`.
+- `web/` React 19 + Vite + Tailwind v4 + shadcn (Base UI) client: `src/canvas/` imperative engine + editor, `src/panels/`, `src/shell/`, `src/pages/`, `src/store/` (zustand), `src/api/`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
 - `data/` runtime data (gitignored): `projects/<id>/{doc,meta,activity,comments}.json`, `snapshots/`, `state.json`.
 
@@ -43,7 +44,7 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
   small focused commits (one per concern, never one giant commit).
 
 ## Architecture notes that are easy to get wrong
-- **Rendering / performance (public/app.js):** every artboard is a shadow-DOM frame. Level of detail: live HTML is
+- **Rendering / performance (web/src/canvas/engine.ts):** every artboard is a shadow-DOM frame. Level of detail: live HTML is
   mounted only when zoom >= `LIVE_K` (0.3) and the board is near the viewport (or Claude is drawing in it);
   below that a cached bitmap snapshot (`<img.thumb>`) is shown. Snapshots are rendered one at a time in idle time
   via SVG foreignObject and cached in IndexedDB keyed by a hash of the HTML. `pidIndex` maps node id -> artboard
@@ -64,9 +65,9 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
   `display:none` and unmounted. Claude's default target page is `ui.currentPage` (`set_page`), not document data.
 - **Token sync:** `meta.repo` is the linked code folder; `src/tokensync.mjs` only reads files inside it (path check) and maps
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
-- **Inspector:** `public/inspector.js` (Design tab) reads the selected node's inline style from the parsed HTML and sends
+- **Inspector:** `web/src/panels/InspectorPanel.tsx` (Design tab) reads the selected node's inline style from the parsed HTML and sends
   `style` actions (one property each, one undo step). Fields suggest `var(--token)` values from the theme.
-- **Layers panel:** `public/layers.js` (left drawer) builds the tree from each artboard's HTML with DOMParser and sends
+- **Layers panel:** `web/src/panels/LayersPanel.tsx` (left drawer) builds the tree from each artboard's HTML with DOMParser and sends
   rename / flags / move-node actions. Edits the user makes there call `markUserEdit()` so the canvas does not play the
   "Claude is designing" reveal and camera follow for them. `hidden` works because the shadow root and screenshot wrapper
   add a `[hidden]` display:none rule (an inline display:flex would otherwise win).
