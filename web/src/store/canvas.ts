@@ -4,6 +4,11 @@ import type { CanvasEngine } from '@/canvas/engine';
 // What the imperative canvas engine reports to React chrome (zoom label, live pill, selected id, page),
 // plus the engine itself so chrome buttons (fit, zoom, follow) can call it. The engine lives in the store
 // instead of a ref so effects and event handlers elsewhere can reach it without prop drilling.
+export interface MenuState {
+  x: number; y: number; id: string | null;
+  extra?: { label: string; run: () => void }[];
+}
+
 interface CanvasState {
   engine: CanvasEngine | null;
   zoom: number;
@@ -18,8 +23,9 @@ interface CanvasState {
   mode: string;
   setMode: (m: string) => void;
   // Right-click menu: where it opened and which node (or board) it is about; null = closed.
-  menu: { x: number; y: number; id: string | null } | null;
-  setMenu: (m: { x: number; y: number; id: string | null } | null) => void;
+  // `extra` is set by the Layers panel: its own items (rename, hide, lock) that only the panel can run.
+  menu: MenuState | null;
+  setMenu: (m: MenuState | null) => void;
   setEngine: (e: CanvasEngine | null) => void;
   setZoom: (k: number) => void;
   setSelected: (id: string | null) => void;

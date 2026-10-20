@@ -37,13 +37,16 @@ export function CanvasContextMenu() {
   if (!menu || !engine) return null;
   const { id } = menu;
   const isBoard = !!id?.startsWith('A');
+  const fromLayers = !!menu.extra;
   const parent = id ? engine.parentOf(id) : null;
   const act = (fn: () => void) => () => { close(); fn(); };
 
   const items: (Item | 'sep')[] = [
     ...(id ? [
-      { label: 'Add comment', run: () => useComments.getState().openNew(id, menu.x, menu.y) } as Item,
-      'sep' as const,
+      // The comment popover is anchored to a canvas point, so it only makes sense from the canvas, not the Layers list.
+      ...(fromLayers ? [] : [{ label: 'Add comment', run: () => useComments.getState().openNew(id, menu.x, menu.y) } as Item, 'sep' as const]),
+      ...(menu.extra ?? []),
+      ...(fromLayers && menu.extra?.length ? ['sep' as const] : []),
       { label: 'Select parent', hint: 'Esc', run: () => engine.selectNode(parent), disabled: !parent } as Item,
       { label: 'Copy', hint: 'Ctrl+C', run: () => engine.copy(id), disabled: isBoard } as Item,
     ] : []),
@@ -53,8 +56,7 @@ export function CanvasContextMenu() {
       'sep' as const,
       { label: isBoard ? 'Delete artboard' : 'Delete', hint: 'Del', run: () => engine.remove(id), danger: true } as Item,
     ] : []),
-    'sep',
-    { label: 'Fit all artboards', run: () => engine.fit() },
+    ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item]),
   ];
 
   // Arrow keys hop between enabled items (roving focus).
