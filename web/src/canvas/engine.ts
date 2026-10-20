@@ -149,6 +149,9 @@ export class CanvasEngine {
 
   getActivePage() { return this.activePage; }
 
+  // Artboard id that owns a node id (panels use it to find the node's HTML without scanning every board).
+  boardOf(id: string) { return this.pidIndex.get(id); }
+
   // Header / toolbar "new artboard".
   createArtboard() { return this.editor.createArtboard(); }
 

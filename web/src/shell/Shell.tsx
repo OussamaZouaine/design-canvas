@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { canvasAction } from '@/api/projects';
 import { pageOfBoard, pagesOf } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
+import { InspectorPanel } from '@/panels/InspectorPanel';
+import { LayersPanel } from '@/panels/LayersPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
@@ -144,7 +146,7 @@ const TABS: { id: PanelTab; label: string }[] = [
   { id: 'versions', label: 'Versions' }, { id: 'theme', label: 'Theme' }, { id: 'tokens', label: 'Tokens' }, { id: 'mcp', label: 'MCP' },
 ];
 
-export function RightPanel() {
+export function RightPanel({ projectId }: { projectId: string }) {
   const { panelTab, setPanelTab, panelOpen } = useUi();
   if (!panelOpen) return null;
   return (
@@ -156,22 +158,21 @@ export function RightPanel() {
           </button>
         ))}
       </nav>
-      <div className="flex-1 overflow-auto p-3 text-muted-foreground">{panelTab} panel (Phase {panelTab === 'design' ? 5 : 6})</div>
+      <div className="flex-1 overflow-auto">
+        {panelTab === 'design' ? <InspectorPanel projectId={projectId} /> : <p className="p-3 text-muted-foreground">{panelTab} panel (Phase 6)</p>}
+      </div>
     </aside>
   );
 }
 
-// Left drawer: icon rail + layers frame. The real tree arrives in Phase 5; for now it lists artboard names live.
-export function LeftPanel() {
+// Left drawer: the layer tree (search, rename, hide/lock, drag to reorder).
+export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
-  const boards = useProject((s) => s.doc?.artboards);
   if (!layersOpen) return null;
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-background">
+    <aside className="flex w-60 shrink-0 flex-col border-r bg-background">
       <div className="border-b px-3 py-2 text-[11px] font-medium">Layers</div>
-      <ul className="flex-1 overflow-auto py-1">
-        {boards?.map((b) => <li key={b.id} className="truncate px-3 py-1 hover:bg-muted">{b.name}</li>)}
-      </ul>
+      <LayersPanel projectId={projectId} />
     </aside>
   );
 }

@@ -15,7 +15,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
     <div className="flex h-full flex-col">
       <TopBar projectId={projectId} />
       <div className="flex min-h-0 flex-1">
-        <LeftPanel />
+        <LeftPanel projectId={projectId} />
         <main className="relative min-w-0 flex-1 bg-[var(--canvas)]">
           <Canvas projectId={projectId} />
           {empty && (
@@ -26,7 +26,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <LivePill />
           <FloatingToolbar />
         </main>
-        <RightPanel />
+        <RightPanel projectId={projectId} />
       </div>
     </div>
   );
