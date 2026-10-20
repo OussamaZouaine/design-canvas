@@ -10,8 +10,6 @@ interface ProjectState {
   connection: Connection;
   // Ids Claude touched recently (the server's `agent` event); drives the "Claude is designing" pill.
   agentIds: string[];
-  // Active page id; null until the doc says there is more than the implicit first page.
-  activePage: string | null;
 
   setMeta: (m: ProjectMeta) => void;
   // Takes the raw delta from the server and refills unchanged boards from the previous doc.
@@ -19,11 +17,10 @@ interface ProjectState {
   setComments: (c: Comment[]) => void;
   setConnection: (c: Connection) => void;
   setAgentIds: (ids: string[]) => void;
-  setActivePage: (id: string | null) => void;
   reset: () => void;
 }
 
-const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [], activePage: null };
+const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [] };
 
 export const useProject = create<ProjectState>((set, get) => ({
   ...empty,
@@ -41,6 +38,5 @@ export const useProject = create<ProjectState>((set, get) => ({
   setComments: (comments) => set({ comments }),
   setConnection: (connection) => set({ connection }),
   setAgentIds: (agentIds) => set({ agentIds }),
-  setActivePage: (activePage) => set({ activePage }),
   reset: () => set(empty),
 }));

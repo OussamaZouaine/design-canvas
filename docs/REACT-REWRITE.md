@@ -56,7 +56,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
   shadcn components restyled for the Figma-like density, plus our NumberField/ColorField, dark/light theme. Done = project page shows live artboard names + status pill.
 - [x] **Phase 2 - Home and Comments pages.** Port `home.js` + `comments.js` (cards with live previews, search/sort, trash, import/export,
   all-comments page with filters, deep link `?comment=`). Easiest full pages, proves the data layer. Done = parity with `/` and `/comments`.
-- [ ] **Phase 3 - Canvas engine core.** Port from `public/app.js`: world transform pan/zoom/fit, shadow-DOM frames, `pidIndex`,
+- [x] **Phase 3 - Canvas engine core.** Port from `public/app.js`: world transform pan/zoom/fit, shadow-DOM frames, `pidIndex`,
   level of detail (`LIVE_K`), IndexedDB thumbnails, delta render, pages, Claude-designing ring/reveal/follow camera, hover/selection overlays.
   `<Canvas>` ref API: `select`, `fit`, `panTo`, events out through the store. Done = same boards render, zoom smoothly, 46 Sprig boards ok.
 - [ ] **Phase 4 - Canvas editing.** Selection, resize handles, drag-move absolute nodes, in-place text edit, copy/paste, undo/redo,
@@ -112,5 +112,24 @@ import, open-comment badge, comments filters (project/author/status/search), rep
   the `items` prop on the root or the trigger shows the raw value. When running `shadcn add`, answer **n** to the button.tsx overwrite prompt.
 - List pages scroll inside their own `h-full overflow-y-auto` wrapper because `body` is `overflow: hidden` (the canvas page needs that).
 - `/p/$id` route now validates `?comment=<id>` (the Comments page links to it); the canvas opens that thread in Phase 6.
-- Checked in the browser (scratch server): home grid, card menu, arming delete-forever, new-project create + navigate, comments list and
+- (Phase 2, continued) Checked in the browser (scratch server): home grid, card menu, arming delete-forever, new-project create + navigate, comments list and
   deep link. Trash/restore/rename mutations use the same endpoints as legacy but were not clicked through (the browser pane was hidden).
+
+**Phase 3 (2026-10-20):** Canvas engine core done; the project page now shows the real boards.
+- `web/src/canvas/engine.ts` = `CanvasEngine` class (port of the render half of `public/app.js`): world transform, wheel pan + ctrl/pinch zoom,
+  drag-pan on empty space, `fit`/`zoomBy`/`focusBoard`/`panTo`, shadow-DOM frames, `pidIndex`, level of detail (`LIVE_K` 0.3), snapshot queue,
+  delta render (skips boards whose HTML did not change), pages (`setPage`, `setPageWhenReady`, auto-switch when Claude draws elsewhere),
+  Claude ring/shimmer/reveal/follow camera, selection + hover + agent overlays, theme decls (`setThemeMode`). `raster.ts` = hash, IndexedDB
+  cache (same db/store name as legacy, so snapshots are shared) and `rasterizeCanvas` (reused by Phase 4 screenshots). `canvas.css` = its styles.
+- `Canvas.tsx` renders an empty div; effects create/destroy the engine, push `doc` and `agentIds` in, and engine events go to `store/canvas.ts`
+  (`engine`, `zoom`, `selected`, `live`, `activePage`, `follow`). Chrome reads those: page switcher, zoom/fit/follow controls, `LivePill` (Shell.tsx).
+- Per-board state is a `Board` object in a Map (no expando props on DOM nodes). Overlays are positioned in viewport coordinates (`relRect`).
+- Selecting posts `/selection` so MCP `get_selection` works. NOT yet ported (Phase 4): artboard label drag, resize handles, node drag, text edit,
+  shortcuts (Delete, undo, copy), `screenshot`/`computed`/`compare` SSE replies, comment mode, reference drop. Pins/comments are Phase 6.
+- Verified on a scratch server with Sprig (46 boards): all boards render as snapshots at 3 percent, go live when zoomed in, click selects with
+  the box, a created board shows ring + shimmer + live pill + follow camera, Add page switches pages. Scratch project removed.
+- Gotcha: a CSS `position: relative` in `canvas.css` beat the Tailwind `absolute` utility and collapsed the viewport to 0 height; the element is
+  positioned by its class only.
+- **Open idea (user, 2026-10-20): Paper stays smooth and lets you select elements even when zoomed far out.** Not researched yet (own session).
+  Our gap: below `LIVE_K` boards are plain bitmaps, so there is no hit-testing. Likely fix: keep a cheap per-board rect index (node id, box, depth)
+  extracted when a snapshot is built, hit-test against it for hover/select at any zoom, and later tile/GPU-draw. Investigate how Paper does it first.

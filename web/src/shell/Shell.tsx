@@ -1,9 +1,14 @@
 import { Link } from '@tanstack/react-router';
-import { Hand, Image, MessageSquare, MousePointer2, Moon, PanelLeft, PanelRight, Square, Sun, Type } from 'lucide-react';
+import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Square, Sun, Type } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { canvasAction } from '@/api/projects';
+import { pageOfBoard, pagesOf } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
+import { toast } from '@/store/toast';
 import { useUi, type PanelTab, type Tool } from '@/store/ui';
 
 // Status pill: connection state, plus "Claude is designing" while the server reports touched nodes.
@@ -19,9 +24,72 @@ function StatusPill() {
   );
 }
 
-export function TopBar() {
+// Page switcher: pages are separate canvases inside one project. The engine owns which one is visible
+// (it also switches by itself when Claude draws on another page); this just mirrors and drives it.
+function PageSwitcher({ projectId }: { projectId: string }) {
+  const doc = useProject((s) => s.doc);
+  const engine = useCanvas((s) => s.engine);
+  const active = useCanvas((s) => s.activePage);
+  const list = pagesOf(doc);
+  const add = async () => {
+    if (!engine) return;
+    engine.markUserEdit();
+    try {
+      const r = await canvasAction(projectId, 'page-create', { name: `Page ${list.length + 1}` });
+      engine.setPageWhenReady((r.result as { id: string }).id);
+    } catch (e) { toast((e as Error).message || 'Could not add a page'); }
+  };
+  return (
+    <div className="flex items-center gap-1">
+      <Select items={list.map((p) => ({ value: p.id, label: p.name }))} value={active ?? list[0].id} onValueChange={(v) => engine?.setPage(v as string)}>
+        <SelectTrigger aria-label="Page" className="h-7 w-32"><SelectValue /></SelectTrigger>
+        <SelectContent>{list.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+      </Select>
+      <Button variant="ghost" size="icon" aria-label="Add a page" onClick={add}><Plus /></Button>
+    </div>
+  );
+}
+
+// Zoom readout + fit + the "follow Claude" camera toggle.
+function ZoomControls() {
+  const { engine, zoom, follow, setFollow } = useCanvas();
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button variant="ghost" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button>
+      <span className="tnum w-10 text-center text-muted-foreground">{Math.round(zoom * 100)}%</span>
+      <Button variant="ghost" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button>
+      <Button variant="ghost" size="icon" aria-label="Fit all artboards" title="Fit all" onClick={() => engine?.fit()}><Maximize /></Button>
+      <Button
+        variant={follow ? 'secondary' : 'ghost'} size="icon" aria-pressed={follow} aria-label="Follow Claude" title="Follow Claude's camera"
+        onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
+      ><Crosshair /></Button>
+    </div>
+  );
+}
+
+// "Claude is writing to <board>" pill over the canvas. The board's own label is unreadable when zoomed out
+// over dozens of boards, so this is the always-visible cue; clicking it glides to that board.
+export function LivePill() {
+  const live = useCanvas((s) => s.live);
+  const engine = useCanvas((s) => s.engine);
+  if (!live) return null;
+  return (
+    <button
+      onClick={() => engine?.focusBoard(live.id)}
+      className="live-pill absolute top-3 right-3 z-10 flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] shadow-md"
+    >
+      <span className="size-1.5 rounded-full bg-[oklch(0.68_0.2_295)]" />
+      {/* React escapes text, so an untrusted board name is safe here. */}
+      Designing <b className="max-w-40 truncate font-medium">{live.name}</b>
+    </button>
+  );
+}
+
+export function TopBar({ projectId }: { projectId: string }) {
   const name = useProject((s) => s.meta?.name);
-  const count = useProject((s) => s.doc?.artboards.length ?? 0);
+  const doc = useProject((s) => s.doc);
+  const page = useCanvas((s) => s.activePage);
+  const count = doc ? doc.artboards.filter((a) => pageOfBoard(doc, a) === page).length : 0;
   const { theme, toggleTheme, toggleLayers, togglePanel } = useUi();
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 border-b bg-background px-2">
@@ -30,8 +98,10 @@ export function TopBar() {
       <span className="text-muted-foreground">/</span>
       {/* textContent-equivalent: React escapes text, so untrusted project names are safe here. */}
       <span className="truncate font-medium">{name ?? '…'}</span>
-      <span className="tnum text-muted-foreground">{count} artboards</span>
-      <div className="ml-auto flex items-center gap-2">
+      <span className="tnum text-muted-foreground">{count} {count === 1 ? 'artboard' : 'artboards'}</span>
+      <div className="ml-auto flex items-center gap-3">
+        <PageSwitcher projectId={projectId} />
+        <ZoomControls />
         <StatusPill />
         <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
         <Button variant="ghost" size="icon" aria-label="Toggle panel" onClick={togglePanel}><PanelRight /></Button>
