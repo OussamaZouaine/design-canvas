@@ -9,6 +9,8 @@ export interface ProjectSummary {
   deletedAt: number | null;
   artboardCount: number;
   active?: boolean;
+  // First artboard, used for the live card preview on Home (null/absent for an empty project).
+  cover?: { width: number; height: number; html: string } | null;
 }
 
 export interface ProjectMeta {
@@ -54,4 +56,20 @@ export interface Comment {
   createdAt: number;
   replies: { text: string; createdAt: number; author?: string }[];
   [key: string]: unknown;
+}
+
+// One row of GET /api/comments: a comment plus where it lives, resolved by the server.
+export interface OverviewComment {
+  id: string;
+  projectId: string;
+  projectName: string;
+  artboardName?: string;
+  targetId: string;
+  text: string;
+  author?: 'user' | 'claude';
+  resolved?: boolean;
+  orphaned?: boolean;
+  element?: { tag: string; text?: string };
+  createdAt: number;
+  replies: { text: string; createdAt: number; author?: string }[];
 }
