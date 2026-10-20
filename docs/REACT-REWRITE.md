@@ -54,7 +54,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - [x] **Phase 1 - Data layer + shell.** Typed API client, SSE hook (doc delta refill from previous doc, `html: null` = unchanged,
   active-project claim via `/activate`), zustand stores, router, app chrome (top bar, left rail, right panel frames, floating toolbar skeleton),
   shadcn components restyled for the Figma-like density, plus our NumberField/ColorField, dark/light theme. Done = project page shows live artboard names + status pill.
-- [ ] **Phase 2 - Home and Comments pages.** Port `home.js` + `comments.js` (cards with live previews, search/sort, trash, import/export,
+- [x] **Phase 2 - Home and Comments pages.** Port `home.js` + `comments.js` (cards with live previews, search/sort, trash, import/export,
   all-comments page with filters, deep link `?comment=`). Easiest full pages, proves the data layer. Done = parity with `/` and `/comments`.
 - [ ] **Phase 3 - Canvas engine core.** Port from `public/app.js`: world transform pan/zoom/fit, shadow-DOM frames, `pidIndex`,
   level of detail (`LIVE_K`), IndexedDB thumbnails, delta render, pages, Claude-designing ring/reveal/follow camera, hover/selection overlays.
@@ -102,3 +102,15 @@ Notes for later phases:
 - globals.css: `--ease-*`, `--selection`, `--canvas` vars; removed the prefers-color-scheme block (the app owns the theme).
 - Gotcha: a long-running server on 3777 started before Phase 0 has no `/next/` route; restart it. Verified on a scratch server (3790): 19 live artboards, connected pill.
 
+
+**Phase 2 (2026-10-20):** Home (`/next/`) and Comments (`/next/comments`) ported with parity: search/sort, Projects/Trash tabs, live cover
+previews, card menu (open, inline rename, duplicate, export, trash with Undo toast, restore, two-step delete forever), New project dialog,
+import, open-comment badge, comments filters (project/author/status/search), reply toggle, resolve/reopen, two-step delete, live refresh.
+- New shared pieces: `hooks/useLiveReload.ts` (global `/events`, debounced per event, `useEffectEvent`), `ui/AppHeader.tsx` (+ConnectionPill),
+  `store/toast.ts` + `ui/Toaster.tsx` (call `toast(msg, actionLabel?, onAction?)` anywhere), `lib/time.ts` (`ago`), `pages/home/*`.
+- shadcn added: input, dialog, dropdown-menu, select, tabs, badge (explicit transitions instead of `transition-all`). Base UI `Select` needs
+  the `items` prop on the root or the trigger shows the raw value. When running `shadcn add`, answer **n** to the button.tsx overwrite prompt.
+- List pages scroll inside their own `h-full overflow-y-auto` wrapper because `body` is `overflow: hidden` (the canvas page needs that).
+- `/p/$id` route now validates `?comment=<id>` (the Comments page links to it); the canvas opens that thread in Phase 6.
+- Checked in the browser (scratch server): home grid, card menu, arming delete-forever, new-project create + navigate, comments list and
+  deep link. Trash/restore/rename mutations use the same endpoints as legacy but were not clicked through (the browser pane was hidden).
