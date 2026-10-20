@@ -19,6 +19,8 @@ const PORT = Number(process.env.PORT || 3777);
 // Loopback only: the MCP endpoint can edit your designs, so it must not be reachable from the network.
 const HOST = '127.0.0.1';
 const PUBLIC = path.join(ROOT, 'public');
+// Build output of the React client (web/). Served under /next/ until the cut-over (docs/REACT-REWRITE.md).
+const NEXT = path.join(ROOT, 'web', 'dist');
 
 const store = new ProjectStore(path.join(ROOT, 'data'));
 
@@ -202,8 +204,8 @@ const canvasActions = {
   },
 };
 
-function serveFile(res, file) {
-  if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+function serveFile(res, file, root = PUBLIC) {
+  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404).end('Not found');
     return;
   }
@@ -358,6 +360,15 @@ const server = http.createServer(async (req, res) => {
       const p = ID_RE.test(parts[1]) ? store.get(parts[1]) : null;
       if (!p || p.meta.deletedAt) { res.writeHead(302, { Location: '/' }).end(); return; }
       return serveFile(res, path.join(PUBLIC, 'canvas.html'));
+    }
+
+    // --- React client (built by `pnpm build:web`). Real files are served as is; any other /next/ path gets
+    // index.html so the client-side router can handle it (SPA fallback). ---
+    if (url.pathname === '/next' || url.pathname.startsWith('/next/')) {
+      const rel = url.pathname.slice('/next/'.length);
+      let file = path.join(NEXT, rel);
+      if (!rel || !file.startsWith(NEXT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(NEXT, 'index.html');
+      return serveFile(res, file, NEXT);
     }
 
     // --- Static assets (the startsWith check in serveFile blocks path traversal) ---
