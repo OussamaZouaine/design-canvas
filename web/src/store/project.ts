@@ -10,6 +10,9 @@ interface ProjectState {
   connection: Connection;
   // Ids Claude touched recently (the server's `agent` event); drives the "Claude is designing" pill.
   agentIds: string[];
+  // Bumped on every server `activity` event so the Activity and Versions tabs know to refetch.
+  activityTick: number;
+  bumpActivity: () => void;
 
   setMeta: (m: ProjectMeta) => void;
   // Takes the raw delta from the server and refills unchanged boards from the previous doc.
@@ -20,7 +23,7 @@ interface ProjectState {
   reset: () => void;
 }
 
-const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [] };
+const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [], activityTick: 0 };
 
 export const useProject = create<ProjectState>((set, get) => ({
   ...empty,
@@ -38,5 +41,6 @@ export const useProject = create<ProjectState>((set, get) => ({
   setComments: (comments) => set({ comments }),
   setConnection: (connection) => set({ connection }),
   setAgentIds: (agentIds) => set({ agentIds }),
+  bumpActivity: () => set((s) => ({ activityTick: s.activityTick + 1 })),
   reset: () => set(empty),
 }));

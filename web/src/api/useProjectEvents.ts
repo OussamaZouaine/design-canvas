@@ -21,6 +21,7 @@ export function useProjectEvents(projectId: string) {
     es.addEventListener('doc', (e) => useProject.getState().applyDocDelta(parse<DocData>(e)));
     es.addEventListener('comments', (e) => useProject.getState().setComments(parse<Comment[]>(e)));
     es.addEventListener('agent', (e) => useProject.getState().setAgentIds(parse<{ ids: string[] }>(e).ids));
+    es.addEventListener('activity', () => useProject.getState().bumpActivity());
     // Claude's MCP tools ask this tab for pixels and layout; the engine owns the DOM, so it answers.
     // With no engine yet (page still loading) the request gets an error reply instead of timing out.
     const ask = (e: Event, endpoint: 'screenshot' | 'reply', run: (host: ReplyHost, d: any) => unknown) => {

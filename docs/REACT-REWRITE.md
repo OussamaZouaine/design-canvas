@@ -64,7 +64,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
   reference drop/paste. Done = screenshots from MCP work against the new app and edits round-trip.
 - [x] **Phase 5 - Layers + Inspector.** Port `layers.js` (tree, search, rename, hide/lock, drag-move) and `inspector.js` (style fields,
   token suggestions) as React panels with the Figma-style sections and scrub number fields, colour field (OKLCH), per-side padding.
-- [ ] **Phase 6 - Side panels.** Comments (pins, popovers, threads, comment mode) + Activity, Versions, Theme (modes), Tokens, MCP tabs.
+- [x] **Phase 6 - Side panels.** Comments (pins, popovers, threads, comment mode) + Activity, Versions, Theme (modes), Tokens, MCP tabs.
 - [ ] **Phase 7 - Figma/Paper polish.** Floating toolbar tools wired (frame, text, image, comment, hand), context menus, rulers/size label,
   empty states, loading skeletons, a11y pass (focus, roles, `inert`), reduced-motion, 50+ board performance check with the React profiler.
 - [ ] **Phase 8 - Cut-over and cleanup.** Serve the new app at `/`, `/p/:id`, `/comments`; remove `public/` and `?legacy`; update
@@ -218,4 +218,17 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
 - Verified on a scratch server (3790, project purged): select on canvas expands the tree, W edit, artboard resize, rename, hide, lock, padding side, drag reorder, search.
   A locked node refuses a move and the server message shows as a toast. NOT clicked through: colour picker, token detach chip, scrub drag, page background field.
 - Note: the server's normalization (on for new projects) adds `display` to some nodes on write; that is not the inspector.
+
+**Phase 6 (2026-10-21):** Side panels ported; every right-panel tab is real now.
+- Comments: `panels/CommentsLayer.tsx` (inside the canvas area) = pins, new-comment / thread popover, `C` and `Esc` shortcuts, `?comment=` deep link.
+  `panels/CommentsPanel.tsx` = Open/All list (open-count badge on the tab). `store/comments.ts` = popover + `showResolved` UI state, `lib/comments.ts` =
+  `elementLabel` (reads stored HTML, never mounts a board, so it fixes the legacy "elementLabel mounts" caveat), `numberOf`, `commentAction`, `focusComment`.
+- Engine additions: `onView` event (pins re-measure; `viewTick` in `store/canvas.ts`), `onCommentPick`, `setCommentMode`, `ensureZoom`, `rectOf`.
+  Comment mode = `useUi().tool === 'comment'`; the toolbar button toggles it.
+- `panels/HistoryPanels.tsx` (Activity with per-request Undo, Versions with Save version + Restore), `panels/ThemePanel.tsx` (modes, token rows, add/delete,
+  `+ dark`; drafts commit on blur/Enter), `panels/TokensMcpPanels.tsx` (read-only token scan with copy, MCP status polled every 3 s).
+  `hooks/useJson.ts` = fetch + refresh key + optional polling. The server `activity` event bumps `activityTick` (project store) to refetch Activity/Versions.
+- Verified on a scratch server (3790, project purged): pin a comment, thread popover live-updates on reply, deep link opens the thread, all five other tabs
+  render real data, theme token edit + dark mode persisted. NOT clicked through: Resolve/Delete/Reopen, Activity Undo, Versions Restore, Esc handling.
+- Testing tip: the browser pane lags, so wait 1-2 s after a click before the screenshot; the Comment tool button TOGGLES, so pressing C and then clicking it turns it off.
 

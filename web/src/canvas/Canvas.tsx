@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useCanvas } from '@/store/canvas';
+import { useComments } from '@/store/comments';
 import { useProject } from '@/store/project';
 import { CanvasEngine } from './engine';
 import './canvas.css';
@@ -21,6 +22,8 @@ export function Canvas({ projectId }: { projectId: string }) {
       onSelect: c.setSelected,
       onLive: c.setLive,
       onPage: c.setActivePage,
+      onView: c.bumpView,
+      onCommentPick: (targetId, x, y) => useComments.getState().openNew(targetId, x, y),
     });
     e.setFollow(c.follow);
     c.setEngine(e);

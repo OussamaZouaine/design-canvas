@@ -24,6 +24,10 @@ export interface EngineEvents {
   onLive: (live: { id: string; name: string } | null) => void;
   // The visible page changed (user switched, a page was deleted, or Claude drew on another one).
   onPage: (id: string) => void;
+  // Pan/zoom/render settled (rAF-coalesced): comment pins re-measure their elements here.
+  onView: () => void;
+  // Comment mode click: the node (or artboard) id under the pointer, plus where the click landed.
+  onCommentPick: (targetId: string, x: number, y: number) => void;
 }
 
 // Everything the engine tracks per artboard. Kept in one object instead of expando properties on the DOM.
@@ -88,6 +92,7 @@ export class CanvasEngine {
   private reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private abort = new AbortController(); // one signal removes every listener on destroy
   private editor: CanvasEditor;
+  private commentMode = false;
   private fitPending = false; // fit() was asked for before the viewport had a size
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
@@ -148,6 +153,29 @@ export class CanvasEngine {
   setThemeMode(mode: string) { this.themeMode = mode; this.applyTheme(); }
 
   getActivePage() { return this.activePage; }
+
+  // Comment mode: a click pins a comment instead of selecting (see onPointerDown).
+  setCommentMode(on: boolean) {
+    this.commentMode = on;
+    this.viewport.classList.toggle('commenting', on);
+    if (on) this.select(null);
+  }
+
+  // Zoom in about the viewport centre (used before jumping to a comment from the zoomed-out overview,
+  // so the pin is readable). Only ever zooms in, never out.
+  ensureZoom(k: number) {
+    if (this.view.k >= k) return;
+    this.zoomAt(this.viewport.clientWidth / 2, this.viewport.clientHeight / 2, k);
+    this.applyView();
+  }
+
+  // Viewport-relative box of a node that is currently drawn, else null (unmounted board / removed node).
+  rectOf(id: string) {
+    const el = this.findElement(id);
+    if (!el) return null;
+    const r = this.relRect(el);
+    return r.width || r.height ? r : null;
+  }
 
   // Artboard id that owns a node id (panels use it to find the node's HTML without scanning every board).
   boardOf(id: string) { return this.pidIndex.get(id); }
@@ -590,6 +618,7 @@ export class CanvasEngine {
   private afterView = () => {
     this.viewRaf = 0;
     this.events.onZoom(this.view.k);
+    this.events.onView();
     for (const b of this.boards.values()) if (b.el.classList.contains('gen')) this.sizeRing(b);
     this.updateVisibility();
     this.drawSelection();
@@ -688,6 +717,13 @@ export class CanvasEngine {
     const abEl = target.closest<HTMLElement>('.dc-artboard');
     const onLabel = !!target.closest('.dc-label');
     if (node?.isContentEditable) return; // clicking inside text being edited just moves the caret
+
+    if (this.commentMode) {
+      e.preventDefault(); // keep focus/selection where it was; the popover focuses its own textarea
+      const targetId = node ? node.dataset.pid! : abEl ? abEl.dataset.ab! : null;
+      if (targetId) this.events.onCommentPick(targetId, e.clientX, e.clientY);
+      return;
+    }
 
     this.editor.noteDown(node ?? null);
     if (onLabel && abEl) { this.select(abEl.dataset.ab!); this.editor.dragBoard(e, abEl.dataset.ab!); return; }
