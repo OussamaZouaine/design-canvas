@@ -47,7 +47,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 ```
 
 ## Phases
-- [ ] **Phase 0 - Scaffold (short).** Create `web/` with Vite + React 19 + TS + React Compiler (verify it is active: build output
+- [x] **Phase 0 - Scaffold (short).** Create `web/` with Vite + React 19 + TS + React Compiler (verify it is active: build output
   contains compiler runtime `react/compiler-runtime`; add `eslint-plugin-react-hooks` compiler rules). Dev proxy to 3777.
   Server serves `web/dist` at `/next/` (add route + SPA fallback, keep Host allowlist and no-cache). `pnpm dev:web`, `pnpm build:web` scripts.
   Run shadcn init (Tailwind v4, OKLCH theme variables, dark/light) and add the base components. Port the design tokens to `styles/`. Hello-world route renders and talks to `/api/projects`. Done = page loads at `/next/`.
@@ -77,4 +77,15 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - Keep the session short: finish the phase, update this file, commit, then tell the user to start a new session.
 
 ## Phase log
-(none yet)
+**Phase 0 (2026-10-20):** `web/` created by hand (Vite 8, React 19.3, TS 7, Tailwind 4, React Compiler via `@rolldown/plugin-babel` +
+`reactCompilerPreset()`; plugin-react 6 has no inline babel option). Compiler verified active (`memo_cache_sentinel` in the build).
+shadcn init ran with `-t vite -b radix -p mira` (compact preset; style `radix-mira`), icons switched to **lucide** (`components.json`).
+Server: `/next/*` serves `web/dist` with SPA fallback (`src/server.mjs`). Scripts: `pnpm build:web`, `pnpm dev:web` (Vite on 5173,
+base `/next/`, proxies /api /events /mcp /reply to 3777). Smoke page at `/next/` lists projects: works, no console errors.
+Notes for later phases:
+- shadcn's `cn` comes from the `cn` npm package re-exported in `src/lib/utils.ts` (what the CLI generated); fine to keep.
+- Generated `button.tsx` uses `transition-all`, which breaks our motion rule: replace with explicit transform/opacity/colour transitions
+  when restyling in Phase 1 (apply to every shadcn component you add).
+- shadcn dark mode is the `.dark` class (custom variant in globals.css), not a media query: Phase 1 adds the theme toggle + `localStorage`.
+- Vite dev: open `http://localhost:5173/next/` with the Node server also running on 3777.
+- To test against the built output use a scratch server: `PORT=3790 node src/server.mjs` (shares `data/`, read-only use is fine).

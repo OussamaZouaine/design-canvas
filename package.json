@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
-    "start": "node src/server.mjs"
+    "start": "node src/server.mjs",
+    "dev:web": "pnpm --dir web dev",
+    "build:web": "pnpm --dir web build"
   },
   "keywords": [],
   "author": "",
