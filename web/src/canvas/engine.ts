@@ -6,6 +6,7 @@
 //   .dc-world      one element carrying the pan/zoom transform; artboards are absolutely placed inside it
 //   .dc-overlay    selection / hover / "Claude is working here" boxes, in screen pixels (never scaled)
 import { canvasAction } from '@/api/projects';
+import { toast } from '@/store/toast';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
@@ -28,7 +29,13 @@ export interface EngineEvents {
   onView: () => void;
   // Comment mode click: the node (or artboard) id under the pointer, plus where the click landed.
   onCommentPick: (targetId: string, x: number, y: number) => void;
+  // A drawing tool finished its one job (frame drawn, text added): chrome switches back to Move.
+  onToolDone: () => void;
+  // Right-click: viewport coordinates plus the node (or artboard) under the pointer, null on empty space.
+  onContextMenu: (x: number, y: number, targetId: string | null) => void;
 }
+
+export type CanvasTool = 'move' | 'frame' | 'text' | 'image' | 'comment' | 'hand';
 
 // Everything the engine tracks per artboard. Kept in one object instead of expando properties on the DOM.
 interface Board {
@@ -93,11 +100,16 @@ export class CanvasEngine {
   private abort = new AbortController(); // one signal removes every listener on destroy
   private editor: CanvasEditor;
   private commentMode = false;
+  private tool: CanvasTool = 'move';
+  private spaceDown = false;  // holding Space turns any tool into a temporary hand
+  private draft = div('dc-draft dc-hide'); // rubber-band rectangle while the frame tool drags
+  private sizeLabel = div('dc-size');      // "W x H" pill under the selection
   private fitPending = false; // fit() was asked for before the viewport had a size
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     this.activePage = lsGet(`dc-page:${projectId}`);
-    this.overlay.append(this.agentHost, this.hoverBox, this.selBox);
+    this.overlay.append(this.agentHost, this.hoverBox, this.selBox, this.draft);
+    this.selBox.append(this.sizeLabel);
     viewport.append(this.world, this.overlay);
     this.applyView();
 
@@ -122,6 +134,10 @@ export class CanvasEngine {
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
     viewport.addEventListener('wheel', this.onWheel, { passive: false, ...sig });
     viewport.addEventListener('pointerdown', this.onPointerDown, sig);
+    viewport.addEventListener('contextmenu', this.onContextMenu, sig);
+    window.addEventListener('keydown', this.onSpace, sig);
+    window.addEventListener('keyup', this.onSpace, sig);
+    window.addEventListener('blur', () => this.setSpace(false), sig);
     // The camera glide is a CSS transition, so no JS runs while it moves: overlay boxes measured at its
     // start would be left behind. Redraw them when it finishes.
     this.world.addEventListener('transitionend', (e) => { if (e.target === this.world) this.afterView(); }, sig);
@@ -159,6 +175,39 @@ export class CanvasEngine {
     this.commentMode = on;
     this.viewport.classList.toggle('commenting', on);
     if (on) this.select(null);
+  }
+
+  // Active toolbar tool. Comment mode keeps its own switch (the comments layer owns that flow).
+  setTool(tool: CanvasTool) {
+    this.tool = tool;
+    this.viewport.dataset.tool = tool;
+    if (tool !== 'move' && tool !== 'comment') this.select(null);
+  }
+
+  // Menu / toolbar actions that need the editor.
+  duplicate(id: string) { this.editor.duplicate(id); }
+  remove(id: string) { this.editor.remove(id); }
+  copy(id: string) { this.editor.copy(id); }
+  paste() { this.editor.pasteNode(); }
+  get canPaste() { return this.editor.canPaste; }
+  addImageFile(file: File) { return this.editor.addReferenceFile(file); }
+  selectNode(id: string | null) { this.select(id); }
+  parentOf(id: string) {
+    if (id.startsWith('A')) return null;
+    return this.findElement(id)?.parentElement?.closest<HTMLElement>('[data-pid]')?.dataset.pid ?? this.pidIndex.get(id) ?? null;
+  }
+
+  // Space held = temporary hand tool (Figma/Paper habit). Ignored while typing.
+  private onSpace = (e: KeyboardEvent) => {
+    if (e.code !== 'Space') return;
+    if (e.type === 'keydown' && e.target instanceof Element && e.target.closest('input, textarea, select, button, [contenteditable]')) return;
+    if (e.type === 'keydown') e.preventDefault(); // otherwise the page scrolls
+    this.setSpace(e.type === 'keydown');
+  };
+
+  private setSpace(on: boolean) {
+    this.spaceDown = on;
+    this.viewport.classList.toggle('space-pan', on);
   }
 
   // Zoom in about the viewport centre (used before jumping to a comment from the zoomed-out overview,
@@ -673,7 +722,10 @@ export class CanvasEngine {
     this.drawHover();
     const target = this.selected ? this.findElement(this.selected) : null;
     if (!target) { this.selBox.classList.add('dc-hide'); return; }
-    this.place(this.selBox, this.relRect(target));
+    const rect = this.relRect(target);
+    this.place(this.selBox, rect);
+    // On-screen size divided by zoom = design pixels, what the inspector shows.
+    this.sizeLabel.textContent = `${Math.round(rect.width / this.view.k)} × ${Math.round(rect.height / this.view.k)}`;
     this.selBox.classList.remove('dc-hide');
     this.editor.showHandles(target);
   }
@@ -725,11 +777,24 @@ export class CanvasEngine {
       return;
     }
 
+    // Hand tool / held Space: always pan, even over elements.
+    if (this.tool === 'hand' || this.spaceDown) { this.panFrom(e); return; }
+    if (this.tool === 'frame') { this.drawFrame(e); return; }
+    if (this.tool === 'text') {
+      const id = node ? node.dataset.pid! : abEl && !onLabel ? abEl.dataset.ab! : null;
+      if (id) { e.preventDefault(); void this.editor.addText(id).finally(() => this.events.onToolDone()); }
+      return;
+    }
+
     this.editor.noteDown(node ?? null);
     if (onLabel && abEl) { this.select(abEl.dataset.ab!); this.editor.dragBoard(e, abEl.dataset.ab!); return; }
     if (node) { this.select(node.dataset.pid!); this.editor.dragNode(e, node); return; }
     this.select(null);
-    // Empty space: pan with the pointer. Capture keeps the drag alive when the cursor leaves the viewport.
+    this.panFrom(e);
+  };
+
+  // Pan with the pointer. Capture keeps the drag alive when the cursor leaves the viewport.
+  private panFrom(e: PointerEvent) {
     const sx = e.clientX, sy = e.clientY, ox = this.view.x, oy = this.view.y;
     this.viewport.setPointerCapture(e.pointerId);
     this.viewport.classList.add('panning');
@@ -741,5 +806,53 @@ export class CanvasEngine {
     };
     this.viewport.addEventListener('pointermove', move);
     this.viewport.addEventListener('pointerup', up);
+  }
+
+  // Frame tool: drag a rectangle, release to create an artboard of that size at that world position.
+  // A click without a drag (under 8 px) makes the default 1440 x 900 board at the click.
+  private drawFrame(e: PointerEvent) {
+    const v = this.viewport.getBoundingClientRect();
+    const sx = e.clientX - v.left, sy = e.clientY - v.top;
+    let cx = sx, cy = sy;
+    this.viewport.setPointerCapture(e.pointerId);
+    this.draft.classList.remove('dc-hide');
+    const box = () => ({ left: Math.min(sx, cx), top: Math.min(sy, cy), width: Math.abs(cx - sx), height: Math.abs(cy - sy) });
+    const move = (ev: PointerEvent) => { cx = ev.clientX - v.left; cy = ev.clientY - v.top; this.place(this.draft, box()); };
+    const finish = (create: boolean) => {
+      this.viewport.removeEventListener('pointermove', move);
+      this.viewport.removeEventListener('pointerup', up);
+      this.viewport.removeEventListener('pointercancel', cancel);
+      this.draft.classList.add('dc-hide');
+      if (!create) return;
+      const b = box();
+      const dragged = b.width > 8 && b.height > 8;
+      const px = dragged ? b.left : sx, py = dragged ? b.top : sy;
+      const at = { x: Math.round((px - this.view.x) / this.view.k), y: Math.round((py - this.view.y) / this.view.k) };
+      const size = dragged ? { width: Math.max(40, Math.round(b.width / this.view.k)), height: Math.max(40, Math.round(b.height / this.view.k)) } : {};
+      this.editor.createArtboard({ ...at, ...size })
+        .then((r) => { const id = (r.result as { id?: string } | undefined)?.id; if (id) this.selectWhenReady(id); })
+        .catch((err: Error) => toast(err.message || 'Could not create the artboard'))
+        .finally(() => this.events.onToolDone());
+    };
+    const up = () => finish(true);
+    const cancel = () => finish(false);
+    this.viewport.addEventListener('pointermove', move);
+    this.viewport.addEventListener('pointerup', up);
+    this.viewport.addEventListener('pointercancel', cancel);
+  }
+
+  // A new board only exists after the doc event redraws; select it as soon as it does.
+  private selectWhenReady(id: string, tries = 40) {
+    if (this.findElement(id)) { this.select(id); return; }
+    if (tries > 0) requestAnimationFrame(() => this.selectWhenReady(id, tries - 1));
+  }
+
+  private onContextMenu = (e: MouseEvent) => {
+    e.preventDefault();
+    const node = e.composedPath().find((n): n is HTMLElement => n instanceof HTMLElement && !!n.dataset.pid);
+    const abEl = (e.target as HTMLElement).closest<HTMLElement>('.dc-artboard');
+    const id = node ? node.dataset.pid! : abEl ? abEl.dataset.ab! : null;
+    if (id) this.select(id); // right-click selects, like every design tool
+    this.events.onContextMenu(e.clientX, e.clientY, id);
   };
 }

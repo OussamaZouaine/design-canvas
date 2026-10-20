@@ -234,8 +234,7 @@ export class CanvasEditor {
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
-      canvasAction(host.projectId, 'delete', { ids: [sel] }).catch((err) => fail(err, 'Could not delete'));
-      host.select(null);
+      this.remove(sel);
     } else if (e.key === 'Escape') {
       // Up one level in the tree, then deselect.
       const parent = sel && !sel.startsWith('A') ? host.findElement(sel)?.parentElement?.closest<HTMLElement>('[data-pid]')?.dataset.pid : undefined;
@@ -246,14 +245,32 @@ export class CanvasEditor {
       host.markUserEdit();
       canvasAction(host.projectId, key === 'y' || e.shiftKey ? 'redo' : 'undo').catch((err) => fail(err, 'Nothing to do'));
     } else if (mod && key === 'c' && sel && !sel.startsWith('A') && !getSelection()?.toString()) {
-      // Copy a node's HTML now, paste it later (even on another board or page).
-      const html = this.nodeHtml(sel);
-      if (html) { this.nodeClip = html; toast('Copied. Paste with Ctrl+V.'); }
+      this.copy(sel);
     } else if (mod && key === 'd' && sel) {
       e.preventDefault();
-      canvasAction(host.projectId, 'duplicate', { ids: [sel] }).catch((err) => fail(err, 'Could not duplicate'));
+      this.duplicate(sel);
     }
   };
+
+  // The actions below are shared by the keyboard shortcuts and the right-click menu.
+  remove(id: string) {
+    this.host.markUserEdit();
+    canvasAction(this.host.projectId, 'delete', { ids: [id] }).catch((err) => fail(err, 'Could not delete'));
+    this.host.select(null);
+  }
+
+  duplicate(id: string) {
+    this.host.markUserEdit();
+    canvasAction(this.host.projectId, 'duplicate', { ids: [id] }).catch((err) => fail(err, 'Could not duplicate'));
+  }
+
+  // Copy a node's HTML now, paste it later (even on another board or page).
+  copy(id: string) {
+    const html = this.nodeHtml(id);
+    if (html) { this.nodeClip = html; toast('Copied. Paste with Ctrl+V.'); }
+  }
+
+  get canPaste() { return !!this.nodeClip; }
 
   // Outer HTML of a node, read from its board's HTML text so it works for unmounted boards and never
   // includes transient attributes such as contenteditable.
@@ -268,7 +285,7 @@ export class CanvasEditor {
 
   // ---- Paste: a copied node, or a picture from the system clipboard ----------------------------
   // Pasting into an artboard appends; pasting with a node selected puts the copy right after it.
-  private pasteNode() {
+  pasteNode() {
     const { host } = this;
     const sel = host.selected();
     const target = sel ?? host.boardsHere()[0]?.id;
@@ -297,7 +314,7 @@ export class CanvasEditor {
 
   // A screenshot to rebuild from: the server stores the file and adds a locked board that shows it, so
   // Claude can compare its own board against it (compare_to_reference).
-  private async addReferenceFile(file: File) {
+  async addReferenceFile(file: File) {
     const { host } = this;
     if (!file.type.startsWith('image/')) { toast('That is not an image'); return; }
     if (file.size > 10_000_000) { toast('Images up to 10 MB, please'); return; }
@@ -314,9 +331,32 @@ export class CanvasEditor {
     } catch (err) { fail(err, 'Could not add the image'); }
   }
 
-  // New empty artboard (header button / frame tool). Returns the request so callers can await it.
-  createArtboard() {
+  // New empty artboard (frame tool drag, or a plain click for the default size). Returns the request so callers can await it.
+  createArtboard(opts: { x?: number; y?: number; width?: number; height?: number } = {}) {
     this.host.markUserEdit();
-    return canvasAction(this.host.projectId, 'create', { name: 'Artboard', width: 1440, height: 900 });
+    return canvasAction(this.host.projectId, 'create', { name: 'Artboard', width: 1440, height: 900, page: this.host.activePage(), ...opts });
+  }
+
+  // Text tool: drop a paragraph into the clicked element (or after it when it is a text leaf, since text
+  // cannot hold children), then open it for typing. The new id comes back from the server; the element only
+  // exists once the doc event has redrawn the board, so we wait for it a few frames.
+  async addText(targetId: string) {
+    const { host } = this;
+    const el = targetId.startsWith('A') ? null : host.findElement(targetId);
+    const leaf = !!el && !el.children.length && !!el.textContent?.trim();
+    host.markUserEdit();
+    try {
+      const r = await canvasAction(host.projectId, 'paste', {
+        html: '<p style="margin:0;font-size:16px">Text</p>', target: targetId, position: leaf ? 'after' : 'append',
+      });
+      const id = (r.result as { ids?: string[] } | undefined)?.ids?.[0];
+      if (!id) return;
+      for (let i = 0; i < 40; i++) {
+        const node = host.findElement(id);
+        // Select only now: before the board redraws there is no element to draw the selection box around.
+        if (node) { host.select(id); this.startTextEdit(node); return; }
+        await new Promise((res) => requestAnimationFrame(res));
+      }
+    } catch (err) { fail(err, 'Could not add text'); }
   }
 }

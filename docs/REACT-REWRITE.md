@@ -65,7 +65,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - [x] **Phase 5 - Layers + Inspector.** Port `layers.js` (tree, search, rename, hide/lock, drag-move) and `inspector.js` (style fields,
   token suggestions) as React panels with the Figma-style sections and scrub number fields, colour field (OKLCH), per-side padding.
 - [x] **Phase 6 - Side panels.** Comments (pins, popovers, threads, comment mode) + Activity, Versions, Theme (modes), Tokens, MCP tabs.
-- [ ] **Phase 7 - Figma/Paper polish.** Floating toolbar tools wired (frame, text, image, comment, hand), context menus, rulers/size label,
+- [x] **Phase 7 - Figma/Paper polish (partly: see log).** Floating toolbar tools wired (frame, text, image, comment, hand), context menus, rulers/size label,
   empty states, loading skeletons, a11y pass (focus, roles, `inert`), reduced-motion, 50+ board performance check with the React profiler.
 - [ ] **Phase 8 - Cut-over and cleanup.** Serve the new app at `/`, `/p/:id`, `/comments`; remove `public/` and `?legacy`; update
   `CLAUDE.md` layout/run sections, `README`, plugin skill if UI names changed; run full manual pass; tag the commit.
@@ -232,3 +232,16 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
   render real data, theme token edit + dark mode persisted. NOT clicked through: Resolve/Delete/Reopen, Activity Undo, Versions Restore, Esc handling.
 - Testing tip: the browser pane lags, so wait 1-2 s after a click before the screenshot; the Comment tool button TOGGLES, so pressing C and then clicking it turns it off.
 
+
+**Phase 7 (2026-10-21):** Toolbar tools, context menu, size label, a11y and empty/loading states.
+- Engine: `setTool(tool)` (`data-tool` on the viewport drives cursors). Hand = drag pans even over elements; **Space** = temporary hand;
+  Frame = drag a rubber band (`.dc-draft`) to create an artboard of that size/position (click = default 1440x900); Text = click an element,
+  `CanvasEditor.addText` pastes `<p>Text</p>` into it (or after a text leaf) and opens it for typing; Image = file picker in the toolbar
+  (`engine.addImageFile`, becomes a reference board). Frame and Text fire `onToolDone` so the toolbar returns to Move. Shortcuts V F T I H (toolbar effect), C stays in `CommentsLayer`.
+- Right-click: engine `onContextMenu` -> `store/canvas.menu` -> `shell/ContextMenu.tsx` (hand-built, roving arrow-key focus, Esc/outside closes). Actions live on
+  `CanvasEditor` (`copy`, `pasteNode`, `duplicate`, `remove`) so keys and menu share them.
+- `.dc-size` pill ("W x H" in design px) rides on the selection box. Project page shows skeleton boards (`.sk`) before the first doc, and an empty-state hint.
+- A11y: toolbar `role=toolbar` + `aria-pressed`, panel tabs `role=tab`, asides labelled, canvas `role=application`, reduced-motion variants for menu and skeleton.
+- **Server contract change (additive):** `POST /api/p/:id/create` now returns `result: {id}` and `paste` returns `result: {ids}` (needed to select the new board / node).
+- Verified on a scratch server (3790, purged): F-drag made a 600x400 board and selected it, T-click inserted text and opened it for editing, menu items + Esc, H-drag pans.
+- NOT done: rulers, 50+ board React-profiler pass (Sprig has 46 boards; only Phase 3 rendering was checked), Layers panel context menu, `inert` (panels unmount instead). Move to Phase 8 or a later polish session.

@@ -154,7 +154,7 @@ const canvasActions = {
   rename: (p, b) => p.doc.renameNodes({ [b.id]: b.name }),
   delete: (p, b) => p.doc.deleteNodes(b.ids),
   duplicate: (p, b) => p.doc.duplicateNodes(b.ids),
-  create: (p, b) => p.doc.createArtboard(b),
+  create: (p, b) => ({ id: p.doc.createArtboard(b).id }), // the id lets the frame tool select the new board
   // Ctrl+V of a node copied in the canvas: its HTML goes next to (or into) the target. The old ids are
   // stripped so the copy gets fresh ones, and writeHtml sanitizes it like any other write.
   paste: (p, b) => {
@@ -346,8 +346,9 @@ const server = http.createServer(async (req, res) => {
         const result = canvasActions[parts[3]](p, body);
         // What the user did by hand, so Claude's get_changes can report it.
         if (USER_EDITS.has(parts[3])) p.doc.record('user', parts[3], body.ids ?? [body.id].filter(Boolean));
-        // Only page creation needs its result back (the browser switches to the new page).
-        return json(res, 200, { ok: true, result: ['page-create', 'reference'].includes(parts[3]) ? result : undefined });
+        // Only these need their result back: the browser switches to a new page, selects a new board (frame tool)
+        // and opens a pasted / inserted node for typing (text tool).
+        return json(res, 200, { ok: true, result: ['page-create', 'reference', 'create', 'paste'].includes(parts[3]) ? result : undefined });
       }
       return json(res, 404, { error: 'Not found' });
     }
