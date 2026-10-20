@@ -10,6 +10,7 @@ import { toast } from '@/store/toast';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
+import { measureBoard, pickRect, type RectEntry } from './rects';
 import type { ReplyHost } from './replies';
 
 // ---- Tunables (see "Level of detail" below) -------------------------------------------
@@ -53,6 +54,8 @@ interface Board {
   thumbKey: string | null;  // key of the snapshot currently displayed
   thumbReady: boolean;
   pinUntil: number;         // Claude drew here recently: keep it mounted until this time
+  index: RectEntry[] | null; // node boxes for picking while only the snapshot is drawn (see rects.ts)
+  indexKey: string;         // html + theme the index was measured from; a mismatch means re-measure
   genTimer?: number;
   thumbTimer?: number;
 }
@@ -134,6 +137,7 @@ export class CanvasEngine {
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
     viewport.addEventListener('wheel', this.onWheel, { passive: false, ...sig });
     viewport.addEventListener('pointerdown', this.onPointerDown, sig);
+    viewport.addEventListener('pointermove', this.onPointerMove, { passive: true, ...sig });
     viewport.addEventListener('contextmenu', this.onContextMenu, sig);
     window.addEventListener('keydown', this.onSpace, sig);
     window.addEventListener('keyup', this.onSpace, sig);
@@ -221,9 +225,44 @@ export class CanvasEngine {
   // Viewport-relative box of a node that is currently drawn, else null (unmounted board / removed node).
   rectOf(id: string) {
     const el = this.findElement(id);
-    if (!el) return null;
+    if (!el) return this.indexRect(id);
     const r = this.relRect(el);
     return r.width || r.height ? r : null;
+  }
+
+  // ---- Picking on snapshot boards ---------------------------------------------------
+  // A zoomed-out board is a bitmap, so there is no element under the cursor. We hit-test the board's
+  // measured rect index instead (rects.ts). Live boards keep using the real DOM, which is exact.
+  private boardIndex(b: Board): RectEntry[] {
+    const key = (b.html ?? '') + '\u0000' + this.themeDecls();
+    if (!b.index || b.indexKey !== key) {
+      b.index = measureBoard(b.html ?? '', b.ab.width, b.ab.height, this.themeDecls());
+      b.indexKey = key;
+    }
+    return b.index;
+  }
+
+  // Node id under a viewport point, from the index of the (unmounted) board there; null when it is a live board or empty.
+  private pickAt(clientX: number, clientY: number): string | null {
+    const v = this.viewport.getBoundingClientRect(), { x, y, k } = this.view;
+    const wx = (clientX - v.left - x) / k, wy = (clientY - v.top - y) / k;
+    for (const b of this.boards.values()) {
+      const { ab } = b;
+      if (b.shown != null || !this.inPage(ab) || !b.html) continue;
+      if (wx < ab.x || wy < ab.y || wx > ab.x + ab.width || wy > ab.y + ab.height) continue;
+      return pickRect(this.boardIndex(b), wx - ab.x, wy - ab.y, k)?.pid ?? null;
+    }
+    return null;
+  }
+
+  // Viewport-relative box of a node on an unmounted board, from the index. Null if the board is live or the node is unknown.
+  private indexRect(id: string) {
+    const b = this.boards.get(this.pidIndex.get(id) ?? '');
+    if (!b || b.shown != null || !b.html) return null;
+    const e = this.boardIndex(b).find((n) => n.pid === id);
+    if (!e) return null;
+    const { x, y, k } = this.view;
+    return { left: x + (b.ab.x + e.x) * k, top: y + (b.ab.y + e.y) * k, width: e.w * k, height: e.h * k };
   }
 
   // Artboard id that owns a node id (panels use it to find the node's HTML without scanning every board).
@@ -380,7 +419,7 @@ export class CanvasEngine {
     const el = div('dc-artboard lod', label, ring, frame, img, lodName, div('dc-shimmer', 'Claude is designing…'));
     el.dataset.ab = ab.id;
     this.world.appendChild(el);
-    return { ab, el, frame, shadow, img, labelName, lodName, html: null, shown: null, oldHtml: '', hash: null, thumbKey: null, thumbReady: false, pinUntil: 0 };
+    return { ab, el, frame, shadow, img, labelName, lodName, html: null, shown: null, oldHtml: '', hash: null, thumbKey: null, thumbReady: false, pinUntil: 0, index: null, indexKey: '' };
   }
 
   private render({ animate }: { animate: boolean }) {
@@ -724,21 +763,35 @@ export class CanvasEngine {
     this.drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
     this.drawHover();
     const target = this.selected ? this.findElement(this.selected) : null;
-    if (!target) { this.selBox.classList.add('dc-hide'); return; }
-    const rect = this.relRect(target);
+    // No element (board is a snapshot): fall back to the rect index, box only, no resize handles.
+    const rect = target ? this.relRect(target) : this.selected ? this.indexRect(this.selected) : null;
+    if (!rect) { this.selBox.classList.add('dc-hide'); return; }
     this.place(this.selBox, rect);
     // On-screen size divided by zoom = design pixels, what the inspector shows.
     this.sizeLabel.textContent = `${Math.round(rect.width / this.view.k)} × ${Math.round(rect.height / this.view.k)}`;
     this.selBox.classList.remove('dc-hide');
-    this.editor.showHandles(target);
+    if (target) this.editor.showHandles(target); else this.editor.hideHandles();
   }
 
   private drawHover() {
     const el = this.hoverId ? this.findElement(this.hoverId) : null;
-    if (!el) { this.hoverBox.classList.add('dc-hide'); return; }
-    this.place(this.hoverBox, this.relRect(el));
+    const rect = el ? this.relRect(el) : this.hoverId ? this.indexRect(this.hoverId) : null;
+    if (!rect) { this.hoverBox.classList.add('dc-hide'); return; }
+    this.place(this.hoverBox, rect);
     this.hoverBox.classList.remove('dc-hide');
   }
+
+  // Hover highlight on snapshot boards (live boards get none today). rAF-throttled: one pick per frame at most.
+  private hoverRaf = 0;
+  private onPointerMove = (e: PointerEvent) => {
+    if (e.buttons || this.tool !== 'move' || this.commentMode || this.hoverRaf) return;
+    const { clientX, clientY } = e;
+    this.hoverRaf = requestAnimationFrame(() => {
+      this.hoverRaf = 0;
+      const id = this.pickAt(clientX, clientY);
+      if (id !== this.hoverId) this.setHover(id);
+    });
+  };
 
   // Dashed boxes around the nodes Claude is reading or writing right now. Boxes are reused to avoid DOM churn.
   private drawAgent() {
@@ -792,6 +845,9 @@ export class CanvasEngine {
     this.editor.noteDown(node ?? null);
     if (onLabel && abEl) { this.select(abEl.dataset.ab!); this.editor.dragBoard(e, abEl.dataset.ab!); return; }
     if (node) { this.select(node.dataset.pid!); this.editor.dragNode(e, node); return; }
+    // Zoomed out the board is a bitmap: pick from the rect index. Dragging then pans (moving needs live DOM).
+    const picked = this.pickAt(e.clientX, e.clientY);
+    if (picked) { this.select(picked); this.panFrom(e); return; }
     this.select(null);
     this.panFrom(e);
   };

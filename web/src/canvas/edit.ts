@@ -65,6 +65,9 @@ export class CanvasEditor {
   // An artboard uses all eight. An absolutely positioned node can too (width, height, left, top). A node that
   // flows with its siblings only gets east, south and south-east: moving its west or north edge would mean
   // changing its position, which the layout decides. Locked nodes get none.
+  // A node picked on a snapshot board has no DOM to resize, so the handles stay hidden until you zoom in.
+  hideHandles() { for (const el of this.handles.values()) el.hidden = true; }
+
   showHandles(target: HTMLElement) {
     const sel = this.host.selected() ?? '';
     const isBoard = sel.startsWith('A');
