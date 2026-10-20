@@ -56,6 +56,7 @@ export interface Comment {
   targetId: string;
   artboardId: string;
   text: string;
+  author?: 'user' | 'claude';
   resolved?: boolean;
   createdAt: number;
   replies: { text: string; createdAt: number; author?: string }[];

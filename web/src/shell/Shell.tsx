@@ -4,7 +4,11 @@ import type { ReactNode } from 'react';
 import { canvasAction } from '@/api/projects';
 import { pageOfBoard, pagesOf } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
+import { CommentsPanel } from '@/panels/CommentsPanel';
+import { ActivityPanel, VersionsPanel } from '@/panels/HistoryPanels';
 import { InspectorPanel } from '@/panels/InspectorPanel';
+import { ThemePanel } from '@/panels/ThemePanel';
+import { McpPanel, TokensPanel } from '@/panels/TokensMcpPanels';
 import { LayersPanel } from '@/panels/LayersPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -128,7 +132,7 @@ export function FloatingToolbar() {
   // Until Phase 7 wires the drawing tools, Frame is a one-click "new artboard" (what the legacy + button did).
   const pick = (id: Tool) => {
     if (id === 'frame') engine?.createArtboard().catch((err: Error) => toast(err.message || 'Could not create the artboard'));
-    else setTool(id);
+    else setTool(id === 'comment' && tool === 'comment' ? 'move' : id);
   };
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-xl border bg-popover p-1 shadow-lg">
@@ -148,18 +152,25 @@ const TABS: { id: PanelTab; label: string }[] = [
 
 export function RightPanel({ projectId }: { projectId: string }) {
   const { panelTab, setPanelTab, panelOpen } = useUi();
+  const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
   if (!panelOpen) return null;
   return (
     <aside className="flex w-64 shrink-0 flex-col border-l bg-background">
       <nav className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2">
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setPanelTab(t.id)} className={cn('text-[11px]', panelTab === t.id ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            {t.label}
+            {t.label}{t.id === 'comment' && open > 0 && <span className="tnum ml-1 rounded-full bg-[var(--selection)] px-1 text-[9px] text-white">{open}</span>}
           </button>
         ))}
       </nav>
       <div className="flex-1 overflow-auto">
-        {panelTab === 'design' ? <InspectorPanel projectId={projectId} /> : <p className="p-3 text-muted-foreground">{panelTab} panel (Phase 6)</p>}
+        {panelTab === 'design' && <InspectorPanel projectId={projectId} />}
+        {panelTab === 'comment' && <CommentsPanel />}
+        {panelTab === 'activity' && <ActivityPanel projectId={projectId} />}
+        {panelTab === 'versions' && <VersionsPanel projectId={projectId} />}
+        {panelTab === 'theme' && <ThemePanel projectId={projectId} />}
+        {panelTab === 'tokens' && <TokensPanel projectId={projectId} />}
+        {panelTab === 'mcp' && <McpPanel />}
       </div>
     </aside>
   );

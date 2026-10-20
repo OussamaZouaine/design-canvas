@@ -98,3 +98,21 @@
 .dc-handle[data-dir="s"] { left: 50%; top: 100%; cursor: ns-resize; }
 .dc-handle[data-dir="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
 .dc-handle[data-dir="w"] { left: 0; top: 50%; cursor: ew-resize; }
+
+/* ---- Comment pins and popover (Phase 6) ---- */
+/* Pin: scale-in once on mount; the outer wrapper moves, so panning never replays it. */
+.dc-pin {
+  position: relative; width: 24px; height: 24px; border-radius: 9999px; border: 2px solid var(--background);
+  background: var(--selection); color: #fff; font-size: 11px; font-weight: 600; line-height: 1;
+  box-shadow: 0 2px 8px oklch(0 0 0 / 0.35); translate: -50% -50%;
+  animation: dc-pin-in 180ms var(--ease-out) backwards;
+  transition: scale 120ms var(--ease-out);
+}
+.dc-pin::after { content: ""; position: absolute; inset: -9px; } /* 24px visible, 42px clickable */
+.dc-pin:active { scale: 0.92; }
+.dc-pin.resolved { background: var(--muted-foreground); opacity: 0.6; }
+@media (hover: hover) and (pointer: fine) { .dc-pin:hover { scale: 1.08; } }
+@keyframes dc-pin-in { from { opacity: 0; scale: 0.6; } }
+.dc-pop { animation: dc-pop-in 150ms var(--ease-out) backwards; }
+@keyframes dc-pop-in { from { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) { .dc-pin, .dc-pop { animation: none; transition: none; } }

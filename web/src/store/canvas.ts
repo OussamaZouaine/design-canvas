@@ -11,6 +11,9 @@ interface CanvasState {
   live: { id: string; name: string } | null;
   activePage: string | null;
   follow: boolean;
+  // Bumped whenever the view settles; chrome that tracks canvas elements (comment pins) re-measures on it.
+  viewTick: number;
+  bumpView: () => void;
   // Theme mode being previewed ('base' or a named mode). A view setting, not document data; the Theme tab (Phase 6) sets it.
   mode: string;
   setMode: (m: string) => void;
@@ -31,6 +34,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   live: null,
   activePage: null,
   follow: initialFollow,
+  viewTick: 0,
+  bumpView: () => set((s) => ({ viewTick: s.viewTick + 1 })),
   mode: 'base',
   setMode: (mode) => { get().engine?.setThemeMode(mode); set({ mode }); },
   setEngine: (engine) => set({ engine }),
