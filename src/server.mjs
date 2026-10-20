@@ -18,9 +18,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 3777);
 // Loopback only: the MCP endpoint can edit your designs, so it must not be reachable from the network.
 const HOST = '127.0.0.1';
-const PUBLIC = path.join(ROOT, 'public');
-// Build output of the React client (web/). Served under /next/ until the cut-over (docs/REACT-REWRITE.md).
-const NEXT = path.join(ROOT, 'web', 'dist');
+// Build output of the React client (web/, `pnpm build:web`). It is the only UI the server serves.
+const WEB = path.join(ROOT, 'web', 'dist');
 
 const store = new ProjectStore(path.join(ROOT, 'data'));
 
@@ -204,7 +203,7 @@ const canvasActions = {
   },
 };
 
-function serveFile(res, file, root = PUBLIC) {
+function serveFile(res, file, root = WEB) {
   if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404).end('Not found');
     return;
@@ -353,27 +352,23 @@ const server = http.createServer(async (req, res) => {
       return json(res, 404, { error: 'Not found' });
     }
 
-    // --- Pages ---
-    if (url.pathname === '/') return serveFile(res, path.join(PUBLIC, 'index.html'));
-    if (url.pathname === '/comments') return serveFile(res, path.join(PUBLIC, 'comments.html'));
+    // --- React client. Unknown or trashed project: back to the home page instead of a broken canvas. ---
     if (parts[0] === 'p' && parts.length === 2) {
-      // Unknown or trashed project: back to the home page instead of a broken canvas.
       const p = ID_RE.test(parts[1]) ? store.get(parts[1]) : null;
       if (!p || p.meta.deletedAt) { res.writeHead(302, { Location: '/' }).end(); return; }
-      return serveFile(res, path.join(PUBLIC, 'canvas.html'));
     }
-
-    // --- React client (built by `pnpm build:web`). Real files are served as is; any other /next/ path gets
-    // index.html so the client-side router can handle it (SPA fallback). ---
-    if (url.pathname === '/next' || url.pathname.startsWith('/next/')) {
-      const rel = url.pathname.slice('/next/'.length);
-      let file = path.join(NEXT, rel);
-      if (!rel || !file.startsWith(NEXT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(NEXT, 'index.html');
-      return serveFile(res, file, NEXT);
+    if (!fs.existsSync(path.join(WEB, 'index.html'))) {
+      res.writeHead(503, { 'Content-Type': 'text/plain' }).end('The web client is not built. Run: pnpm build:web');
+      return;
     }
-
-    // --- Static assets (the startsWith check in serveFile blocks path traversal) ---
-    serveFile(res, path.join(PUBLIC, url.pathname.slice(1)));
+    // Real files (hashed assets) are served as is. A path without an extension is a client-side route
+    // (/, /p/<id>, /comments), so it gets index.html (SPA fallback); a missing file with an extension is a real 404.
+    // serveFile's startsWith check blocks path traversal.
+    const file = path.join(WEB, url.pathname.slice(1));
+    const isFile = file.startsWith(WEB) && fs.existsSync(file) && fs.statSync(file).isFile();
+    if (isFile) return serveFile(res, file);
+    if (path.extname(url.pathname)) { res.writeHead(404).end('Not found'); return; }
+    serveFile(res, path.join(WEB, 'index.html'));
   } catch (err) {
     // Validation errors from the store are user-facing; everything else is still just a message.
     if (!res.headersSent) res.writeHead(400, { 'Content-Type': 'application/json' });

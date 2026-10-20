@@ -20,8 +20,7 @@ const projectRoute = createRoute({
 const commentsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/comments', component: CommentsPage });
 
 const routeTree = rootRoute.addChildren([homeRoute, projectRoute, commentsRoute]);
-// basepath: the app is served under /next/ until the Phase 8 cut-over.
-const router = createRouter({ routeTree, basepath: '/next' });
+const router = createRouter({ routeTree });
 
 declare module '@tanstack/react-router' {
   interface Register { router: typeof router }

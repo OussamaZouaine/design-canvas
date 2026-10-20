@@ -156,10 +156,7 @@ src/
   export.mjs     artboard -> React + Tailwind
   meter.mjs      per-tool token estimates (served at /api/status)
   tokens.mjs     OKLCH design-token extraction (css / json / tailwind)
-public/
-  index.html + home.*       projects home
-  canvas.html + app.js + style.css   the canvas
-  comments.*                all-comments page
+web/                        React client (Vite): src/canvas engine, panels, pages, stores; built to web/dist
 examples/sprig/             scripts that build the Sprig design system
 test/                       node:test unit tests (`pnpm test`)
 skills/, .claude-plugin/, .mcp.json   Claude Code plugin: design skill + MCP config
