@@ -162,7 +162,15 @@ session scratchpad / side-session notes, not in the repo.
   per pointermove. The real costs Paper pays are memory (every node is a live DOM element plus a JS node object with layout fields) and style recalc, which
   it bounds with culling, the restyle budget and LOD. Paper still needs the whole document's DOM mounted, which is why it has the 15000-node LOD gate.
 
-### Proposal: per-board rect index so hover/select works at any zoom (not implemented)
+### Implemented 2026-10-21: per-board rect index (simplified from the proposal below)
+`web/src/canvas/rects.ts` (`measureBoard`, `pickRect`) + `engine.ts` (`boardIndex`, `pickAt`, `indexRect`, `onPointerMove`). Differences from the proposal:
+the index is measured **lazily** (first pick/hover/selection draw on an unmounted board, one forced layout in a reusable off-screen shadow host),
+cached on `Board.index` keyed by html + theme, **not** in IndexedDB and **not** in the idle queue. Pick = deepest node >= 12 screen px (`MIN_PICK_PX`).
+Zoomed out: click selects (box + size label, no resize handles via `editor.hideHandles`), drag then pans (moving needs live DOM), hover highlights.
+Live boards still use `composedPath`. Verified in the browser pane at 5% zoom (click selects, box shows size). NOT measured: layout cost on big boards,
+frame rate. Not done: context menu / comment mode / text tool on a snapshot board still use the DOM path (they ignore the index).
+
+### Proposal: per-board rect index so hover/select works at any zoom (implemented in simplified form, see above)
 Idea: copy Paper's *separation of model from paint* but keep our cheaper paint (snapshot bitmaps). Our "model" is the HTML string, so we derive
 a small **rect index** from it once per HTML version and hit-test against that.
 1. **Data.** `BoardIndex = { hash, nodes: Float32Array/arrays of {pid, parentIdx, depth, x, y, w, h} }` in board-local px at scale 1, roots first.
@@ -253,4 +261,4 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
 - Phase 7 leftovers closed (2026-10-21): Layers right-click menu (`LayersPanel` sets `menu.extra` = Rename / Hide / Lock; `ContextMenu.tsx` hides Add comment and Fit when `extra` is set),
   rulers (`shell/Rulers.tsx`, Shift+R or the ruler button, `ui.rulers` persisted in localStorage, design-px ticks redrawn on `viewTick`; `engine.getView()` exposes the camera),
   50+ board pass: scratch project with 56 boards (purged), wheel pan/zoom costs about 1 ms of JS + forced layout per input event, no long tasks. Frame-time (rAF) numbers were NOT
-  obtainable: the browser pane throttles rAF to ~1 fps. Re-check on a real display if it ever feels slow. Still open: the queued Paper-style zoomed-out selection proposal (Phase 3 log).
+  obtainable: the browser pane throttles rAF to ~1 fps. Re-check on a real display if it ever feels slow. The Paper-style zoomed-out selection was implemented later the same day (see "Implemented 2026-10-21" above).
