@@ -130,6 +130,64 @@ import, open-comment badge, comments filters (project/author/status/search), rep
   the box, a created board shows ring + shimmer + live pill + follow camera, Add page switches pages. Scratch project removed.
 - Gotcha: a CSS `position: relative` in `canvas.css` beat the Tailwind `absolute` utility and collapsed the viewport to 0 height; the element is
   positioned by its class only.
-- **Open idea (user, 2026-10-20): Paper stays smooth and lets you select elements even when zoomed far out.** Not researched yet (own session).
-  Our gap: below `LIVE_K` boards are plain bitmaps, so there is no hit-testing. Likely fix: keep a cheap per-board rect index (node id, box, depth)
-  extracted when a snapshot is built, hit-test against it for hover/select at any zoom, and later tile/GPU-draw. Investigate how Paper does it first.
+- **Open idea (user, 2026-10-20): Paper stays smooth and lets you select elements even when zoomed far out.** Researched below; **proposal only,
+  no engine code changed yet.** Our gap: below `LIVE_K` boards are plain bitmaps (`<img.thumb>`), so `onPointerDown` (`composedPath` -> `data-pid`) finds nothing.
+
+### Research: how Paper renders and hit-tests (2026-10-20)
+Evidence: static read of the shipped artifacts only, nothing executed or measured. Desktop app `Paper.exe` is an Electron shell whose `app.asar`
+(`src/window/paper-tab.ts`, `load-url.ts`) just does `loadURL(APP_URL + route)`; the editor is the web app at `app.paper.design`, bundle
+`assets/main-BqJp0QF7.js` (4 MB, minified; names below are minified class names, so they will change per build). Raw copies and notes are in the
+session scratchpad / side-session notes, not in the repo.
+- **Rendering = real DOM, not canvas/WebGL.** Nodes are HTML/SVG elements inside one `div.paper-camera` (`transform-origin: top left`,
+  `backface-visibility: hidden`, `pointer-events: none`) in a `contain: strict` viewport; pan/zoom is a transform on that one element. WebGL2 appears
+  only in "Paper Shaders" fills and colour pickers; `OffscreenCanvas`/`createImageBitmap` only for image-alpha sniffing. No tiling, no bitmap snapshots,
+  no CanvasKit/Skia/wasm found in the bundle (`grep` for them: zero hits). So the "stays smooth zoomed out" comes from doing **less DOM work**, not from bitmaps.
+- **Culling (`CullingState`, `data-culled`).** Top-level nodes are grouped into "units" (a plan limited to ~4000 descendants per unit, at most 500 units).
+  A unit whose `subtreeBounds` leaves a viewport inflated by 1.0x is marked `data-culled`, and revealed again inside an inflated 0.5x (my reading of the
+  constants `smt=1`, `imt=.5`; the inflate helper `cZ` was not read). CSS: `.paper-camera [data-culled], [data-lod-hidden] { visibility: hidden }`.
+  Culled nodes stay in the tree and keep their model data. Hides and reveals are metered by a per-frame **restyle budget** (`ymt`: 1500 hides, then 800
+  reveals per tick; reveals go nearest-to-viewport-centre first) so a big zoom never restyles thousands of nodes in one frame.
+- **Level of detail (`LodState`, `data-lod-hidden`, `data-lod-fx`).** Only on pages with >= 15000 nodes. Leaf nodes (no children) are bucketed by size
+  (`max(width,height)`, text uses `fontSize*0.7`, text >= 20px never hidden) in half-octave buckets; a table maps zoom to a minimum world size:
+  scale < 0.4 hides leaves under 7.5 px, < 0.2: 15, < 0.1: 30, < 0.05: 60, < 0.025: 120. They get `visibility:hidden`, so layout stays and containers
+  still paint. Below scale 0.3 (or while zooming, 150 ms settle) `filter`/`backdrop-filter` are forced off via `data-lod-fx` once there are >= 32 such nodes.
+- **Hit-testing is a JS walk over a world-space model, never `elementFromPoint`.** `HitTester.fromPoint(worldPoint, tolerance)`, tolerance =
+  4 screen px x `1/scale`. It walks `rootNode.children`, skips invisible/locked/dragged nodes, tests `ze.intersectsRect(node, rect)` against model rects
+  (`x,y,width,height` kept in the node tree), and recurses through `childrenIntersecting`, which filters by each child's cached `subtreeBounds`
+  (union of own paint bounds and visible children, stops at `clipsContent`). Only SVG shapes get a precise `isPointInFill/Stroke` test. Artboard title
+  labels are tested against their last drawn rect. Result: `{node, location: body|label, isEnclosed}` list, outermost to innermost; the select tool then picks
+  from that list (the pick policy in `calculateNodeAtPoint` was not read). Because the model exists regardless of what is painted, **selection works at any
+  zoom and is independent of culling/LOD**; selection and hover boxes are drawn by a separate HUD layer (`hudState`) from model rects.
+- **Cost (reasoned from the code, not measured):** a hit-test is O(depth x siblings-per-level) with bounds pruning, no layout reads, so it is cheap enough
+  per pointermove. The real costs Paper pays are memory (every node is a live DOM element plus a JS node object with layout fields) and style recalc, which
+  it bounds with culling, the restyle budget and LOD. Paper still needs the whole document's DOM mounted, which is why it has the 15000-node LOD gate.
+
+### Proposal: per-board rect index so hover/select works at any zoom (not implemented)
+Idea: copy Paper's *separation of model from paint* but keep our cheaper paint (snapshot bitmaps). Our "model" is the HTML string, so we derive
+a small **rect index** from it once per HTML version and hit-test against that.
+1. **Data.** `BoardIndex = { hash, nodes: Float32Array/arrays of {pid, parentIdx, depth, x, y, w, h} }` in board-local px at scale 1, roots first.
+   Store in `Board` (`b.index`), cache in IndexedDB next to the thumbnail (same key `${project}:${ab.id}:${hash}`, new store `rects`), so a reload is instant
+   and only changed boards are re-measured. Cap at nodes with `data-pid` and size >= 1 px; typical board = a few hundred entries.
+2. **Extraction.** SVG foreignObject rasterizing yields an opaque image, so rects need real layout. In `buildThumb`'s idle queue add `measureBoard(b)`:
+   mount the HTML in one reusable off-screen shadow host (`position:fixed; left:-100000px; visibility:hidden; contain:strict`, board width, same theme decls),
+   `querySelectorAll('[data-pid]')`, `getBoundingClientRect()` minus the root rect, unmount. One forced layout per board, one board at a time, same
+   "wait until the user stops dragging" gate as snapshots. When a board is already live, refresh `b.index` from its mounted DOM on the same debounce
+   (free layout) and use it so the two sources agree. Re-measure after fonts/images settle (`document.fonts.ready`, image `load`) because they shift layout.
+3. **Hit-test API** in `engine.ts`: `pickAt(clientX, clientY): {pid, abId} | null`. Convert to world once, find the board (linear over boards is fine for
+   hundreds; use `rbush` only if boards > ~2000), convert to board-local, then walk the index with a descent: take the children containing the point
+   (tolerance `4/k` world px) while the child is "pickable" at this zoom. Pickable rule borrowed from Paper's LOD table: skip a node whose on-screen
+   `max(w,h)*k` is under ~6 px, so far out you grab frames/sections and zooming in reveals smaller targets. Use it from `onPointerDown` and a
+   rAF-throttled `pointermove` hover; the live-DOM `composedPath` path stays as is for `k >= LIVE_K` (exact, handles contenteditable) with the index as fallback.
+4. **Overlays.** Selection/hover boxes already come from `relRect`; add a branch that builds the rect from the index when the node's board is a snapshot
+   (no DOM to measure). Also keep `selected` valid when the board unmounts (today the box would lose its element).
+5. **Invalidation.** `b.index` is stale as soon as `b.html` changes; keep serving the old index (rects move little) until the debounced re-measure lands,
+   and drop it if the pid disappeared. Delta sync already tells us which boards changed (`html: null` = unchanged), so only those re-measure.
+6. **Cost estimate (unmeasured, verify):** measure ~5-30 ms per typical board (one layout), done once per HTML version and cached; memory ~40 bytes x
+   nodes (46 Sprig boards x ~500 nodes ~ 1 MB); hit-test microseconds. No change to snapshot cost. Worst case is a huge board (thousands of nodes): cap
+   the index (e.g. 5000 nodes, depth-first, largest first) and report the cap.
+7. **Later, optional (Paper-style, only if snapshots stop being enough):** instead of swapping to bitmaps, keep boards as live DOM and add Paper's three
+   levers: `visibility:hidden` culling with hysteresis and a per-frame restyle budget, size-bucketed LOD that hides tiny leaves by zoom, and effects off while
+   zooming. That removes bitmap blur and the snapshot queue, but costs a mounted DOM for every board, so it needs a perf experiment on Sprig (46 boards)
+   before committing. Recommendation: build steps 1-5 first; they are additive and do not touch the render path.
+Test plan: unit-test the index walk + pickable rule with a fake index (pure function in `canvas/pick.ts`); manual check on Sprig at 3 % and 10 % zoom
+(hover box follows the cursor, click selects, `get_selection` returns the pid, selecting survives a board edit).
