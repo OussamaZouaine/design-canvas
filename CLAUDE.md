@@ -4,7 +4,8 @@ A small local, Paper-like design canvas that Claude drives over MCP. Built from 
 Claude generates HTML designs onto an infinite pan/zoom canvas; the user watches them appear live, comments on
 elements, and Claude reads and answers those comments. Local only, no database (JSON files).
 
-**Read `PROGRESS.md` first** for what has been done, current state and what to do next.
+**Read `PROGRESS.md` first** for what has been done, current state and what to do next (it has a "Next work, split into sessions"
+list: pick one area per session, keep sessions short, and update PROGRESS.md / ROADMAP.md before ending a session).
 
 ## Run
 - `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777. Stop it with a normal kill so it flushes `data/`.

@@ -3,11 +3,13 @@
 Newest first inside each section. Update this file at the end of every work session (what changed, what is next).
 Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do list.
 
-## Current state (as of 2026-10-19)
+## Current state (as of 2026-10-20)
 - App works end to end: projects home, canvas, MCP tools, comments, history, tokens, generation animation, follow camera.
 - Sprig design system project has 46 artboards (light + dark): foundations, components, 14 pages, 9 system sheets
   (buttons, forms, feedback, navigation, data display, states, icons, theme & tokens, data table density).
-- Dev server is **stopped**; start with `pnpm start`. No git remote configured, nothing pushed.
+- Plan status: every phase of the build plan that fits the Node stack is done (see `docs/ROADMAP.md`). Tools, panels (Layers,
+  Design, Theme, MCP), pages, components, references, token sync, normalization, lint, export are all in. 86 unit tests pass.
+- Dev server is **stopped** (restart it to load `src/` changes; a running 3777 server from before 2026-10-20 lacks the newest tools); start with `pnpm start`. No git remote configured, nothing pushed.
 - Git history is on `main`, small commits per concern (`git log --oneline`).
 
 ## What was built, in order
@@ -70,13 +72,25 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 24. Canvas editing (2026-10-19): resize handles, drag absolute nodes, node copy / paste. Normalization now covers inputs and spans.
 
-## Next ideas (none are committed to; ask the user)
-- Follow `docs/ROADMAP.md` ("Not done, in suggested order"): MCP panel UI, theme editor, components, layers panel.
-- More Sprig pages: Replay viewer, onboarding, empty states, modals; a mobile page set.
-- Per-user density preference demo, responsive previews, static-site export, pick-the-cover for a project.
-- Keep comment ids stable across rebuilds (re-target by artboard name) so rebuilds do not orphan comments.
-- Tests: `pnpm test` covers doc, lint, export and meter; the store, sanitizer and tokens extraction are still untested.
+## Next work, split into sessions (start a fresh session per area; each one reads CLAUDE.md + this file)
+Order is a suggestion; the user decides.
+1. **Use it for real** (no code): run Claude Code against the canvas on a real task (Trove), note what is slow, token-hungry or
+   wrong, then turn that into issues here. The plan itself said to stop after Phase 3 and do this.
+2. **UI rewrite decision (asked 2026-10-20, answered in chat only)**: possible move of `public/` to React (Vite, or TanStack Start
+   as a plain Vite app: SSR/server functions add little to a local tool). Keep the canvas imperative (shadow roots, transforms,
+   overlays) in one component and use React for panels (layers, design, theme, MCP, comments, home). Keep the Node server and its
+   `/api` + SSE unchanged: the React app is just a new client, ported panel by panel. Not started; needs the user's go.
+3. **Desktop app (later)**: the Go/Wails path from the plan only makes sense if the server is rewritten in Go. Otherwise wrap the
+   Node server (Electron or Tauri, or Wails with a Node sidecar). Open question for the user: is the Go rewrite itself a goal?
+4. **Roadmap leftovers** (`docs/ROADMAP.md`): insert toolbar (frame/text/image/component), canvas drag-reorder inside flex parents,
+   image upload to `assets/`, per-side padding + colour picker, extra shortcuts, "commit version" button, 50+ board performance.
+   `capture_url` needs a headless browser (not built).
+5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
+   paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
+6. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
+0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
+   project through MCP/HTTP, open it in a browser tab, and delete + purge it afterwards. Never leave scratch projects in `data/`.
 1. Read `CLAUDE.md` and this file. 2. `git log --oneline | head -20` and `git status`. 3. `pnpm start`, open
 http://localhost:3777. 4. Ask the user what to do next if the request is not clear.
