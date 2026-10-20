@@ -126,6 +126,21 @@ export function LayersPanel({ projectId }: { projectId: string }) {
             }}
             onMouseEnter={() => engine?.setHover(r.id)}
             onClick={() => engine?.select(r.id)}
+            // Same menu as the canvas, plus the row-only actions. Selecting first so Copy/Duplicate/Delete hit this row.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              engine?.select(r.id);
+              useCanvas.getState().setMenu({
+                x: e.clientX, y: e.clientY, id: r.id,
+                extra: [
+                  { label: 'Rename', run: () => setRenaming(r.id) },
+                  ...(r.isBoard ? [] : [
+                    { label: r.hidden ? 'Show' : 'Hide', run: () => send('flags', { ids: [r.id], hidden: !r.hidden }) },
+                    { label: r.locked ? 'Unlock' : 'Lock', run: () => send('flags', { ids: [r.id], locked: !r.locked }) },
+                  ]),
+                ],
+              });
+            }}
             style={{ paddingLeft: 6 + r.depth * 14 }}
             className={cn(
               'group relative flex h-7 cursor-default items-center gap-1 pr-1.5 select-none',
