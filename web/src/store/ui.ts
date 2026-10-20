@@ -21,6 +21,8 @@ interface UiState {
   layersOpen: boolean;
   panelOpen: boolean;
   theme: Theme;
+  rulers: boolean;
+  toggleRulers: () => void;
   setTool: (t: Tool) => void;
   setPanelTab: (t: PanelTab) => void;
   toggleLayers: () => void;
@@ -37,6 +39,12 @@ export const useUi = create<UiState>((set, get) => ({
   layersOpen: true,
   panelOpen: true,
   theme: initialTheme,
+  rulers: read('dc-rulers') === '1',
+  toggleRulers: () => {
+    const rulers = !get().rulers;
+    write('dc-rulers', rulers ? '1' : '0');
+    set({ rulers });
+  },
   setTool: (tool) => set({ tool }),
   setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
   toggleLayers: () => set((s) => ({ layersOpen: !s.layersOpen })),

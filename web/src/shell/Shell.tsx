@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Square, Sun, Type } from 'lucide-react';
+import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Ruler, Square, Sun, Type } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { canvasAction } from '@/api/projects';
 import { pageOfBoard, pagesOf } from '@/canvas/engine';
@@ -59,12 +59,14 @@ function PageSwitcher({ projectId }: { projectId: string }) {
 // Zoom readout + fit + the "follow Claude" camera toggle.
 function ZoomControls() {
   const { engine, zoom, follow, setFollow } = useCanvas();
+  const { rulers, toggleRulers } = useUi();
   return (
     <div className="flex items-center gap-0.5">
       <Button variant="ghost" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button>
       <span className="tnum w-10 text-center text-muted-foreground">{Math.round(zoom * 100)}%</span>
       <Button variant="ghost" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button>
       <Button variant="ghost" size="icon" aria-label="Fit all artboards" title="Fit all" onClick={() => engine?.fit()}><Maximize /></Button>
+      <Button variant={rulers ? 'secondary' : 'ghost'} size="icon" aria-pressed={rulers} aria-label="Rulers (Shift+R)" title="Rulers (Shift+R)" onClick={toggleRulers}><Ruler /></Button>
       <Button
         variant={follow ? 'secondary' : 'ghost'} size="icon" aria-pressed={follow} aria-label="Follow Claude" title="Follow Claude's camera"
         onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
@@ -82,7 +84,7 @@ export function LivePill() {
   return (
     <button
       onClick={() => engine?.focusBoard(live.id)}
-      className="live-pill absolute top-3 right-3 z-10 flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] shadow-md"
+      className="live-pill absolute top-6 right-3 z-10 flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] shadow-md"
     >
       <span className="size-1.5 rounded-full bg-[oklch(0.68_0.2_295)]" />
       {/* React escapes text, so an untrusted board name is safe here. */}
@@ -143,6 +145,7 @@ export function FloatingToolbar() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.shiftKey && e.key.toLowerCase() === 'r') { useUi.getState().toggleRulers(); return; }
       const hit = TOOLS.find((t) => t.key.toLowerCase() === e.key.toLowerCase() && t.id !== 'comment');
       if (hit) pick(hit.id);
     };

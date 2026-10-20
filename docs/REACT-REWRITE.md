@@ -244,10 +244,13 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
 - A11y: toolbar `role=toolbar` + `aria-pressed`, panel tabs `role=tab`, asides labelled, canvas `role=application`, reduced-motion variants for menu and skeleton.
 - **Server contract change (additive):** `POST /api/p/:id/create` now returns `result: {id}` and `paste` returns `result: {ids}` (needed to select the new board / node).
 - Verified on a scratch server (3790, purged): F-drag made a 600x400 board and selected it, T-click inserted text and opened it for editing, menu items + Esc, H-drag pans.
-- NOT done: rulers, 50+ board React-profiler pass (Sprig has 46 boards; only Phase 3 rendering was checked), Layers panel context menu, `inert` (panels unmount instead). Move to Phase 8 or a later polish session.
+- Not done here (closed after Phase 8, see below): rulers, 50+ board pass, Layers panel context menu. `inert` is not needed (panels unmount instead).
 
 **Phase 8 (2026-10-21):** Cut-over done.
 - `src/server.mjs` serves `web/dist` at `/` (real files as is, extension-less paths get `index.html`, missing files with an extension 404, 503 with a hint if not built). `/p/<bad or trashed id>` still redirects to `/`.
 - Vite `base` is `/` and the TanStack router has no basepath. `/next/` and `?legacy` are gone; `public/` deleted (history keeps it).
 - Dev: `pnpm dev:web` now lives at http://localhost:5173/ (not /next/). Verified on a scratch server (3790): `/`, `/comments`, assets 200, bad project 302, `pnpm test` 86 pass.
-- Left from Phase 7 (optional polish): rulers, 50+ board profiler pass, Layers context menu. Also the queued Paper-style zoomed-out selection proposal (Phase 3 log).
+- Phase 7 leftovers closed (2026-10-21): Layers right-click menu (`LayersPanel` sets `menu.extra` = Rename / Hide / Lock; `ContextMenu.tsx` hides Add comment and Fit when `extra` is set),
+  rulers (`shell/Rulers.tsx`, Shift+R or the ruler button, `ui.rulers` persisted in localStorage, design-px ticks redrawn on `viewTick`; `engine.getView()` exposes the camera),
+  50+ board pass: scratch project with 56 boards (purged), wheel pan/zoom costs about 1 ms of JS + forced layout per input event, no long tasks. Frame-time (rAF) numbers were NOT
+  obtainable: the browser pane throttles rAF to ~1 fps. Re-check on a real display if it ever feels slow. Still open: the queued Paper-style zoomed-out selection proposal (Phase 3 log).
