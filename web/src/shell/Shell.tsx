@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Square, Sun, Type } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { canvasAction } from '@/api/projects';
 import { pageOfBoard, pagesOf } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
@@ -125,19 +125,39 @@ const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string }[] = [
   { id: 'hand', icon: <Hand />, label: 'Hand', key: 'H' },
 ];
 
-// Bottom-centre floating toolbar. Skeleton only: tools are selectable, wired to the canvas in Phase 7.
+const typing = (t: EventTarget | null) => t instanceof Element && !!t.closest('input, textarea, select, [contenteditable]');
+
+// Bottom-centre floating toolbar. Frame (drag a rectangle), Text (click an element), Hand (drag to pan) and
+// Comment are modes the canvas engine reads; Image opens a file picker (the picture becomes a reference board).
 export function FloatingToolbar() {
   const { tool, setTool } = useUi();
+  const fileInput = useRef<HTMLInputElement>(null);
   const engine = useCanvas((s) => s.engine);
-  // Until Phase 7 wires the drawing tools, Frame is a one-click "new artboard" (what the legacy + button did).
   const pick = (id: Tool) => {
-    if (id === 'frame') engine?.createArtboard().catch((err: Error) => toast(err.message || 'Could not create the artboard'));
-    else setTool(id === 'comment' && tool === 'comment' ? 'move' : id);
+    if (id === 'image') fileInput.current?.click();
+    else setTool(tool === id && id !== 'move' ? 'move' : id); // pressing the active tool again returns to Move
   };
+
+  // Single-letter shortcuts, ignored while typing or with a modifier held (Ctrl+C is copy, not Comment).
+  // C is handled by the comments layer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      const hit = TOOLS.find((t) => t.key.toLowerCase() === e.key.toLowerCase() && t.id !== 'comment');
+      if (hit) pick(hit.id);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   return (
-    <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-xl border bg-popover p-1 shadow-lg">
+    <div role="toolbar" aria-label="Tools" aria-orientation="horizontal" className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-xl border bg-popover p-1 shadow-lg">
+      <input
+        ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden aria-hidden tabIndex={-1}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void engine?.addImageFile(f); e.target.value = ''; }}
+      />
       {TOOLS.map((t) => (
-        <Button key={t.id} variant={tool === t.id ? 'secondary' : 'ghost'} size="icon" aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} onClick={() => pick(t.id)}>
+        <Button key={t.id} variant={tool === t.id ? 'secondary' : 'ghost'} size="icon" aria-pressed={tool === t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} onClick={() => pick(t.id)}>
           {t.icon}
         </Button>
       ))}
@@ -155,10 +175,13 @@ export function RightPanel({ projectId }: { projectId: string }) {
   const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
   if (!panelOpen) return null;
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-l bg-background">
-      <nav className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2">
+    <aside aria-label="Inspector" className="flex w-64 shrink-0 flex-col border-l bg-background">
+      <nav role="tablist" aria-label="Panels" className="flex flex-wrap gap-x-3 gap-y-1 border-b px-3 py-2">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setPanelTab(t.id)} className={cn('text-[11px]', panelTab === t.id ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+          <button
+            key={t.id} role="tab" aria-selected={panelTab === t.id} onClick={() => setPanelTab(t.id)}
+            className={cn('rounded-sm text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring', panelTab === t.id ? 'font-medium text-foreground' : 'text-muted-foreground hover:text-foreground')}
+          >
             {t.label}{t.id === 'comment' && open > 0 && <span className="tnum ml-1 rounded-full bg-[var(--selection)] px-1 text-[9px] text-white">{open}</span>}
           </button>
         ))}
@@ -181,7 +204,7 @@ export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
   if (!layersOpen) return null;
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-background">
+    <aside aria-label="Layers" className="flex w-60 shrink-0 flex-col border-r bg-background">
       <div className="border-b px-3 py-2 text-[11px] font-medium">Layers</div>
       <LayersPanel projectId={projectId} />
     </aside>

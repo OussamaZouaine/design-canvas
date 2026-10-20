@@ -11,6 +11,19 @@
 }
 .dc-viewport.panning { cursor: grabbing; }
 .dc-viewport.commenting { cursor: crosshair; }
+/* Tool cursors: the cursor itself is the only feedback, so no motion here. */
+.dc-viewport[data-tool="frame"] { cursor: crosshair; }
+.dc-viewport[data-tool="text"] { cursor: text; }
+.dc-viewport[data-tool="hand"], .dc-viewport.space-pan { cursor: grab; }
+.dc-viewport[data-tool="hand"] *, .dc-viewport.space-pan * { cursor: inherit; }
+/* Frame tool rubber band, drawn in viewport pixels like the other overlay boxes. */
+.dc-draft { position: absolute; z-index: 6; border: 1px solid var(--dc-accent); background: color-mix(in oklch, var(--dc-accent) 10%, transparent); pointer-events: none; }
+/* "W x H" pill under the selection; rides on the selection box so it moves with it. */
+.dc-size {
+  position: absolute; top: 100%; left: 50%; margin-top: 8px; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+  padding: 1px 6px; border-radius: 4px; background: var(--dc-accent); color: oklch(1 0 0); font: 500 10px/16px system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
 .dc-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .dc-hide { display: none; }
 

@@ -17,6 +17,9 @@ interface CanvasState {
   // Theme mode being previewed ('base' or a named mode). A view setting, not document data; the Theme tab (Phase 6) sets it.
   mode: string;
   setMode: (m: string) => void;
+  // Right-click menu: where it opened and which node (or board) it is about; null = closed.
+  menu: { x: number; y: number; id: string | null } | null;
+  setMenu: (m: { x: number; y: number; id: string | null } | null) => void;
   setEngine: (e: CanvasEngine | null) => void;
   setZoom: (k: number) => void;
   setSelected: (id: string | null) => void;
@@ -38,6 +41,8 @@ export const useCanvas = create<CanvasState>((set, get) => ({
   bumpView: () => set((s) => ({ viewTick: s.viewTick + 1 })),
   mode: 'base',
   setMode: (mode) => { get().engine?.setThemeMode(mode); set({ mode }); },
+  menu: null,
+  setMenu: (menu) => set({ menu }),
   setEngine: (engine) => set({ engine }),
   setZoom: (zoom) => set({ zoom }),
   setSelected: (selected) => set({ selected }),
