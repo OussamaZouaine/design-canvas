@@ -85,3 +85,16 @@
 .live-pill { animation: dc-pill-in 200ms var(--ease-out); }
 @keyframes dc-pill-in { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .live-pill { animation: none; } }
+
+/* Resize handles ride on the selection box. The overlay ignores the pointer, so the handles opt back in.
+   Positions use percentages so the eight squares follow the box at any size. */
+.dc-handle { position: absolute; width: 9px; height: 9px; margin: -5px 0 0 -5px; background: oklch(1 0 0); border: 1.5px solid var(--dc-accent); border-radius: 2px; pointer-events: auto; touch-action: none; }
+.dc-handle[hidden] { display: none; }
+.dc-handle[data-dir="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.dc-handle[data-dir="n"] { left: 50%; top: 0; cursor: ns-resize; }
+.dc-handle[data-dir="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.dc-handle[data-dir="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+.dc-handle[data-dir="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.dc-handle[data-dir="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+.dc-handle[data-dir="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+.dc-handle[data-dir="w"] { left: 0; top: 50%; cursor: ew-resize; }

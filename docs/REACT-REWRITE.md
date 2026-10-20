@@ -59,7 +59,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - [x] **Phase 3 - Canvas engine core.** Port from `public/app.js`: world transform pan/zoom/fit, shadow-DOM frames, `pidIndex`,
   level of detail (`LIVE_K`), IndexedDB thumbnails, delta render, pages, Claude-designing ring/reveal/follow camera, hover/selection overlays.
   `<Canvas>` ref API: `select`, `fit`, `panTo`, events out through the store. Done = same boards render, zoom smoothly, 46 Sprig boards ok.
-- [ ] **Phase 4 - Canvas editing.** Selection, resize handles, drag-move absolute nodes, in-place text edit, copy/paste, undo/redo,
+- [x] **Phase 4 - Canvas editing.** Selection, resize handles, drag-move absolute nodes, in-place text edit, copy/paste, undo/redo,
   keyboard shortcuts, artboard create/move, rasterize + `get_screenshot`/`get_computed_styles` replies over `/reply`, `compareToReference`,
   reference drop/paste. Done = screenshots from MCP work against the new app and edits round-trip.
 - [ ] **Phase 5 - Layers + Inspector.** Port `layers.js` (tree, search, rename, hide/lock, drag-move) and `inspector.js` (style fields,
@@ -191,3 +191,17 @@ a small **rect index** from it once per HTML version and hit-test against that.
    before committing. Recommendation: build steps 1-5 first; they are additive and do not touch the render path.
 Test plan: unit-test the index walk + pickable rule with a fake index (pure function in `canvas/pick.ts`); manual check on Sprig at 3 % and 10 % zoom
 (hover box follows the cursor, click selects, `get_selection` returns the pid, selecting survives a board edit).
+
+**Phase 4 (2026-10-21):** Canvas editing and MCP replies ported; screenshots and edits round-trip against the new app.
+- `canvas/replies.ts`: `screenshot`, `computedStyles`, `compareToReference` + `answer()` (POSTs `/screenshot` or `/reply` by request id).
+  `useProjectEvents` listens for the `screenshot` / `computed` / `compare` SSE events and calls `engine.replyHost()`; no engine yet = error reply.
+- `canvas/edit.ts`: `CanvasEditor` (plain class, gets an `EditHost` from the engine): 8 resize handles (`.dc-handle` inside the selection box; boards
+  all 8, absolute nodes 8, flowing nodes e/s/se, locked none), drag boards by label, drag absolute nodes (under 3 px = click), dblclick text edit
+  (contenteditable plaintext-only), Delete, Escape (up one level), Ctrl+Z/Y, Ctrl+C/V/D, image paste/drop as a reference board.
+  Previews write straight to the element; the server doc event replaces them on release. Changes go out through `canvasAction`; errors become toasts.
+- Frame tool in the floating toolbar = "new artboard" until Phase 7 wires real tools (`engine.createArtboard()`).
+- Fixed a Phase 3 bug: `fit()` on a viewport with no size gave a NEGATIVE zoom; it now waits (`fitPending`) for the ResizeObserver.
+- Verified on a scratch server (3790, project purged afterwards): select, drag, SE resize, text edit, undo, duplicate, copy/paste, delete all
+  persisted correctly; MCP `get_screenshot` (args `artboard_id`) and `get_computed_styles` (`node_ids`, `props`) answered by the new app.
+  NOT clicked through: `compare_to_reference` (code is a straight port), reference drop/paste, label drag of boards, Layers-driven selection.
+- Testing tip: the browser pane's screenshot frame is scaled vs `innerWidth`; compute click coordinates from `getBoundingClientRect() * 800 / innerWidth`.

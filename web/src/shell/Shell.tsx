@@ -122,10 +122,16 @@ const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string }[] = [
 // Bottom-centre floating toolbar. Skeleton only: tools are selectable, wired to the canvas in Phase 7.
 export function FloatingToolbar() {
   const { tool, setTool } = useUi();
+  const engine = useCanvas((s) => s.engine);
+  // Until Phase 7 wires the drawing tools, Frame is a one-click "new artboard" (what the legacy + button did).
+  const pick = (id: Tool) => {
+    if (id === 'frame') engine?.createArtboard().catch((err: Error) => toast(err.message || 'Could not create the artboard'));
+    else setTool(id);
+  };
   return (
     <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-xl border bg-popover p-1 shadow-lg">
       {TOOLS.map((t) => (
-        <Button key={t.id} variant={tool === t.id ? 'secondary' : 'ghost'} size="icon" aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} onClick={() => setTool(t.id)}>
+        <Button key={t.id} variant={tool === t.id ? 'secondary' : 'ghost'} size="icon" aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} onClick={() => pick(t.id)}>
           {t.icon}
         </Button>
       ))}

@@ -8,6 +8,8 @@
 import { canvasAction } from '@/api/projects';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
+import { CanvasEditor } from './edit';
+import type { ReplyHost } from './replies';
 
 // ---- Tunables (see "Level of detail" below) -------------------------------------------
 const LIVE_K = 0.3;          // below this zoom a board is drawn from its snapshot
@@ -85,6 +87,8 @@ export class CanvasEngine {
   private followAt = 0;
   private reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private abort = new AbortController(); // one signal removes every listener on destroy
+  private editor: CanvasEditor;
+  private fitPending = false; // fit() was asked for before the viewport had a size
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     this.activePage = lsGet(`dc-page:${projectId}`);
@@ -93,6 +97,22 @@ export class CanvasEngine {
     this.applyView();
 
     const sig = { signal: this.abort.signal };
+    this.editor = new CanvasEditor({
+      viewport,
+      projectId,
+      selBox: this.selBox,
+      zoom: () => this.view.k,
+      selected: () => this.selected,
+      select: (id) => this.select(id),
+      board: (id) => this.doc.artboards.find((a) => a.id === id),
+      boardsHere: () => this.boardsHere(),
+      boardEl: (id) => this.boards.get(id)?.el,
+      findElement: (id) => this.findElement(id),
+      boardOf: (id) => this.pidIndex.get(id),
+      redraw: () => this.drawSelection(),
+      markUserEdit: () => this.markUserEdit(),
+      activePage: () => this.activePage,
+    }, this.abort.signal);
     // Remember when the user last touched the canvas; capture phase so nothing can stop it first.
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
     viewport.addEventListener('wheel', this.onWheel, { passive: false, ...sig });
@@ -101,7 +121,7 @@ export class CanvasEngine {
     // start would be left behind. Redraw them when it finishes.
     this.world.addEventListener('transitionend', (e) => { if (e.target === this.world) this.afterView(); }, sig);
     // Resizing the viewport (panels opening) changes which boards are near the screen.
-    const ro = new ResizeObserver(() => this.scheduleAfterView());
+    const ro = new ResizeObserver(() => { if (this.fitPending) this.fit(); this.scheduleAfterView(); });
     ro.observe(viewport);
     this.abort.signal.addEventListener('abort', () => ro.disconnect());
   }
@@ -128,6 +148,9 @@ export class CanvasEngine {
   setThemeMode(mode: string) { this.themeMode = mode; this.applyTheme(); }
 
   getActivePage() { return this.activePage; }
+
+  // Header / toolbar "new artboard".
+  createArtboard() { return this.editor.createArtboard(); }
 
   // Switch pages. `fitView` is false when the switch is automatic (Claude drew on another page).
   setPage(id: string, { fitView = true } = {}) {
@@ -163,7 +186,11 @@ export class CanvasEngine {
     const maxX = Math.max(...here.map((a) => a.x + a.width));
     const maxY = Math.max(...here.map((a) => a.y + a.height));
     const w = this.viewport.clientWidth, h = this.viewport.clientHeight;
-    this.view.k = Math.min(1, (w - 80) / (maxX - minX), (h - 80) / (maxY - minY));
+    // A viewport that is not laid out yet (hidden pane, first paint) would give a negative zoom. Wait for the
+    // ResizeObserver to report a real size, then fit.
+    if (w < 200 || h < 200) { this.fitPending = true; return; }
+    this.fitPending = false;
+    this.view.k = Math.min(1, Math.max(MIN_K, Math.min((w - 80) / (maxX - minX), (h - 80) / (maxY - minY))));
     this.view.x = (w - (maxX - minX) * this.view.k) / 2 - minX * this.view.k;
     this.view.y = (h - (maxY - minY) * this.view.k) / 2 - minY * this.view.k;
     this.applyView();
@@ -198,6 +225,18 @@ export class CanvasEngine {
     this.view.y += this.viewport.clientHeight / 2 - (r.top + r.height / 2);
     this.applyView();
     return true;
+  }
+
+  // What replies.ts needs from the engine to answer screenshot / computed / compare requests from Claude.
+  replyHost(): ReplyHost {
+    return {
+      projectId: this.projectId,
+      themeDecls: () => this.themeDecls(),
+      findBoard: (id) => this.doc.artboards.find((a) => a.id === id),
+      findElement: (id, opts) => this.findElement(id, opts),
+      frameOf: (id) => this.boards.get(id.startsWith('A') ? id : this.pidIndex.get(id) ?? '')?.frame ?? null,
+      reference: (refId) => (this.doc.references as { id: string; width: number; height: number }[] | undefined)?.find((r) => r.id === refId),
+    };
   }
 
   // ---- Document -------------------------------------------------------------------
@@ -604,6 +643,7 @@ export class CanvasEngine {
     if (!target) { this.selBox.classList.add('dc-hide'); return; }
     this.place(this.selBox, this.relRect(target));
     this.selBox.classList.remove('dc-hide');
+    this.editor.showHandles(target);
   }
 
   private drawHover() {
@@ -646,8 +686,9 @@ export class CanvasEngine {
     const onLabel = !!target.closest('.dc-label');
     if (node?.isContentEditable) return; // clicking inside text being edited just moves the caret
 
-    if (onLabel && abEl) { this.select(abEl.dataset.ab!); return; } // dragging boards by label arrives in Phase 4
-    if (node) { this.select(node.dataset.pid!); return; }
+    this.editor.noteDown(node ?? null);
+    if (onLabel && abEl) { this.select(abEl.dataset.ab!); this.editor.dragBoard(e, abEl.dataset.ab!); return; }
+    if (node) { this.select(node.dataset.pid!); this.editor.dragNode(e, node); return; }
     this.select(null);
     // Empty space: pan with the pointer. Capture keeps the drag alive when the cursor leaves the viewport.
     const sx = e.clientX, sy = e.clientY, ox = this.view.x, oy = this.view.y;
