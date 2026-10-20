@@ -1,28 +1,26 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Outlet, RouterProvider, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import './styles/globals.css';
-import { Button } from '@/components/ui/button';
-import { listProjects, type ProjectSummary } from './api/projects';
+import { HomePage } from './pages/HomePage';
+import { ProjectPage } from './pages/ProjectPage';
 
-// Phase 0 smoke test: proves Vite, the compiler, Tailwind, shadcn and the proxy to the Node server work together.
-function App() {
-  const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    listProjects().then(setProjects).catch((e) => setError(String(e)));
-  }, []);
-  return (
-    <main className="p-6 text-sm">
-      <h1 className="text-lg font-semibold">Design Canvas (React)</h1>
-      <Button className="mt-3" onClick={() => location.reload()}>Reload</Button>
-      {error && <p className="text-destructive">{error}</p>}
-      {projects && (
-        <ul className="mt-3 list-disc pl-5">
-          {projects.map((p) => <li key={p.id}>{p.name}</li>)}
-        </ul>
-      )}
-    </main>
-  );
+// Code-based TanStack Router (no file-based plugin: only three routes, so one file is clearer).
+const rootRoute = createRootRoute({ component: Outlet });
+const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/p/$id',
+  component: function Project() { return <ProjectPage projectId={projectRoute.useParams().id} />; },
+});
+// /comments is ported in Phase 2.
+
+const routeTree = rootRoute.addChildren([homeRoute, projectRoute]);
+// basepath: the app is served under /next/ until the Phase 8 cut-over.
+const router = createRouter({ routeTree, basepath: '/next' });
+
+declare module '@tanstack/react-router' {
+  interface Register { router: typeof router }
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+createRoot(document.getElementById('root')!).render(<StrictMode><RouterProvider router={router} /></StrictMode>);
