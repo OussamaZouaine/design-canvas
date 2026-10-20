@@ -7,7 +7,12 @@ update `PROGRESS.md`, commit. A new session continues from the first unticked ph
 ## Decisions (do not re-ask)
 - **Stack:** React 19.x (latest), Vite 8, `@vitejs/plugin-react` 6 + **React Compiler** (`babel-plugin-react-compiler` 1.x,
   enabled in the Vite config; no manual `useMemo`/`useCallback`), TypeScript, Zustand for shared state (store is selector-based, works with the
-  compiler). Plain CSS with the existing OKLCH tokens (no Tailwind), CSS modules per component.
+  compiler). **shadcn/ui + Tailwind CSS v4** for components and styling (added 2026-10-20 at the user's request; shadcn requires Tailwind,
+  so this replaces the earlier "plain CSS" idea). Theme the shadcn CSS variables with the existing OKLCH palette (shadcn v4 is OKLCH already).
+  Use `pnpm dlx shadcn@latest init` / `add` inside `web/`; components are copied into `web/src/components/ui/` and may be edited freely.
+  Restyle them to the dense Figma-like look (small type, 28px controls, 1px hairlines) through the theme variables, not per-use overrides.
+  Custom pieces shadcn lacks (scrub NumberField, OKLCH ColorField, layer tree, floating toolbar) are built on the same Radix primitives.
+  Check current shadcn docs with the context7 tools before init (CLI flags change).
 - **Server unchanged.** `/api`, `/events` (SSE), `/mcp`, `/reply` keep their contracts. The React app is a new client in `web/`.
 - **Canvas stays imperative.** Shadow-DOM frames, transforms, level-of-detail, thumbnails, overlays, rasterizing live in
   `web/src/canvas/` as plain TS classes/modules behind ONE `<Canvas>` React component with a ref API. React must never render artboard HTML.
@@ -36,18 +41,19 @@ web/                      Vite app (own package.json or workspace; dev server pr
   src/canvas/             imperative engine (port of public/app.js) + <Canvas> wrapper
   src/panels/             Layers, Inspector, Comments, Activity, Versions, Theme, Tokens, Mcp
   src/pages/              Home, Project, Comments
-  src/ui/                 primitives: Button, IconButton, Tabs, NumberField, ColorField, Select, Popover, Menu, Tooltip, Toolbar
-  src/styles/             tokens.css (OKLCH), reset, motion
+  components/ui/          shadcn components (button, tabs, select, popover, dropdown/context-menu, tooltip, input, slider, toggle-group, scroll-area...)
+  src/ui/                 our own primitives built on them: NumberField (scrub), ColorField (OKLCH), Toolbar, LayerRow
+  src/styles/             globals.css (Tailwind v4 import, theme variables in OKLCH, motion rules)
 ```
 
 ## Phases
 - [ ] **Phase 0 - Scaffold (short).** Create `web/` with Vite + React 19 + TS + React Compiler (verify it is active: build output
   contains compiler runtime `react/compiler-runtime`; add `eslint-plugin-react-hooks` compiler rules). Dev proxy to 3777.
   Server serves `web/dist` at `/next/` (add route + SPA fallback, keep Host allowlist and no-cache). `pnpm dev:web`, `pnpm build:web` scripts.
-  Port design tokens/reset to `styles/`. Hello-world route renders and talks to `/api/projects`. Done = page loads at `/next/`.
+  Run shadcn init (Tailwind v4, OKLCH theme variables, dark/light) and add the base components. Port the design tokens to `styles/`. Hello-world route renders and talks to `/api/projects`. Done = page loads at `/next/`.
 - [ ] **Phase 1 - Data layer + shell.** Typed API client, SSE hook (doc delta refill from previous doc, `html: null` = unchanged,
   active-project claim via `/activate`), zustand stores, router, app chrome (top bar, left rail, right panel frames, floating toolbar skeleton),
-  UI primitives with the Figma-like styling, dark/light theme. Done = project page shows live artboard names + status pill.
+  shadcn components restyled for the Figma-like density, plus our NumberField/ColorField, dark/light theme. Done = project page shows live artboard names + status pill.
 - [ ] **Phase 2 - Home and Comments pages.** Port `home.js` + `comments.js` (cards with live previews, search/sort, trash, import/export,
   all-comments page with filters, deep link `?comment=`). Easiest full pages, proves the data layer. Done = parity with `/` and `/comments`.
 - [ ] **Phase 3 - Canvas engine core.** Port from `public/app.js`: world transform pan/zoom/fit, shadow-DOM frames, `pidIndex`,
@@ -66,7 +72,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 
 ## Rules for every phase
 - Behaviour parity first; restyle only inside the phase that owns that UI. Do not change server contracts without noting it here.
-- Comments explain the *why* (project rule). No literal bracketed Tailwind classes in comments (not using Tailwind anyway).
+- Comments explain the *why* (project rule). Tailwind is now in use: never write a literal Tailwind class containing brackets (arbitrary value or variant) in a comment or any text outside a real className; Tailwind scans all source text and it breaks the build.
 - Test through a scratch server (`PORT=3790 node src/server.mjs`), delete scratch projects afterwards. Never leave them in `data/`.
 - Keep the session short: finish the phase, update this file, commit, then tell the user to start a new session.
 
