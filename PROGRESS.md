@@ -76,10 +76,8 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 Order is a suggestion; the user decides.
 1. **Use it for real** (no code): run Claude Code against the canvas on a real task (Trove), note what is slow, token-hungry or
    wrong, then turn that into issues here. The plan itself said to stop after Phase 3 and do this.
-2. **UI rewrite decision (asked 2026-10-20, answered in chat only)**: possible move of `public/` to React (Vite, or TanStack Start
-   as a plain Vite app: SSR/server functions add little to a local tool). Keep the canvas imperative (shadow roots, transforms,
-   overlays) in one component and use React for panels (layers, design, theme, MCP, comments, home). Keep the Node server and its
-   `/api` + SSE unchanged: the React app is just a new client, ported panel by panel. Not started; needs the user's go.
+2. **React rewrite: APPROVED 2026-10-20, in progress.** Follow `docs/REACT-REWRITE.md` (phases 0-8, one session per phase;
+   React 19 + React Compiler + Vite, Figma/Paper-like UI, canvas stays imperative, server unchanged). Do this before items 4-6.
 3. **Desktop app (later)**: the Go/Wails path from the plan only makes sense if the server is rewritten in Go. Otherwise wrap the
    Node server (Electron or Tauri, or Wails with a Node sidecar). Open question for the user: is the Go rewrite itself a goal?
 4. **Roadmap leftovers** (`docs/ROADMAP.md`): insert toolbar (frame/text/image/component), canvas drag-reorder inside flex parents,
