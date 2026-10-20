@@ -257,6 +257,9 @@ export class CanvasEngine {
     for (const b of this.boards.values()) b.el.querySelector('.dc-label')?.classList.toggle('sel', b.ab.id === id);
   }
 
+  // Read-only copy of the camera (screen = world * k + x/y). The rulers use it; they must not mutate the engine's own object.
+  getView() { return { ...this.view }; }
+
   // Zoom/pan so every artboard on the page is visible.
   fit() {
     const here = this.boardsHere();
