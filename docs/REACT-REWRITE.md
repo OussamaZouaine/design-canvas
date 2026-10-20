@@ -11,7 +11,7 @@ update `PROGRESS.md`, commit. A new session continues from the first unticked ph
   so this replaces the earlier "plain CSS" idea). Theme the shadcn CSS variables with the existing OKLCH palette (shadcn v4 is OKLCH already).
   Use `pnpm dlx shadcn@latest init` / `add` inside `web/`; components are copied into `web/src/components/ui/` and may be edited freely.
   Restyle them to the dense Figma-like look (small type, 28px controls, 1px hairlines) through the theme variables, not per-use overrides.
-  Custom pieces shadcn lacks (scrub NumberField, OKLCH ColorField, layer tree, floating toolbar) are built on the same Radix primitives.
+  Custom pieces shadcn lacks (scrub NumberField, OKLCH ColorField, layer tree, floating toolbar) are built on Base UI primitives (`@base-ui/react`).
   Check current shadcn docs with the context7 tools before init (CLI flags change).
 - **Server unchanged.** `/api`, `/events` (SSE), `/mcp`, `/reply` keep their contracts. The React app is a new client in `web/`.
 - **Canvas stays imperative.** Shadow-DOM frames, transforms, level-of-detail, thumbnails, overlays, rasterizing live in
@@ -79,7 +79,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 ## Phase log
 **Phase 0 (2026-10-20):** `web/` created by hand (Vite 8, React 19.3, TS 7, Tailwind 4, React Compiler via `@rolldown/plugin-babel` +
 `reactCompilerPreset()`; plugin-react 6 has no inline babel option). Compiler verified active (`memo_cache_sentinel` in the build).
-shadcn init ran with `-t vite -b radix -p mira` (compact preset; style `radix-mira`), icons switched to **lucide** (`components.json`).
+shadcn init ran with `-t vite -b base -p mira` (compact preset; style `base-mira`). **Primitives are Base UI (`@base-ui/react`), not Radix** (user choice 2026-10-20); re-running init resets the icon library, so keep `iconLibrary` = **lucide** in `components.json`.
 Server: `/next/*` serves `web/dist` with SPA fallback (`src/server.mjs`). Scripts: `pnpm build:web`, `pnpm dev:web` (Vite on 5173,
 base `/next/`, proxies /api /events /mcp /reply to 3777). Smoke page at `/next/` lists projects: works, no console errors.
 Notes for later phases:
