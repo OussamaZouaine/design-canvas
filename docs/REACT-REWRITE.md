@@ -6,7 +6,7 @@ update `PROGRESS.md`, commit. A new session continues from the first unticked ph
 
 ## Decisions (do not re-ask)
 - **Stack:** React 19.x (latest), Vite 8, `@vitejs/plugin-react` 6 + **React Compiler** (`babel-plugin-react-compiler` 1.x,
-  enabled in the Vite config; no manual `useMemo`/`useCallback`), TypeScript, Zustand for shared state (store is selector-based, works with the
+  enabled in the Vite config; no manual `useMemo`/`useCallback`), TypeScript, Zustand for shared state, **TanStack Router** (code-based, user choice 2026-10-20; not React Router) (store is selector-based, works with the
   compiler). **shadcn/ui + Tailwind CSS v4** for components and styling (added 2026-10-20 at the user's request; shadcn requires Tailwind,
   so this replaces the earlier "plain CSS" idea). Theme the shadcn CSS variables with the existing OKLCH palette (shadcn v4 is OKLCH already).
   Use `pnpm dlx shadcn@latest init` / `add` inside `web/`; components are copied into `web/src/components/ui/` and may be edited freely.
@@ -35,7 +35,7 @@ update `PROGRESS.md`, commit. A new session continues from the first unticked ph
 ## Layout of the new app
 ```
 web/                      Vite app (own package.json or workspace; dev server proxies /api /events /mcp to :3777)
-  src/main.tsx            router: /, /p/:id, /comments
+  src/main.tsx            TanStack router (basepath /next until Phase 8): /, /p/$id, /comments
   src/api/                typed fetch client + SSE hook (one EventSource per project, reconnect) + shared types
   src/store/              zustand: doc, selection, view (pan/zoom), ui (panels, tool), comments, theme
   src/canvas/             imperative engine (port of public/app.js) + <Canvas> wrapper
@@ -51,7 +51,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
   contains compiler runtime `react/compiler-runtime`; add `eslint-plugin-react-hooks` compiler rules). Dev proxy to 3777.
   Server serves `web/dist` at `/next/` (add route + SPA fallback, keep Host allowlist and no-cache). `pnpm dev:web`, `pnpm build:web` scripts.
   Run shadcn init (Tailwind v4, OKLCH theme variables, dark/light) and add the base components. Port the design tokens to `styles/`. Hello-world route renders and talks to `/api/projects`. Done = page loads at `/next/`.
-- [ ] **Phase 1 - Data layer + shell.** Typed API client, SSE hook (doc delta refill from previous doc, `html: null` = unchanged,
+- [x] **Phase 1 - Data layer + shell.** Typed API client, SSE hook (doc delta refill from previous doc, `html: null` = unchanged,
   active-project claim via `/activate`), zustand stores, router, app chrome (top bar, left rail, right panel frames, floating toolbar skeleton),
   shadcn components restyled for the Figma-like density, plus our NumberField/ColorField, dark/light theme. Done = project page shows live artboard names + status pill.
 - [ ] **Phase 2 - Home and Comments pages.** Port `home.js` + `comments.js` (cards with live previews, search/sort, trash, import/export,
@@ -89,3 +89,16 @@ Notes for later phases:
 - shadcn dark mode is the `.dark` class (custom variant in globals.css), not a media query: Phase 1 adds the theme toggle + `localStorage`.
 - Vite dev: open `http://localhost:5173/next/` with the Node server also running on 3777.
 - To test against the built output use a scratch server: `PORT=3790 node src/server.mjs` (shares `data/`, read-only use is fine).
+
+**Phase 1 (2026-10-20):** Data layer + shell done.
+- `web/src/api/`: `types.ts`, `projects.ts` (fetch wrapper; `projectAction`, `canvasAction`, `activateProject`), `useProjectEvents.ts`
+  (one EventSource per project page; claims "active" on load/visibility, not on reconnect).
+- `web/src/store/project.ts` (meta, doc, comments, connection, agentIds; `applyDocDelta` refills `html: null` from the previous doc)
+  and `store/ui.ts` (tool, panel tab, panels, theme persisted in localStorage, dark default).
+- `web/src/shell/Shell.tsx`: TopBar + status pill, LeftPanel (artboard names; real tree in Phase 5), RightPanel tab frames, FloatingToolbar skeleton.
+- `web/src/ui/NumberField.tsx` (drag-label scrub) and `ColorField.tsx` (text is source of truth; hex-to-OKLCH picker deferred to Phase 5).
+- Router is **TanStack Router**, code-based, in `main.tsx` (basepath `/next`). Routes: `/`, `/p/$id`. `/comments` comes in Phase 2.
+- Button restyled: explicit transitions, 0.96 press scale, reduced-motion. Only Button exists from shadcn so far; apply the same to each new one.
+- globals.css: `--ease-*`, `--selection`, `--canvas` vars; removed the prefers-color-scheme block (the app owns the theme).
+- Gotcha: a long-running server on 3777 started before Phase 0 has no `/next/` route; restart it. Verified on a scratch server (3790): 19 live artboards, connected pill.
+

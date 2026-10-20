@@ -7,6 +7,12 @@
 
 /* Colours are OKLCH everywhere (project rule). shadcn init will extend these theme variables. */
 :root {
+  /* Project motion curves (CLAUDE.md). Components reference these instead of retyping the numbers. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --selection: oklch(0.62 0.19 255);
+  --canvas: oklch(0.93 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -30,7 +36,7 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -39,12 +45,6 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.2 0 0);
-    --foreground: oklch(0.95 0 0);
-  }
 }
 body { background: var(--background); color: var(--foreground); }
 
@@ -92,6 +92,7 @@ body { background: var(--background); color: var(--foreground); }
 }
 
 .dark {
+  --canvas: oklch(0.2 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -136,3 +137,7 @@ body { background: var(--background); color: var(--foreground); }
     @apply font-sans;
   }
 }
+/* Dense, Figma-like chrome: 12px base type and tabular numbers so values do not jitter while scrubbing. */
+html, body, #root { height: 100%; }
+body { font-size: 12px; overflow: hidden; }
+.tnum { font-variant-numeric: tabular-nums; }
