@@ -4,18 +4,22 @@ import { cn } from '@/lib/utils';
 interface Props {
   label: string;
   value: number;
+  // Called once per finished edit (typing + Enter/blur, arrow key, or the END of a scrub). Every call is a server
+  // write and an undo step in this app, so it must not fire for each pointer move.
   onChange: (v: number) => void;
   step?: number;
   min?: number;
   max?: number;
   unit?: string;
+  title?: string;
   className?: string;
 }
 
 // Figma-style number input: drag the label sideways to scrub the value, or type into the field.
 // Pointer capture keeps the drag alive when the cursor leaves the label (a common scrub bug otherwise).
-export function NumberField({ label, value, onChange, step = 1, min = -Infinity, max = Infinity, unit, className }: Props) {
+export function NumberField({ label, value, onChange, step = 1, min = -Infinity, max = Infinity, unit, title, className }: Props) {
   const [draft, setDraft] = useState<string | null>(null); // text while typing; null = show the real value
+  const [scrub, setScrub] = useState<number | null>(null); // value while dragging; committed on release
   const drag = useRef<{ startX: number; startValue: number } | null>(null);
 
   const clamp = (v: number) => Math.min(max, Math.max(min, v));
@@ -25,14 +29,14 @@ export function NumberField({ label, value, onChange, step = 1, min = -Infinity,
   const commit = () => {
     if (draft === null) return;
     const n = parseFloat(draft);
-    if (Number.isFinite(n)) onChange(clamp(round(n)));
+    if (Number.isFinite(n) && clamp(round(n)) !== value) onChange(clamp(round(n)));
     setDraft(null);
   };
 
   return (
-    <label className={cn('flex h-7 items-center rounded-md bg-muted/60 text-xs focus-within:ring-2 focus-within:ring-ring/40', className)}>
+    <label title={title} className={cn('flex h-7 items-center rounded-md bg-muted/60 text-xs focus-within:ring-2 focus-within:ring-ring/40', className)}>
       <span
-        className="w-6 shrink-0 cursor-ew-resize select-none text-center text-muted-foreground touch-none"
+        className="min-w-6 shrink-0 cursor-ew-resize px-1.5 select-none text-center text-muted-foreground touch-none"
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
           drag.current = { startX: e.clientX, startValue: value };
@@ -41,15 +45,19 @@ export function NumberField({ label, value, onChange, step = 1, min = -Infinity,
           if (!drag.current) return;
           // Shift = 10x faster, Alt = 10x finer, like Figma.
           const mult = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
-          onChange(clamp(round(drag.current.startValue + (e.clientX - drag.current.startX) * step * mult)));
+          setScrub(clamp(round(drag.current.startValue + (e.clientX - drag.current.startX) * step * mult)));
         }}
-        onPointerUp={() => { drag.current = null; }}
+        onPointerUp={() => {
+          drag.current = null;
+          if (scrub !== null && scrub !== value) onChange(scrub);
+          setScrub(null);
+        }}
       >
         {label}
       </span>
       <input
         className="tnum min-w-0 flex-1 bg-transparent pr-1 outline-none"
-        value={draft ?? String(value)}
+        value={draft ?? String(scrub ?? value)}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {

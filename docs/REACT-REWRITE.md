@@ -62,7 +62,7 @@ web/                      Vite app (own package.json or workspace; dev server pr
 - [x] **Phase 4 - Canvas editing.** Selection, resize handles, drag-move absolute nodes, in-place text edit, copy/paste, undo/redo,
   keyboard shortcuts, artboard create/move, rasterize + `get_screenshot`/`get_computed_styles` replies over `/reply`, `compareToReference`,
   reference drop/paste. Done = screenshots from MCP work against the new app and edits round-trip.
-- [ ] **Phase 5 - Layers + Inspector.** Port `layers.js` (tree, search, rename, hide/lock, drag-move) and `inspector.js` (style fields,
+- [x] **Phase 5 - Layers + Inspector.** Port `layers.js` (tree, search, rename, hide/lock, drag-move) and `inspector.js` (style fields,
   token suggestions) as React panels with the Figma-style sections and scrub number fields, colour field (OKLCH), per-side padding.
 - [ ] **Phase 6 - Side panels.** Comments (pins, popovers, threads, comment mode) + Activity, Versions, Theme (modes), Tokens, MCP tabs.
 - [ ] **Phase 7 - Figma/Paper polish.** Floating toolbar tools wired (frame, text, image, comment, hand), context menus, rulers/size label,
@@ -205,3 +205,17 @@ Test plan: unit-test the index walk + pickable rule with a fake index (pure func
   persisted correctly; MCP `get_screenshot` (args `artboard_id`) and `get_computed_styles` (`node_ids`, `props`) answered by the new app.
   NOT clicked through: `compare_to_reference` (code is a straight port), reference drop/paste, label drag of boards, Layers-driven selection.
 - Testing tip: the browser pane's screenshot frame is scaled vs `innerWidth`; compute click coordinates from `getBoundingClientRect() * 800 / innerWidth`.
+
+**Phase 5 (2026-10-21):** Layers + Inspector ported as React panels (left drawer, Design tab).
+- `lib/htmlTree.ts`: `treeOf` (cached DOMParser tree per artboard), `kindOf/labelOf/snippetOf`, `findNode`, `ancestorsOf`, `parseStyle` and
+  `sendEdit(projectId, action, body)` (marks a user edit, posts, turns server refusals into toasts). Panels read HTML, never the live shadow DOM.
+- `panels/LayersPanel.tsx`: tree, search (flat innermost matches), inline rename (dblclick), hide/lock toggles, HTML5 drag reorder (before/inside/after),
+  400-row cap, only boards of the visible page. A canvas selection opens its ancestors (state adjusted during render, no effect). Engine gained `boardOf(id)`.
+- `panels/InspectorPanel.tsx`: page / artboard / node inspectors, collapsible sections, data-driven field list (`SECTIONS`), token datalists per family with
+  detach chip, per-side padding (writes the shorthand), "Other styles" raw rows, locked nodes dimmed. Fields are keyed by their value so outside changes reset drafts.
+- `NumberField` now commits ONCE per edit (scrub commits on release) because every commit is a server write + undo step. `ColorField` has a native picker
+  whose hex result is converted to OKLCH (`lib/color.ts`), a datalist and a swatch preview for `var()` tokens. `store/canvas.ts` got `mode` (theme mode being viewed; Phase 6 UI sets it).
+- Verified on a scratch server (3790, project purged): select on canvas expands the tree, W edit, artboard resize, rename, hide, lock, padding side, drag reorder, search.
+  A locked node refuses a move and the server message shows as a toast. NOT clicked through: colour picker, token detach chip, scrub drag, page background field.
+- Note: the server's normalization (on for new projects) adds `display` to some nodes on write; that is not the inspector.
+

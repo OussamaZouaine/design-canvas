@@ -11,6 +11,9 @@ interface CanvasState {
   live: { id: string; name: string } | null;
   activePage: string | null;
   follow: boolean;
+  // Theme mode being previewed ('base' or a named mode). A view setting, not document data; the Theme tab (Phase 6) sets it.
+  mode: string;
+  setMode: (m: string) => void;
   setEngine: (e: CanvasEngine | null) => void;
   setZoom: (k: number) => void;
   setSelected: (id: string | null) => void;
@@ -21,13 +24,15 @@ interface CanvasState {
 
 const initialFollow = (() => { try { return localStorage.getItem('dc-follow') !== '0'; } catch { return true; } })();
 
-export const useCanvas = create<CanvasState>((set) => ({
+export const useCanvas = create<CanvasState>((set, get) => ({
   engine: null,
   zoom: 0.5,
   selected: null,
   live: null,
   activePage: null,
   follow: initialFollow,
+  mode: 'base',
+  setMode: (mode) => { get().engine?.setThemeMode(mode); set({ mode }); },
   setEngine: (engine) => set({ engine }),
   setZoom: (zoom) => set({ zoom }),
   setSelected: (selected) => set({ selected }),
