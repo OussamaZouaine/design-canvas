@@ -1,6 +1,6 @@
 # Plan: make Claude's designs on Design Canvas good and never clipped
 
-Status: research done 2026-10-21. Phases A (stop clipping) and C (taste guide) implemented 2026-10-21, see their sections; B, D, E, F not started. One phase per session.
+Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide) and D (skill) implemented 2026-10-21, see their sections; B, E, F not started. One phase per session.
 Goal: (1) generations stay inside their frame, (2) generations have taste, (3) both hold for any agent, not only Claude Code.
 
 ## 1. Research: how Paper connects an agent to its canvas
@@ -105,7 +105,11 @@ Original list:
    `brief` field stored in project meta and shown in the Activity tab (this also gives later sessions the intent).
 4. Snippet library tool/topic: iOS status bar, device sizes (390x844 phone, 768x1024 tablet, 1440x900 desktop), nav bars.
 
-### Phase D: Skills (for Claude Code users)
+### Phase D: Skills (for Claude Code users) - DONE 2026-10-21
+Built: `skills/design-canvas/SKILL.md` rewritten: step 0 loads `get_guide`, mandatory brief, per-group review with a one-line verdict
+per checkpoint, fit-never-rebuild, and a short optional list of the user's other skills (the MCP guide stays self-sufficient).
+Not built: the optional read-only `design-review` skill (do it with Phase F if wanted).
+Original list:
 1. Rewrite `skills/design-canvas/SKILL.md`: step 0 "load the taste guide", mandatory brief, review checkpoints with a one-line verdict
    per section, "fix with targeted edits, never rebuild a board for an overflow".
 2. Point it at skills the user already has: `frontend-design` (aesthetic direction), `emil-design-eng` / `make-interfaces-feel-better`
