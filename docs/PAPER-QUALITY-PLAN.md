@@ -1,6 +1,6 @@
 # Plan: make Claude's designs on Design Canvas good and never clipped
 
-Status: research done 2026-10-21. Phase A (stop clipping) implemented 2026-10-21, see its section; B-F not started. One phase per session.
+Status: research done 2026-10-21. Phases A (stop clipping) and C (taste guide) implemented 2026-10-21, see their sections; B, D, E, F not started. One phase per session.
 Goal: (1) generations stay inside their frame, (2) generations have taste, (3) both hold for any agent, not only Claude Code.
 
 ## 1. Research: how Paper connects an agent to its canvas
@@ -91,7 +91,12 @@ Original list:
    absolute element covering the whole board.
 3. Return structured feedback like Paper: `affectedParents` on move_node, id maps on duplicate_nodes.
 
-### Phase C: Taste guide served by the MCP (works for every agent)
+### Phase C: Taste guide served by the MCP (works for every agent) - DONE 2026-10-21
+Built: `src/guide.mjs` (topics `start`, `brief`, `type`, `layout`, `review`, `mobile`; `get_guide({topic})`), server `instructions` gate,
+`log_prompt.brief` stored in `meta.brief` + shown in the Activity tab ("Design brief"), soft `reminder` on `create_artboard` when no
+brief is recorded, tests in `test/guide.test.mjs`. Not built: a separate snippet tool (the `mobile` topic carries the status bar /
+device sizes as text instead). Needs a Claude Code restart to see the new `get_guide` / `log_prompt` schemas.
+Original list:
 1. New `get_guide` topics: `brief` (mood method, palette from scene objects, pairings and anti-pairings, neutrals), `type` (scale,
    contrast of weights, tracking), `layout` (flex dialect, fit height, slots), `review` (the checkpoint list), `mobile` (status bar snippet).
    All in OKLCH to match project rules. Original wording, adapted from the ideas above.

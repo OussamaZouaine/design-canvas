@@ -22,6 +22,8 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
 - `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there.
 - `src/store.mjs` `ProjectStore`: projects, snapshots (versions), activity log, comments, active project.
 - `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
+- `src/guide.mjs` the design guide served by `get_guide({topic})` (start, brief, type, layout, review, mobile). The process and taste rules
+  live here so any MCP client gets them; the skill only points at it. `log_prompt.brief` is stored in `meta.brief`.
 - `src/normalize.mjs` opt-in HTML normalization on write (`meta.normalize`: on for new projects, off for Sprig and imports).
 - `src/lint.mjs` static lint (`lint` tool; spacing grid 4 by default, use `grid: 2` for Sprig); `src/export.mjs` React+Tailwind export; `src/meter.mjs` per-tool token estimates
   (`/api/status`). `test/` holds `node:test` tests: run `pnpm test` before committing.
