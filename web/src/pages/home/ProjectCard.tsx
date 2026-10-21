@@ -67,8 +67,10 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
     <div className="truncate text-sm font-medium">{p.name}</div>
   ) : (
     // Stretched-link pattern: the ::after covers the whole card so it is all clickable, while the menu button
-    // (z-10) sits above it. Avoids nesting a button inside an anchor.
-    <Link to="/p/$id" params={{ id: p.id }} className="block truncate text-sm font-medium after:absolute after:inset-0 after:content-['']">
+    // (z-10) sits above it. Avoids nesting a button inside an anchor. The overlay needs z-[1]: the preview wrapper
+    // below is `relative` and comes later in the DOM, so without an explicit z-index it would paint over the overlay
+    // and swallow clicks on the thumbnail.
+    <Link to="/p/$id" params={{ id: p.id }} className="block truncate text-sm font-medium after:absolute after:inset-0 after:z-[1] after:content-['']">
       {p.name}
     </Link>
   );
