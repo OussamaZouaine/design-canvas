@@ -7,10 +7,11 @@
 //   .dc-overlay    selection / hover / "Claude is working here" boxes, in screen pixels (never scaled)
 import { canvasAction } from '@/api/projects';
 import { toast } from '@/store/toast';
-import type { Artboard, DocData, Page } from '@/api/types';
+import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
+import { fontsSignature, setProjectFonts } from './fonts';
 import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
 
@@ -235,7 +236,7 @@ export class CanvasEngine {
   // A zoomed-out board is a bitmap, so there is no element under the cursor. We hit-test the board's
   // measured rect index instead (rects.ts). Live boards keep using the real DOM, which is exact.
   private boardIndex(b: Board): RectEntry[] {
-    const key = (b.html ?? '') + '\u0000' + this.themeDecls();
+    const key = (b.html ?? '') + '\u0000' + this.themeDecls() + '\u0000' + fontsSignature(); // a web font changes line breaks
     if (!b.index || b.indexKey !== key) {
       b.index = measureBoard(b.html ?? '', b.ab.width, b.ab.height, this.themeDecls(), b.ab.heightMode === 'fit');
       b.indexKey = key;
@@ -551,7 +552,8 @@ export class CanvasEngine {
   }
 
   private wantThumb(b: Board) {
-    b.hash ??= hashStr((b.html ?? '') + this.themeDecls());
+    // The font set is part of the key: a snapshot drawn with the fallback font must not be reused once the real one exists.
+    b.hash ??= hashStr((b.html ?? '') + this.themeDecls() + fontsSignature());
     const key = `${this.projectId}:${b.ab.id}:${b.hash}`;
     if (b.thumbKey === key) return;
     this.thumbQueue.set(b.ab.id, key);
@@ -603,6 +605,16 @@ export class CanvasEngine {
     b.thumbReady = true;
     b.el.classList.add('has-thumb');
     this.updateVisibility(); // a board that was kept live while waiting can now switch to its snapshot
+  }
+
+  // The project's Google Fonts changed (use_font, or first load): install them for the live boards and redraw
+  // every snapshot, since the old bitmaps were drawn with the fallback font.
+  setFonts(fonts: ProjectFont[] | undefined) {
+    if (!setProjectFonts(fonts)) return;
+    for (const b of this.boards.values()) {
+      b.hash = null;
+      this.scheduleThumb(b);
+    }
   }
 
   // Push the current tokens into every mounted board and redraw snapshots made with old values.

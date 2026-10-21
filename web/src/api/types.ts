@@ -21,6 +21,14 @@ export interface ProjectMeta {
   updatedAt: number;
   deletedAt: number | null;
   normalize?: boolean;
+  fonts?: ProjectFont[];
+}
+
+// A Google Font the server downloaded for this project (see src/fonts.mjs).
+export interface ProjectFont {
+  family: string;
+  slug: string;
+  faces: { weight: number; style: 'normal' | 'italic'; file: string }[];
 }
 
 export interface Artboard {

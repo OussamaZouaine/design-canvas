@@ -3,6 +3,7 @@
 // rasterizeCanvas for the get_screenshot / compare_to_reference replies.
 import type { Artboard } from '@/api/types';
 import { BOARD_CSS, boardRoot } from './contract';
+import { embeddedFontCss } from './fonts';
 
 // FNV-1a: a fast non-cryptographic hash, good enough as a cache key for "did this HTML change".
 export const hashStr = (str: string) => {
@@ -77,11 +78,13 @@ export async function rasterizeCanvas(
     return canvas;
   }
 
+  // The SVG cannot fetch anything, so the faces this board uses travel inside it as data: URIs.
+  const fontCss = await embeddedFontCss(ab.html);
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   // HTML -> well-formed XML (SVG requires it), minus the holder div. The hidden rule is added AFTER
   // stripping because the strip regex anchors on the holder's opening tag at the very start.
-  const xhtml = `<style>${BOARD_CSS}</style>`
+  const xhtml = `<style>${fontCss}${BOARD_CSS}</style>`
     + boardRoot(ab.heightMode === 'fit', new XMLSerializer().serializeToString(holder).replace(/^<div[^>]*>|<\/div>$/g, ''));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls.replace(/"/g, '&quot;')}">${xhtml}</div></foreignObject></svg>`;
   const img = new Image();

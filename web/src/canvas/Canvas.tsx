@@ -13,6 +13,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const host = useRef<HTMLDivElement>(null);
   const engine = useCanvas((s) => s.engine);
   const doc = useProject((s) => s.doc);
+  const fonts = useProject((s) => s.meta?.fonts);
   const agentIds = useProject((s) => s.agentIds);
   const tool = useUi((s) => s.tool);
 
@@ -42,6 +43,8 @@ export function Canvas({ projectId }: { projectId: string }) {
 
   // Every new doc goes straight into the engine, which diffs it against what is on screen.
   useEffect(() => { if (engine && doc) engine.setDoc(doc); }, [engine, doc]);
+  // Google Fonts live in project meta (not in the doc); the engine installs them and redraws snapshots.
+  useEffect(() => { engine?.setFonts(fonts); }, [engine, fonts]);
   useEffect(() => { engine?.setAgentIds(agentIds); }, [engine, agentIds]);
   useEffect(() => { engine?.setTool(tool); }, [engine, tool]);
 

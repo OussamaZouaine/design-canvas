@@ -5,6 +5,7 @@ import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
 import { rasterizeCanvas, type Crop } from './raster';
 import { measureLayout } from './rects';
+import { fontsReady } from './fonts';
 
 export interface ReplyHost {
   projectId: string;
@@ -57,7 +58,8 @@ export function computedStyles(host: ReplyHost, nodeIds: string[], props: string
 // Layout check for check_layout / the write results. The server sends each board's html, so the answer
 // never depends on this tab having received the latest doc yet (SSE delivery order is not guaranteed
 // relative to the request). Measuring mounts hidden DOM, so boards that are only snapshots work too.
-export function measure(host: ReplyHost, boards: { id: string; html: string; width: number; height: number; fit: boolean }[]) {
+export async function measure(host: ReplyHost, boards: { id: string; html: string; width: number; height: number; fit: boolean }[]) {
+  await fontsReady(); // a web font changes line breaks, so measuring with the fallback would report the wrong height
   return boards.map((b) => measureLayout(b, host.themeDecls()));
 }
 
