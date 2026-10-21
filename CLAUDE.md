@@ -71,6 +71,10 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
   rename / flags / move-node actions. Edits the user makes there call `markUserEdit()` so the canvas does not play the
   "Claude is designing" reveal and camera follow for them. `hidden` works because the shadow root and screenshot wrapper
   add a `[hidden]` display:none rule (an inline display:flex would otherwise win).
+- **Board contract + fit height (Phase A):** every board is wrapped in `[data-board-root]` (flex column, border-box) from one definition,
+  `web/src/canvas/contract.ts` (server copy `src/contract.mjs`; a test keeps them equal). Boards with `heightMode: 'fit'` treat `height`
+  as a minimum: the browser measures real layout (`measureLayout` in `rects.ts`, over SSE `measure`), `src/layout.mjs` formats the
+  report and grows the board. Tools: `check_layout`, `fit_artboard`; `finish_working` gates on it. New MCP boards default to fit.
 - **Doc history:** `Doc` keeps an in-memory undo stack (50 steps, not saved to disk) and a change journal (`record`,
   `changesSince`) that backs `get_changes`. Nodes with `data-locked` refuse edits. `write_html` expands `<x-clone node-id>`.
 - **Browser round-trips:** screenshots and `get_computed_styles` need real layout, so the server asks an open tab over SSE
