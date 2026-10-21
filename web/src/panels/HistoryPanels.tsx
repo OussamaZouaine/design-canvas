@@ -8,6 +8,7 @@ import { toast } from '@/store/toast';
 interface Run {
   t: number;
   prompt?: string;
+  brief?: string;
   actions: { tool: string; count: number; artboards: string[] }[];
   restorable?: boolean;
   snapshotId?: string;
@@ -40,6 +41,13 @@ export function ActivityPanel({ projectId }: { projectId: string }) {
           <div className="min-w-0 flex-1">
             {/* Prompts are untrusted text: React escapes them. */}
             <div className="line-clamp-3 break-words font-medium">{r.prompt ? `“${r.prompt}”` : 'Edits'}</div>
+            {/* The design brief Claude posted for a new design; also untrusted text, so no HTML. */}
+            {r.brief && (
+              <details className="mt-1 text-xs text-muted-foreground">
+                <summary className="cursor-pointer">Design brief</summary>
+                <p className="mt-1 whitespace-pre-wrap break-words">{r.brief}</p>
+              </details>
+            )}
             <small className="text-muted-foreground">{ago(r.t)}</small>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {r.actions.map((a, j) => (
