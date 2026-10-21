@@ -149,8 +149,10 @@ Built: `examples/evals/` (`briefs.json` with the 6 briefs, `run.mjs`), `src/eval
 diffs the server token meter, saves `examples/evals/results/<label>.json` (gitignored); `report <a> <b>` prints the comparison table.
 Token follow-up (2026-10-21): the first run (`after-a-c-d-b`, $0.29-0.38 and 16-26 turns per brief) showed turns, not tool results, drive cost.
 So `get_guide()` now returns the whole method in one call (was 3 calls), server `instructions` and the skill tell agents to batch independent
-calls and skip `get_basic_info` / `get_tree` / `get_comments` in a new project, and `run.mjs` saves real CLI token usage. NOT re-run yet:
-run `node examples/evals/run.mjs run turns-cut` and `report after-a-c-d-b turns-cut` to see the effect. Not done: schema trimming (~8.2k tokens/turn).
+calls and skip `get_basic_info` / `get_tree` / `get_comments` in a new project, and `run.mjs` saves real CLI token usage. First `turns-cut` run showed
+no saving (avg 23 turns / $0.39 vs 22 / $0.34): the runner pre-created the project so agents still read it, and the font tools
+(Phase E) added calls. The eval prompt now says the project is new and empty, and `--repeat n` averages runs per brief. NOT re-run yet:
+`node examples/evals/run.mjs run turns-cut2 --repeat 2`, then `report after-a-c-d-b turns-cut turns-cut2`. Not done: schema trimming (~8.2k tokens/turn).
 Not done: the actual before/after runs (needs the real server + a browser + paid Claude runs, user to start them), and no way to
 check out the pre-Phase-A code automatically, so "before" is only possible by running on an old commit.
 Original plan:
