@@ -13,6 +13,7 @@ import { createMcpServer } from './mcp.mjs';
 import { Meter } from './meter.mjs';
 import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
+import { FontCache } from './fonts.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -109,7 +110,10 @@ function highlight(projectId, ids) {
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
-const mcpDeps = { store, ui, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port: PORT };
+// Google Fonts the server downloaded (use_font). Shared by all projects, so a family is fetched once.
+const fonts = new FontCache(path.join(ROOT, 'data', 'fonts'));
+
+const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -289,6 +293,16 @@ const server = http.createServer(async (req, res) => {
       // Server health for the MCP panel: open tabs and where Claude's tokens go.
       if (parts[1] === 'status' && req.method === 'GET') {
         return json(res, 200, { ok: true, tabs: [...ui.clients].filter((c) => c.projectId).length, meter: meter.snapshot() });
+      }
+
+      // Downloaded font files: /api/fonts/<slug>/<style>-<weight>.woff2. FontCache.file only accepts strict
+      // name patterns, so this cannot reach outside data/fonts. A file never changes once written: cache hard.
+      if (parts[1] === 'fonts' && parts.length === 4 && req.method === 'GET') {
+        const f = fonts.file(parts[2], parts[3]);
+        if (!f) return json(res, 404, { error: 'Font not found' });
+        res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+        fs.createReadStream(f).pipe(res);
+        return;
       }
 
       // Every comment in every non-trashed project, newest activity first (powers /comments).
