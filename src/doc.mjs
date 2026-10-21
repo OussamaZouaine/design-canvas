@@ -239,6 +239,13 @@ export class Doc {
     return this.getArtboard(id) ?? this._find(id)?.ab ?? null;
   }
 
+  // The id of a node's parent: another node's id, or the artboard id when the node is a top-level child.
+  parentOf(id) {
+    const hit = this._find(id);
+    if (!hit) return null;
+    return hit.el.parentNode?.getAttribute?.('data-pid') ?? hit.ab.id;
+  }
+
   // ---- Queries ------------------------------------------------------------
 
   getArtboard(id) {
@@ -739,27 +746,40 @@ export class Doc {
     this._commit();
   }
 
-  duplicateNodes(ids) {
+  // Returns the new top-level ids. With { withMap: true } returns { created, idMap } where idMap maps every
+  // original id (node and descendants) to its copy's id, so the copy can be edited without another get_tree.
+  duplicateNodes(ids, { withMap = false } = {}) {
     this._checkpoint('duplicate_nodes');
     const out = [];
+    const idMap = {};
+    // A copy has the same structure, so the n-th id in document order of the original pairs with the n-th of the copy.
+    const pidsIn = (html) => parse(html).querySelectorAll('[data-pid]').map((n) => n.getAttribute('data-pid'));
+    const pair = (fromHtml, toHtml) => {
+      const a = pidsIn(fromHtml);
+      const b = pidsIn(toHtml);
+      a.forEach((id, i) => { if (b[i]) idMap[id] = b[i]; });
+    };
     for (const id of ids) {
       const ab = this.getArtboard(id);
       if (ab) {
         const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, heightMode: ab.heightMode, page: this.pageOf(ab) });
         // Strip old ids from the copy so _prepare mints fresh ones.
         copy.html = this._prepare(ab.html.replace(/ data-pid="[^"]*"/g, '')).toString();
+        pair(ab.html, copy.html);
+        idMap[ab.id] = copy.id;
         out.push(copy.id);
         continue;
       }
       const hit = this._find(id);
       if (!hit) throw new Error(`Node ${id} not found`);
       const clone = this._prepare(hit.el.toString().replace(/ data-pid="[^"]*"/g, ''));
+      pair(hit.el.toString(), clone.toString());
       hit.el.insertAdjacentHTML('afterend', clone.toString());
       this._save(hit.ab, hit.root);
       out.push(...this._topLevelIds(clone));
     }
     this._commit();
-    return out;
+    return withMap ? { created: out, idMap } : out;
   }
 
   // Move a node next to or inside another node, keeping its ids. position: before | after (siblings
