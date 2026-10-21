@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { answer, compareToReference, computedStyles, screenshot, type ReplyHost } from '@/canvas/replies';
+import { answer, compareToReference, computedStyles, measure, screenshot, type ReplyHost } from '@/canvas/replies';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { activateProject } from './projects';
@@ -34,6 +34,7 @@ export function useProjectEvents(projectId: string) {
     };
     es.addEventListener('screenshot', (e) => ask(e, 'screenshot', (h, d) => screenshot(h, d.artboardId, d)));
     es.addEventListener('computed', (e) => ask(e, 'reply', (h, d) => computedStyles(h, d.nodeIds, d.props)));
+    es.addEventListener('measure', (e) => ask(e, 'reply', (h, d) => measure(h, d.boards)));
     es.addEventListener('compare', (e) => ask(e, 'reply', (h, d) => compareToReference(h, d.artboardId, d.refId)));
 
     // Claim "active project" when the tab loads or becomes visible, NOT on SSE reconnect, so a stale
