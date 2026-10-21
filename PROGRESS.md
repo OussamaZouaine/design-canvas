@@ -32,6 +32,12 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 14. `/comments` page: all comments across projects with status tabs, filters, replies, resolve/reopen/delete,
     deep link `/p/<id>?comment=<id>`; open-comment badge on the home header.
 
+## Home page redesign (2026-10-21)
+Home is now Paper-style: left sidebar (`web/src/pages/home/HomeSidebar.tsx`: workspace row, search, Recents / Trash / Comments / Import,
+connection pill + theme toggle in the footer) and a main area with a "Recents"/"Trash" heading, sort select, New project button and a
+grid/list toggle (remembered in localStorage `dc-home-view`). `ProjectCard` shows title + "Edited N ago" above the preview; `CoverThumb`
+takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet checked with real covers on a populated project.
+
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not
