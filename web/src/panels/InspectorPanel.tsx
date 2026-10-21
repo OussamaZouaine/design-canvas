@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { ColorField } from '@/ui/ColorField';
+import { FontField } from '@/ui/FontField';
 import { NumberField } from '@/ui/NumberField';
 
 // Every field maps one-to-one onto an inline CSS property, so an edit is just "set this property".
@@ -204,6 +205,8 @@ export function InspectorPanel({ projectId }: { projectId: string }) {
     <>
       {FAMILIES.map((fam) => (
         <datalist key={fam} id={`dl-${fam}`}>
+          {/* An input takes one list, so the plain numeric weights are offered next to any weight tokens. */}
+          {fam === 'weight' && [100, 200, 300, 400, 500, 600, 700, 800, 900].map((w) => <option key={w} value={w} />)}
           {Object.keys(tokens).filter((k) => k.split('-')[0] === fam).map((k) => <option key={k} value={`var(--${k})`}>{tokens[k]}</option>)}
         </datalist>
       ))}
@@ -219,6 +222,16 @@ export function InspectorPanel({ projectId }: { projectId: string }) {
   return <NodeInspector projectId={projectId} id={selected} el={hit.el} lists={lists} tokens={tokens} />;
 }
 
+// The font-family in effect for a node: its own inline value, else the nearest ancestor's (CSS inherits it),
+// with a var(--token) swapped for the token's stack so the picker can name and draw the real family.
+function effectiveFamily(el: HTMLElement, tokens: Record<string, string>): { own: string; resolved: string } {
+  const own = parseStyle(el.getAttribute('style') ?? '').get('font-family') ?? '';
+  let raw = own;
+  for (let n: HTMLElement | null = el.parentElement; !raw && n; n = n.parentElement) raw = parseStyle(n.getAttribute('style') ?? '').get('font-family') ?? '';
+  const tok = tokenName(raw);
+  return { own, resolved: tok && tok in tokens ? tokens[tok] : raw };
+}
+
 function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string; id: string; el: HTMLElement; lists: ReactNode; tokens: Record<string, string> }) {
   const style = parseStyle(el.getAttribute('style') ?? '');
   // A locked node (or one inside a locked parent) refuses edits server-side; dim the controls and say why.
@@ -226,6 +239,8 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
   const set = (prop: string, value: string) => sendEdit(projectId, 'style', { ids: [id], styles: { [prop]: value.trim() || null } });
   const valueOf = (f: Field) => style.get(f.prop) ?? (f.prop === 'background' ? style.get('background-color') : undefined) ?? '';
   const other = [...style].filter(([k]) => !HANDLED.has(k));
+  const projectFonts = useProject((s) => s.meta?.fonts) ?? [];
+  const family = effectiveFamily(el, tokens);
 
   const control = (f: Field) => {
     const value = valueOf(f);
@@ -234,7 +249,15 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
     const name = tokenName(value);
     const list = f.family ? `dl-${f.family}` : undefined;
     let body: ReactNode;
-    if (f.kind === 'select') {
+    if (f.prop === 'font-family') {
+      // Picker (name drawn in its own face) over a raw-stack field: the stack stays editable for fallbacks and tokens.
+      body = (
+        <div key={key} className="flex flex-col gap-1.5">
+          <FontField value={value} resolved={family.resolved} projectFonts={projectFonts} onChange={(v) => set('font-family', v)} />
+          <TextField label="Stack" title="font-family" value={value} list={list} onCommit={(v) => set('font-family', v)} />
+        </div>
+      );
+    } else if (f.kind === 'select') {
       body = <SelectField key={key} label={f.label} value={value} options={f.options!} onCommit={(v) => set(f.prop, v)} />;
     } else if (f.kind === 'color') {
       const resolved = name && name in tokens ? tokens[name] : value;
