@@ -76,6 +76,7 @@ export class ProjectStore {
     const doc = new Doc(path.join(this._dir(id), 'doc.json'));
     // Read live from meta so toggling the option takes effect without reloading the doc.
     doc.normalize = () => !!this.metas.get(id)?.normalize;
+    doc.fonts = () => this.metas.get(id)?.fonts ?? [];
     doc.onChange((data) => {
       const meta = this.metas.get(id);
       if (!meta) return;
@@ -163,6 +164,17 @@ export class ProjectStore {
     this._emit('meta', { id, meta });
     this._emit('projects');
     return meta;
+  }
+
+  // Record a Google Font on the project (meta.fonts). Re-adding a family replaces its entry, so asking for
+  // more weights later just widens it. The browser gets the change through the normal `meta` event.
+  addFont(id, font) {
+    const meta = this._meta(id);
+    meta.fonts = [...(meta.fonts ?? []).filter((f) => f.family !== font.family), font];
+    meta.updatedAt = Date.now();
+    this._saveMeta(id);
+    this._emit('meta', { id, meta });
+    return meta.fonts;
   }
 
   setActive(id) {

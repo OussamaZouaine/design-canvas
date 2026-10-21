@@ -66,7 +66,8 @@ export const STARTER = {
     'color-bg': 'oklch(0.99 0.003 90)', 'color-surface': 'oklch(1 0 0)', 'color-fg': 'oklch(0.22 0.01 270)',
     'color-muted': 'oklch(0.5 0.01 270)', 'color-border': 'oklch(0.9 0.005 270)',
     'color-primary': 'oklch(0.55 0.2 275)', 'color-on-primary': 'oklch(1 0 0)', 'color-danger': 'oklch(0.52 0.19 25)',
-    'font-sans': 'Inter, system-ui, sans-serif',
+    // A system stack: naming a font that is not loaded (use_font) would silently fall back. Swap it after use_font.
+    'font-sans': 'system-ui, -apple-system, "Segoe UI", sans-serif',
     'size-sm': '13px', 'size-base': '15px', 'size-lg': '18px', 'size-xl': '24px', 'size-2xl': '32px',
     'weight-regular': '400', 'weight-medium': '500', 'weight-bold': '600',
     'leading-tight': '1.25', 'leading-normal': '1.5',
