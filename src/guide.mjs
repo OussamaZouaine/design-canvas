@@ -4,20 +4,20 @@
 // All colours are OKLCH to match the project rules. Wording is our own; the ideas (mood from a scene,
 // restraint, a review loop) are common design practice.
 
-const START = `Design Canvas workflow:
+const WORKFLOW = `Design Canvas workflow (this one call also contains the brief, type, layout and review rules below, so you do not need to fetch them separately; only "mobile" is on demand). Every turn re-reads the whole conversation, so use few turns: send independent tool calls together in ONE turn (for example log_prompt + create_artboard, or several write_html calls for different boards).
 0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
 0b. LOG THE REQUEST + BRIEF. At the start of every new user request, call log_prompt with the request in the user's own words (one short sentence). For a NEW design also pass brief (mood, palette, type, direction: see get_guide topic "brief") and post the same brief in chat before the first write. It is stored with the project so later sessions know the intent.
-1. get_basic_info to see the project's artboards; get_tree for a compact outline (use query to find a node by name or text).
+1. In an EXISTING project, get_basic_info to see its artboards and get_tree for an outline (query finds a node by name or text). In a project you just created there is nothing to read: skip both and go straight to create_artboard.
 2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call, and review it (topic "review") before the next.
 3. Style with inline style attributes only. No <script>, <link> or event handlers: they are stripped. Layout rules: topic "layout".
 4. Every element gets a stable id (data-pid). Use get_tree to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
 5. LAYOUT: boards default to height_mode fit (height is a minimum, the board grows with its content). write_html / update_styles add a "layout" line to their result when something does not fit; check_layout measures real boxes on demand; fit_artboard fixes a clipped board in one call. Never delete and rebuild a board for an overflow. finish_working refuses to finish while content is clipped.
 5b. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...).
-Feedback: the user can pin comments on elements. Call get_comments at the start of a task and after finishing; fix what open comments ask, then reply_comment and resolve_comment.
+Feedback: the user can pin comments on elements. In an existing project call get_comments at the start of a task; fix what open comments ask, then reply_comment and resolve_comment. A project you just created has none, so skip it.
 Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
 Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.
-More topics: brief, type, layout, review, mobile.`;
+On demand: topic "mobile".`;
 
 const BRIEF = `Brief (do this before the first write_html of a new design; post it in chat, then pass it as log_prompt.brief):
 1. Mood. List three candidate moods, then pick one that is NOT your first instinct. A mood is a place or material ("quiet pharmacy at 7am", "oxidised copper roof"), not an adjective like "modern and clean".
@@ -69,6 +69,9 @@ const MOBILE = `Mobile screens:
 - Touch targets 44px minimum; body text 16-17px; side padding 16-20px.
 - Lists: fixed-width leading slot (40-44px) and trailing slot so rows align.`;
 
+// `start` is the whole method in one call: each get_guide call costs a full agent turn, and the evals showed
+// agents spending three of them reading brief / type / layout one by one. The single topics stay for lookups.
+const START = [WORKFLOW, BRIEF, TYPE, LAYOUT, REVIEW].join('\n\n');
 export const TOPICS = { start: START, brief: BRIEF, type: TYPE, layout: LAYOUT, review: REVIEW, mobile: MOBILE };
 
 // Unknown topics return the topic list instead of an error, so an agent can recover in one call.

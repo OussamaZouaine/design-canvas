@@ -79,7 +79,11 @@ async function run(label, only, open) {
     const quality = await api(`/api/p/${projectId}/eval`);
     const r = {
       id: brief.id, projectId, seconds,
-      turns: agent.num_turns ?? null, costUsd: agent.total_cost_usd ?? null, agentError: agent.is_error || agent.error || null,
+      turns: agent.num_turns ?? null,
+      // Real token use from the CLI (the server meter only sees tool results, not the HTML the agent writes or the context it re-reads).
+      inputTokens: agent.usage?.input_tokens ?? null, outputTokens: agent.usage?.output_tokens ?? null,
+      cacheReadTokens: agent.usage?.cache_read_input_tokens ?? null, cacheWriteTokens: agent.usage?.cache_creation_input_tokens ?? null,
+      costUsd: agent.total_cost_usd ?? null, agentError: agent.is_error || agent.error || null,
       ...meterDelta(before, after), ...quality,
     };
     results.push(r);
@@ -93,7 +97,7 @@ async function run(label, only, open) {
 // One row per brief, one column group per saved run, for the before / after comparison.
 function report(labels) {
   const runs = labels.map((l) => JSON.parse(fs.readFileSync(path.join(RESULTS, `${l}.json`), 'utf8')));
-  const cols = [['overflowBoards', 'overflow'], ['overflowNodes', 'nodes'], ['lintIssues', 'lint'], ['screenshots', 'shots'], ['fixRounds', 'fixes'], ['toolTokens', 'tokens'], ['brief', 'brief']];
+  const cols = [['turns', 'turns'], ['costUsd', 'usd'], ['outputTokens', 'out'], ['cacheReadTokens', 'cache-read'], ['overflowBoards', 'overflow'], ['overflowNodes', 'nodes'], ['lintIssues', 'lint'], ['screenshots', 'shots'], ['fixRounds', 'fixes'], ['toolTokens', 'tokens'], ['brief', 'brief']];
   const ids = [...new Set(runs.flatMap((r) => r.results.map((x) => x.id)))];
   const lines = [`| brief | run | ${cols.map((c) => c[1]).join(' | ')} |`, `|${'---|'.repeat(cols.length + 2)}`];
   for (const id of ids) {

@@ -145,6 +145,10 @@ Built: `examples/evals/` (`briefs.json` with the 6 briefs, `run.mjs`), `src/eval
 (boards, lint totals, still-overflowing boards/nodes, whether a brief was recorded), tests in `test/evalmetrics.test.mjs`.
 `node examples/evals/run.mjs run <label>` makes one project per brief, opens a tab on it (needed for measuring), runs `claude -p`,
 diffs the server token meter, saves `examples/evals/results/<label>.json` (gitignored); `report <a> <b>` prints the comparison table.
+Token follow-up (2026-10-21): the first run (`after-a-c-d-b`, $0.29-0.38 and 16-26 turns per brief) showed turns, not tool results, drive cost.
+So `get_guide()` now returns the whole method in one call (was 3 calls), server `instructions` and the skill tell agents to batch independent
+calls and skip `get_basic_info` / `get_tree` / `get_comments` in a new project, and `run.mjs` saves real CLI token usage. NOT re-run yet:
+run `node examples/evals/run.mjs run turns-cut` and `report after-a-c-d-b turns-cut` to see the effect. Not done: schema trimming (~8.2k tokens/turn).
 Not done: the actual before/after runs (needs the real server + a browser + paid Claude runs, user to start them), and no way to
 check out the pre-Phase-A code automatically, so "before" is only possible by running on an old commit.
 Original plan:
