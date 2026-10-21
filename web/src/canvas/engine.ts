@@ -11,6 +11,7 @@ import type { Artboard, DocData, Page } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
+import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
 
 // ---- Tunables (see "Level of detail" below) -------------------------------------------
@@ -236,7 +237,7 @@ export class CanvasEngine {
   private boardIndex(b: Board): RectEntry[] {
     const key = (b.html ?? '') + '\u0000' + this.themeDecls();
     if (!b.index || b.indexKey !== key) {
-      b.index = measureBoard(b.html ?? '', b.ab.width, b.ab.height, this.themeDecls());
+      b.index = measureBoard(b.html ?? '', b.ab.width, b.ab.height, this.themeDecls(), b.ab.heightMode === 'fit');
       b.indexKey = key;
     }
     return b.index;
@@ -446,6 +447,8 @@ export class CanvasEngine {
           b.el.addEventListener('animationend', () => b!.el.classList.remove('enter'), { once: true });
         }
       }
+      // fit_artboard / a manual resize can flip the height mode without touching the HTML, so restyle the live root.
+      if (b.ab.heightMode !== ab.heightMode) b.shadow.querySelector('[data-board-root]')?.setAttribute('style', boardRootStyle(ab.heightMode === 'fit'));
       b.ab = ab;
       Object.assign(b.el.style, { left: ab.x + 'px', top: ab.y + 'px', width: ab.width + 'px', height: ab.height + 'px' });
       b.el.classList.toggle('empty', !ab.html.trim());
@@ -501,7 +504,7 @@ export class CanvasEngine {
   private mountFrame(b: Board) {
     if (b.shown === b.html) return;
     b.oldHtml = b.shown ?? '';
-    b.shadow.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}[hidden]{display:none !important}</style><style data-theme>:host{${this.themeDecls()}}</style><div style="position:relative;width:100%;height:100%">${b.html ?? ''}</div>`;
+    b.shadow.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}${BOARD_CSS}</style><style data-theme>:host{${this.themeDecls()}}</style>${boardRoot(b.ab.heightMode === 'fit', b.html ?? '')}`;
     b.shown = b.html;
     b.el.classList.remove('lod');
   }

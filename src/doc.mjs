@@ -12,7 +12,8 @@ import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSh
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
-const FORBIDDEN_TAGS = ['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form'];
+const MAX_BOARD_HEIGHT = 20000; // a runaway `fit` board must not grow without bound
+const FORBIDDEN_TAGS =['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form'];
 
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
 
@@ -249,7 +250,7 @@ export class Doc {
       pages: this.pages,
       references: this.references,
       artboards: this.data.artboards.map((a) => ({
-        id: a.id, name: a.name, x: a.x, y: a.y, width: a.width, height: a.height, page: this.pageOf(a),
+        id: a.id, name: a.name, x: a.x, y: a.y, width: a.width, height: a.height, ...(a.heightMode ? { heightMode: a.heightMode } : {}), page: this.pageOf(a),
       })),
     };
   }
@@ -617,7 +618,8 @@ export class Doc {
 
   // ---- Mutations ----------------------------------------------------------
 
-  createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y, page: pageArg } = {}) {
+  // heightMode 'fit' = `height` is a minimum and the board grows with its content; anything else = fixed.
+  createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y, page: pageArg, heightMode } = {}) {
     // Place new artboards to the right of the rightmost one so they never overlap.
     const page = this._pageId(pageArg); // validate before the undo checkpoint so a bad page leaves no entry
     this._checkpoint('create_artboard');
@@ -630,6 +632,7 @@ export class Doc {
       width,
       height,
       html: '',
+      ...(heightMode === 'fit' ? { heightMode } : {}), // stored only when set: old boards stay fixed
       ...(this.data.pages?.length ? { page } : {}), // projects that never added a page keep boards field-free
     };
     this.data.artboards.push(ab);
@@ -742,7 +745,7 @@ export class Doc {
     for (const id of ids) {
       const ab = this.getArtboard(id);
       if (ab) {
-        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, page: this.pageOf(ab) });
+        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, heightMode: ab.heightMode, page: this.pageOf(ab) });
         // Strip old ids from the copy so _prepare mints fresh ones.
         copy.html = this._prepare(ab.html.replace(/ data-pid="[^"]*"/g, '')).toString();
         out.push(copy.id);
@@ -823,8 +826,33 @@ export class Doc {
   resizeArtboard(id, width, height) {
     const ab = this.getArtboard(id);
     if (!ab) return;
+    // Dragging a board to a new height is an explicit "this tall": it stops auto-growing.
+    if (height !== ab.height) delete ab.heightMode;
     ab.width = width;
     ab.height = height;
     this._commit();
+  }
+
+  // The browser measured more content than a `fit` board holds: raise the height. Never shrinks, and is not
+  // an undo step or journal entry (it follows from the write that caused it). Returns true if it changed.
+  growArtboard(id, contentHeight) {
+    const ab = this.getArtboard(id);
+    const next = Math.min(MAX_BOARD_HEIGHT, Math.ceil(contentHeight));
+    if (!ab || ab.heightMode !== 'fit' || next <= ab.height) return false;
+    ab.height = next;
+    this._commit();
+    return true;
+  }
+
+  // Switch a board to `fit` and set its height to exactly its content (at least `minHeight`). This is the one
+  // place a board shrinks. `contentHeight` is the browser's measurement, or null when no tab was open.
+  fitArtboard(id, contentHeight, minHeight = 40) {
+    const ab = this.getArtboard(id);
+    if (!ab) throw new Error(`Artboard ${id} not found`);
+    this._checkpoint('fit_artboard');
+    ab.heightMode = 'fit';
+    if (contentHeight != null) ab.height = Math.min(MAX_BOARD_HEIGHT, Math.max(minHeight, Math.ceil(contentHeight)));
+    this._commit();
+    return ab;
   }
 }

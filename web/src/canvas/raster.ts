@@ -2,6 +2,7 @@
 // Plain module (no React). The engine uses it for zoomed-out snapshots now; Phase 4 reuses
 // rasterizeCanvas for the get_screenshot / compare_to_reference replies.
 import type { Artboard } from '@/api/types';
+import { BOARD_CSS, boardRoot } from './contract';
 
 // FNV-1a: a fast non-cryptographic hash, good enough as a cache key for "did this HTML change".
 export const hashStr = (str: string) => {
@@ -80,8 +81,8 @@ export async function rasterizeCanvas(
   holder.innerHTML = ab.html;
   // HTML -> well-formed XML (SVG requires it), minus the holder div. The hidden rule is added AFTER
   // stripping because the strip regex anchors on the holder's opening tag at the very start.
-  const xhtml = '<style>[hidden]{display:none !important}</style>'
-    + new XMLSerializer().serializeToString(holder).replace(/^<div[^>]*>|<\/div>$/g, '');
+  const xhtml = `<style>${BOARD_CSS}</style>`
+    + boardRoot(ab.heightMode === 'fit', new XMLSerializer().serializeToString(holder).replace(/^<div[^>]*>|<\/div>$/g, ''));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ab.width}" height="${ab.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml" style="position:relative;width:${ab.width}px;height:${ab.height}px;background:#fff;overflow:hidden;font-family:system-ui,sans-serif;${themeDecls.replace(/"/g, '&quot;')}">${xhtml}</div></foreignObject></svg>`;
   const img = new Image();
   img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);

@@ -32,6 +32,7 @@ export interface Artboard {
   height: number;
   // The server sends `null` for boards whose HTML did not change; the SSE layer refills it before the store sees it.
   html: string;
+  heightMode?: 'fit'; // absent = fixed; fit = `height` is a minimum and the board grows with its content
   page?: string;
   generated?: string;
   ref?: string;
