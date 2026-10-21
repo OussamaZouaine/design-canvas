@@ -33,10 +33,14 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
   and `GET /api/p/<id>/eval`. Costs real Claude runs and needs a browser tab per project; results are gitignored.
 - `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
 - `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
+- `src/fonts.mjs` Google Fonts: `use_font` / `list_fonts` fetch the latin woff2 once into `data/fonts/` (gitignored), served at `/api/fonts/<slug>/<file>`, recorded in `meta.fonts`; browser side is `web/src/canvas/fonts.ts`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
 - `web/` React 19 + Vite + Tailwind v4 + shadcn (Base UI) client: `src/canvas/` imperative engine + editor, `src/panels/`, `src/shell/`, `src/pages/`, `src/store/` (zustand), `src/api/`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
 - `data/` runtime data (gitignored): `projects/<id>/{doc,meta,activity,comments}.json`, `snapshots/`, `state.json`.
+
+## Fonts (easy to get wrong)
+The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `@font-face`) and bitmaps go through SVG foreignObject (which loads nothing). So: live DOM uses a document-head `<style id=dc-project-fonts>`; screenshots and snapshots embed the used faces as data: URIs (`embeddedFontCss`). Agents must call `use_font` before using a Google family; `lint` flags any family that is neither system nor loaded.
 
 ## Conventions (follow these)
 - **Colours are OKLCH everywhere** (UI CSS, generated designs, tokens). Hex only as authored input that gets converted.

@@ -1,6 +1,6 @@
 # Plan: make Claude's designs on Design Canvas good and never clipped
 
-Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide), D (skill) and B (dialect report), F (evals, baseline runs pending) implemented 2026-10-21, see their sections; E not started. One phase per session.
+Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide), D (skill), B (dialect report), F (evals, baseline runs pending) and E (fonts) implemented 2026-10-21, see their sections. One phase per session.
 Goal: (1) generations stay inside their frame, (2) generations have taste, (3) both hold for any agent, not only Claude Code.
 
 ## 1. Research: how Paper connects an agent to its canvas
@@ -124,7 +124,9 @@ Original list:
 3. Optional second skill `design-review`: a read-only pass that screenshots every board, runs `lint` + `check_layout`, and writes a
    verdict list. Good for the Sprig project.
 
-### Phase E: Fonts (system fonts + Google Fonts, decided 2026-10-21)
+### Phase E: Fonts (system fonts + Google Fonts, decided 2026-10-21) - DONE 2026-10-21
+Built: `src/fonts.mjs` (`FontCache`: validated family + weights, fetches css2 with a Chrome UA, keeps only the latin subset, host allowlist, woff2 magic check, atomic writes to `data/fonts/<slug>/<style>-<weight>.woff2`, offline after first fetch), tools `use_font` / `list_fonts`, `GET /api/fonts/<slug>/<file>`, `meta.fonts` (`store.addFont`), `lint` flag for unloaded families (one line per family), exports (`export_html` links, `export_react` header comment), guide `type` rule, default theme `font-sans` now a system stack. Browser: `web/src/canvas/fonts.ts` (document-head `@font-face`, because shadow roots ignore them; `embeddedFontCss` base64-embeds only the families a board mentions for `raster.ts`; `fontsSignature` is in the snapshot hash and rect-index key; `measure` waits for `fontsReady`). Tests: `test/fonts.test.mjs` (fake fetch). Checked live: Fraunces in the DOM, in `get_screenshot` and in the zoomed-out snapshot. Not built: non-latin subsets, variable-font axes, italic-only requests, a UI panel for fonts, removing a font from a project.
+Original plan:
 Why it is not just a `<link>`: the sanitizer strips `<link>`/`<style>`, boards live in shadow DOM, and screenshots / bitmap snapshots are
 drawn through SVG foreignObject, which cannot load any external resource. So fonts must be fetched and embedded by us.
 1. `use_font` tool (`family`, `weights`, `italic?`): the server (never the browser) fetches the CSS from `fonts.googleapis.com`
