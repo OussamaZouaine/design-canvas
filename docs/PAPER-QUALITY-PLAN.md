@@ -1,6 +1,6 @@
 # Plan: make Claude's designs on Design Canvas good and never clipped
 
-Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide), D (skill) and B (dialect report) implemented 2026-10-21, see their sections; E, F not started. One phase per session.
+Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide), D (skill) and B (dialect report), F (evals, baseline runs pending) implemented 2026-10-21, see their sections; E not started. One phase per session.
 Goal: (1) generations stay inside their frame, (2) generations have taste, (3) both hold for any agent, not only Claude Code.
 
 ## 1. Research: how Paper connects an agent to its canvas
@@ -140,7 +140,14 @@ drawn through SVG foreignObject, which cannot load any external resource. So fon
 6. `export_react` / `export_html` list the Google families used (with the Google CSS URL for production).
 Test: font-face generation, allowlist and regex rejection, raster embedding (unit), one real check that a screenshot shows the font.
 
-### Phase F: Measure it (so we know it got better)
+### Phase F: Measure it (so we know it got better) - BUILT 2026-10-21, baseline runs not done yet
+Built: `examples/evals/` (`briefs.json` with the 6 briefs, `run.mjs`), `src/evalmetrics.mjs`, read-only `GET /api/p/:id/eval`
+(boards, lint totals, still-overflowing boards/nodes, whether a brief was recorded), tests in `test/evalmetrics.test.mjs`.
+`node examples/evals/run.mjs run <label>` makes one project per brief, opens a tab on it (needed for measuring), runs `claude -p`,
+diffs the server token meter, saves `examples/evals/results/<label>.json` (gitignored); `report <a> <b>` prints the comparison table.
+Not done: the actual before/after runs (needs the real server + a browser + paid Claude runs, user to start them), and no way to
+check out the pre-Phase-A code automatically, so "before" is only possible by running on an old commit.
+Original plan:
 `examples/evals/`: 6 fixed briefs (landing page, dashboard, mobile onboarding, settings, pricing, empty state). Script runs each through
 a fresh Claude Code session, then records: overflow count from `check_layout`, lint issues, number of screenshots/fix rounds, tokens (`/api/status`).
 Compare before Phase A, after A, after C+D. Human taste check = screenshots side by side.

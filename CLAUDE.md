@@ -29,6 +29,8 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
 - `src/normalize.mjs` opt-in HTML normalization on write (`meta.normalize`: on for new projects, off for Sprig and imports).
 - `src/lint.mjs` static lint (`lint` tool; spacing grid 4 by default, use `grid: 2` for Sprig); `src/export.mjs` React+Tailwind export; `src/meter.mjs` per-tool token estimates
   (`/api/status`). `test/` holds `node:test` tests: run `pnpm test` before committing.
+- `examples/evals/` generation-quality evals (6 fixed briefs, `run.mjs run <label>` / `report <a> <b>`), fed by `src/evalmetrics.mjs`
+  and `GET /api/p/<id>/eval`. Costs real Claude runs and needs a browser tab per project; results are gitignored.
 - `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
 - `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
