@@ -73,6 +73,8 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
 - **Pages:** `doc.data.pages` is stored only once a second page exists (before that the first page is implicit and boards
   carry no `page`). The browser shows one page at a time (`activePage`, remembered per project); off-page boards are
   `display:none` and unmounted. Claude's default target page is `ui.currentPage` (`set_page`), not document data.
+  The only page switcher is `web/src/panels/PagesPanel.tsx`, the top section of the left sidebar (`LeftPanel` in Shell.tsx): click to switch,
+  "+" creates a page (canvas action `page-create`) and starts inline rename (`page-update`), double-click renames. There is no header select any more.
 - **Token sync:** `meta.repo` is the linked code folder; `src/tokensync.mjs` only reads files inside it (path check) and maps
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
 - **Inspector:** `web/src/panels/InspectorPanel.tsx` (Design tab) reads the selected node's inline style from the parsed HTML and sends

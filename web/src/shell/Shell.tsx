@@ -1,8 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Ruler, Square, Sun, Type } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { canvasAction } from '@/api/projects';
-import { pageOfBoard, pagesOf } from '@/canvas/engine';
+import { pageOfBoard } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
 import { CommentsPanel } from '@/panels/CommentsPanel';
 import { ActivityPanel, VersionsPanel } from '@/panels/HistoryPanels';
@@ -10,11 +9,10 @@ import { InspectorPanel } from '@/panels/InspectorPanel';
 import { ThemePanel } from '@/panels/ThemePanel';
 import { McpPanel, TokensPanel } from '@/panels/TokensMcpPanels';
 import { LayersPanel } from '@/panels/LayersPanel';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PagesPanel } from '@/panels/PagesPanel';
 import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
-import { toast } from '@/store/toast';
 import { useUi, type PanelTab, type Tool } from '@/store/ui';
 
 // Status pill: connection state, plus "Claude is designing" while the server reports touched nodes.
@@ -27,32 +25,6 @@ function StatusPill() {
       <span className={cn('size-1.5 rounded-full', designing ? 'bg-[var(--selection)]' : connection === 'connected' ? 'bg-emerald-500' : 'bg-destructive')} />
       {text}
     </span>
-  );
-}
-
-// Page switcher: pages are separate canvases inside one project. The engine owns which one is visible
-// (it also switches by itself when Claude draws on another page); this just mirrors and drives it.
-function PageSwitcher({ projectId }: { projectId: string }) {
-  const doc = useProject((s) => s.doc);
-  const engine = useCanvas((s) => s.engine);
-  const active = useCanvas((s) => s.activePage);
-  const list = pagesOf(doc);
-  const add = async () => {
-    if (!engine) return;
-    engine.markUserEdit();
-    try {
-      const r = await canvasAction(projectId, 'page-create', { name: `Page ${list.length + 1}` });
-      engine.setPageWhenReady((r.result as { id: string }).id);
-    } catch (e) { toast((e as Error).message || 'Could not add a page'); }
-  };
-  return (
-    <div className="flex items-center gap-1">
-      <Select items={list.map((p) => ({ value: p.id, label: p.name }))} value={active ?? list[0].id} onValueChange={(v) => engine?.setPage(v as string)}>
-        <SelectTrigger aria-label="Page" className="h-7 w-32"><SelectValue /></SelectTrigger>
-        <SelectContent>{list.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-      </Select>
-      <Button variant="ghost" size="icon" aria-label="Add a page" onClick={add}><Plus /></Button>
-    </div>
   );
 }
 
@@ -108,7 +80,6 @@ export function TopBar({ projectId }: { projectId: string }) {
       <span className="truncate font-medium">{name ?? '…'}</span>
       <span className="tnum text-muted-foreground">{count} {count === 1 ? 'artboard' : 'artboards'}</span>
       <div className="ml-auto flex items-center gap-3">
-        <PageSwitcher projectId={projectId} />
         <ZoomControls />
         <StatusPill />
         <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
@@ -202,12 +173,13 @@ export function RightPanel({ projectId }: { projectId: string }) {
   );
 }
 
-// Left drawer: the layer tree (search, rename, hide/lock, drag to reorder).
+// Left drawer: the page list on top, then the layer tree of the active page (search, rename, hide/lock, drag to reorder).
 export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
   if (!layersOpen) return null;
   return (
-    <aside aria-label="Layers" className="flex w-60 shrink-0 flex-col border-r bg-background">
+    <aside aria-label="Pages and layers" className="flex w-60 shrink-0 flex-col border-r bg-background">
+      <PagesPanel projectId={projectId} />
       <div className="border-b px-3 py-2 text-[11px] font-medium">Layers</div>
       <LayersPanel projectId={projectId} />
     </aside>
