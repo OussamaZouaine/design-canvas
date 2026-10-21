@@ -77,6 +77,9 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
 - **Inspector:** `web/src/panels/InspectorPanel.tsx` (Design tab) reads the selected node's inline style from the parsed HTML and sends
   `style` actions (one property each, one undo step). Fields suggest `var(--token)` values from the theme.
+- **Font picker:** the Typography Font row is `web/src/ui/FontField.tsx` (menu of project fonts from `meta.fonts` plus system fonts, each name drawn
+  in its own face because the project-fonts style tag lives in the same document as the panels) over a raw "Stack" text field. The shown family is
+  the node's own `font-family`, else the nearest ancestor's (inherited, dimmed), with `var(--token)` resolved via the theme (`effectiveFamily` in InspectorPanel).
 - **Layers panel:** `web/src/panels/LayersPanel.tsx` (left drawer) builds the tree from each artboard's HTML with DOMParser and sends
   rename / flags / move-node actions. Edits the user makes there call `markUserEdit()` so the canvas does not play the
   "Claude is designing" reveal and camera follow for them. `hidden` works because the shadow root and screenshot wrapper
