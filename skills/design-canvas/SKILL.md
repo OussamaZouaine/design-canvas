@@ -24,7 +24,9 @@ artboards; the user watches them appear live and can pin comments on elements.
    resending markup. Refine with `update_styles` / `set_text_content`, not a rewrite.
 5. **Verify.** `lint` (text, cheap) -> fix -> one `get_screenshot` (crop with `node_id` when only one
    part changed) -> `get_computed_styles` if a size or colour looks wrong. Stop after 3 rounds or
-   when lint says `clean`.
+   when lint says `clean`. Boards grow with their content by default (`height_mode: fit`); a `layout`
+   line in a write result, or `check_layout`, means something does not fit: fix it with `fit_artboard`
+   or narrower widths, never by deleting and rebuilding the board.
 6. **Finish.** `reply_comment` + `resolve_comment` for each comment handled, then `finish_working`.
    A bad change can be reverted with `undo`.
 
