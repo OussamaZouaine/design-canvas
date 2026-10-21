@@ -10,25 +10,13 @@ import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
+import { guideText, TOPICS } from './guide.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
-const GUIDE = `Design Canvas workflow:
-0. PROJECTS FIRST. Call list_projects. If one already matches the thing you are building, open_project it; otherwise create_project with a short (2-4 word) name taken from what you are working on (the repo, product or feature, e.g. "Checkout redesign"), plus a one-line description. Never create a second project for the same work. After create/open, pass the returned project_id on every later call so parallel sessions don't mix up projects.
-0b. LOG THE REQUEST. At the start of every new user request, call log_prompt with the request in the user's own words (one short sentence). It records the request in the project's Activity and saves a restore point so the user can roll back to before it.
-1. get_basic_info to see the project's artboards; get_tree for a compact outline (use query to find a node by name or text).
-2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
-3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
-4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
-5. LAYOUT: boards default to height_mode fit (height is a minimum, the board grows with its content). Every board root is a flex column with border-box sizing. write_html / update_styles add a "layout" line to their result when something does not fit; check_layout measures real boxes on demand; fit_artboard fixes a clipped board in one call. Never delete and rebuild a board for an overflow. finish_working refuses to finish while content is clipped.
-5b. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
-Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...). Build a ramp by holding C and H and stepping L.
-Tips: pick a palette, type scale and spacing scale first; use px units; give containers explicit widths; use system fonts (Inter, system-ui) because custom fonts are not loaded.
-Feedback: the user can pin comments on elements. Call get_comments at the start of a task and after finishing; fix what open comments ask, then reply_comment and resolve_comment.
-Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
-Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.`;
-
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
+// The first line is a gate: the process and taste rules live in the guide, and clients that skip it skip them.
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
+You MUST call get_guide() before any other tool, and get_guide({topic:"brief"}) before the first write of a new design: post a short brief (mood, palette, type, direction) in chat, then pass it as log_prompt.brief. Other topics: type, layout, review, mobile.
 Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt -> get_basic_info -> get_tree -> write_html / update_styles -> lint -> one get_screenshot -> check_layout -> finish_working.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>; check get_comments and get_changes before starting. Call get_guide for the full guide.`;
 
@@ -104,9 +92,9 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
-    description: 'Read this first. Explains the project + design workflow and constraints.',
-    inputSchema: {},
-  }, safe(() => text(GUIDE)));
+    description: 'Read this first (no topic = the workflow). Topics with the design method: brief (mood, palette, direction: read before a new design), type, layout (flex dialect, fit height), review (checkpoints after each section), mobile (status bar, safe areas).',
+    inputSchema: { topic: z.enum(Object.keys(TOPICS)).optional() },
+  }, safe(({ topic }) => text(guideText(topic))));
 
   server.registerTool('list_projects', {
     description: 'List all projects (most recently edited first) with ids, names and artboard counts. Call this before creating a project so you reuse an existing one.',
@@ -160,9 +148,13 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
   // ---- history + comments -------------------------------------------------
   server.registerTool('log_prompt', {
     description: "Call at the START of every new user request with the request in the user's own words (one short sentence). Records it in the project's Activity and saves a restore point so the user can undo the whole request.",
-    inputSchema: { ...pid, prompt: z.string().min(1).max(500) },
-  }, safe(({ project_id, prompt }) => {
-    store.logPrompt(target(project_id).meta.id, prompt);
+    inputSchema: {
+      ...pid,
+      prompt: z.string().min(1).max(500),
+      brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat (mood, palette with oklch roles, type scale, one-sentence direction). Stored with the project and shown in Activity.'),
+    },
+  }, safe(({ project_id, prompt, brief }) => {
+    store.logPrompt(target(project_id).meta.id, prompt, brief);
     return text('Logged');
   }));
 
@@ -243,7 +235,9 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     const { page_id, height_mode = 'fit', ...rest } = a;
     const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'create_artboard', ab.id);
-    return text(ab);
+    // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
+    const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, read get_guide({topic:"brief"}), post a brief in chat and pass it to log_prompt.' };
+    return text({ ...ab, ...reminder });
   }));
 
   server.registerTool('write_html', {
