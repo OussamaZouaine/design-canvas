@@ -38,6 +38,14 @@ connection pill + theme toggle in the footer) and a main area with a "Recents"/"
 grid/list toggle (remembered in localStorage `dc-home-view`). `ProjectCard` shows title + "Edited N ago" above the preview; `CoverThumb`
 takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet checked with real covers on a populated project.
 
+## UI round 2026-10-21 (merged into main, verified in the browser)
+- Home page restyled like Paper (`web/src/pages/home/HomeSidebar.tsx`, `ProjectCard.tsx`): sidebar, Recents grid, New project, grid/list toggle.
+- Left sidebar has a collapsible Pages section with "+" (`web/src/panels/PagesPanel.tsx`): create, rename, switch.
+- Design tab Font row is a picker (`web/src/ui/FontField.tsx`): real family name in its own face, project fonts + system fonts.
+- Gotchas: locked nodes/boards (e.g. generated Foundations) disable the whole inspector (`pointer-events-none`), which looks like a broken picker.
+  Base UI menus ignore synthetic JS click events; test them with a real click.
+- Not checked: the list view of the home page, and "New page" on a project with many pages.
+
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not
