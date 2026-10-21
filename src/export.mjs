@@ -64,13 +64,17 @@ export function componentName(name) {
 
 // `theme` is optional: when the project has tokens they are declared on the wrapper, so var(--...)
 // references inside the design keep resolving without a separate stylesheet.
-export function artboardToReact(ab, theme) {
+// `fontUrls` are the Google CSS URLs of the families the board uses; they are listed in a header comment
+// because a component cannot load a font by itself (add them to the app's <head> or CSS @import).
+export function artboardToReact(ab, theme, fontUrls = []) {
   const root = parse(ab.html, { comment: false });
   const body = root.childNodes.map((c) => render(c, 2)).filter(Boolean).join('\n');
   // Wrapper gives the board its design size; children are laid out inside it as on the canvas.
   const tokenClasses = styleToClasses(toCssDeclarations(theme?.tokens ?? {}));
   const wrap = [`[position:relative] [width:${ab.width}px] [min-height:${ab.height}px]`, ...tokenClasses].join(' ');
-  return `export function ${componentName(ab.name)}() {
+  const fontLines = fontUrls.map((u) => `//   <link rel="stylesheet" href="${u}" />`);
+  const fontNote = fontUrls.length ? ['// Google Fonts used (load once in your app\'s <head>):', ...fontLines, ''].join('\n') : '';
+  return `${fontNote}export function ${componentName(ab.name)}() {
   return (
     <div className="${wrap}">
 ${body}
