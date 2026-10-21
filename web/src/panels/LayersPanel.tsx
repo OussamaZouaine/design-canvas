@@ -213,7 +213,8 @@ function FlagButton({ on, onLabel, offLabel, onIcon, offIcon, onClick }: {
 
 // Rename in place: Enter or blur saves, Escape cancels. Keys are stopped here so Delete/Backspace
 // typed into the field can never reach the canvas shortcuts.
-function RenameInput({ initial, onDone }: { initial: string; onDone: (name: string | null) => void }) {
+// Shared with PagesPanel (pages are renamed the same way), hence the exported name and the `label` prop.
+export function RenameInput({ initial, onDone, label = 'Layer name' }: { initial: string; onDone: (name: string | null) => void; label?: string }) {
   const [value, setValue] = useState(initial);
   const [done, setDone] = useState(false); // blur fires after Enter unmounts the field; finish only once
   const finish = (save: boolean) => {
@@ -224,7 +225,7 @@ function RenameInput({ initial, onDone }: { initial: string; onDone: (name: stri
   return (
     <input
       autoFocus
-      aria-label="Layer name"
+      aria-label={label}
       maxLength={80}
       value={value}
       onFocus={(e) => e.currentTarget.select()}
