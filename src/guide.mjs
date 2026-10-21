@@ -13,6 +13,7 @@ const WORKFLOW = `Design Canvas workflow (this one call also contains the brief,
 4. Every element gets a stable id (data-pid). Use get_tree to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
 5. LAYOUT: boards default to height_mode fit (height is a minimum, the board grows with its content). write_html / update_styles add a "layout" line to their result when something does not fit; check_layout measures real boxes on demand; fit_artboard fixes a clipped board in one call. Never delete and rebuild a board for an overflow. finish_working refuses to finish while content is clipped.
 5b. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
+Fonts: list_fonts, then use_font for a Google Font before styling with it (see topic "type").
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...).
 Feedback: the user can pin comments on elements. In an existing project call get_comments at the start of a task; fix what open comments ask, then reply_comment and resolve_comment. A project you just created has none, so skip it.
 Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
@@ -34,7 +35,7 @@ Restraint: fewer elements than your first draft. Put content on the page surface
 Non-negotiable: text contrast at least 4.5:1 (3:1 for 24px+ or bold 19px+), minimum text size 12px, touch targets at least 40px on mobile.`;
 
 const TYPE = `Type:
-- Fonts: use system stacks (system-ui, -apple-system, "Segoe UI", Inter, sans-serif; ui-serif, Georgia, serif; ui-monospace, Menlo, monospace). Custom fonts are not loaded, so naming one silently falls back.
+- Fonts: only use a system stack (system-ui, -apple-system, "Segoe UI", sans-serif; ui-serif, Georgia, serif; ui-monospace, Menlo, monospace) or a family you loaded. Call list_fonts to see what exists, then use_font({family, weights}) for a Google Font (ask for every weight you will use) and paste the css value it returns. Any other name silently falls back to the next family, and lint flags it. A pairing is one display face plus one text face at most; the system stack is a fine default for product UI.
 - Contrast of weight and size does the work: a heavy display line (700-800) next to light small labels (400-500) beats a uniform mid-weight page. Use 2 weights per board, 3 at most.
 - Tracking: tighten large type (-0.02em to -0.04em above 32px), keep body at 0, open tiny uppercase labels (+0.06em to +0.12em at 11-12px).
 - Line height: 1.05-1.15 for display, 1.4-1.5 for body, always unitless or px. Keep lines at 45-75 characters.

@@ -3,6 +3,7 @@
 // real layout: overflow/clipping still needs a screenshot. Each issue is one short line.
 import { HTMLElement } from 'node-html-parser';
 import { dialectKind } from './dialect.mjs';
+import { familiesOf, isKnownFamily } from './fonts.mjs';
 
 // ---- colour parsing ---------------------------------------------------------
 
@@ -100,8 +101,9 @@ const MAX_LINES = 40;
 
 // Lint everything under `rootEl` (a parsed artboard or one node). `ab` supplies the size that
 // widths and offsets are checked against.
-export function lintArtboard(ab, rootEl, { grid = 4, tokens = {} } = {}) {
+export function lintArtboard(ab, rootEl, { grid = 4, tokens = {}, fonts } = {}) {
   const issues = [];
+  const warnedFonts = new Set(); // one line per family per lint run, not one per element
   const add = (el, msg) => issues.push(`${el.getAttribute('data-pid')} ${msg}`);
 
   // Walk with the inherited text colour and the nearest painted background so contrast is judged
@@ -149,7 +151,17 @@ export function lintArtboard(ab, rootEl, { grid = 4, tokens = {} } = {}) {
         }
       }
 
-      if (tag === 'img' && !child.getAttribute('alt') && child.getAttribute('alt') !== '') add(child, 'image has no alt text');
+      // A family that is neither a system font nor loaded with use_font silently falls back to the next one.
+      // Skipped when the caller passes no font list (a bare lintArtboard call).
+      if (fonts && st.has('font-family')) {
+        for (const fam of familiesOf(st.get('font-family'))) {
+          if (/var\(/.test(fam) || isKnownFamily(fam, fonts) || warnedFonts.has(fam.toLowerCase())) continue;
+          warnedFonts.add(fam.toLowerCase());
+          add(child, `font "${fam}" is not loaded: call use_font for a Google Font, or use a system font (list_fonts)`);
+        }
+      }
+
+      if (tag === 'img' &&!child.getAttribute('alt') && child.getAttribute('alt') !== '') add(child, 'image has no alt text');
 
       // A fixed width wider than the artboard always overflows it.
       const w = px(st.get('width'));

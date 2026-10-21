@@ -24,6 +24,8 @@ export class Doc {
     this.listeners = new Set();
     // Set by the store: returns true when this project normalizes HTML on write (see normalize.mjs).
     this.normalize = () => false;
+    // Set by the store: the project's Google Fonts (meta.fonts), so lint knows which families are loaded.
+    this.fonts = () => [];
     // In-memory only (not saved): the last states Claude/the user can step back to.
     this.undoStack = [];
     this.redoStack = [];
@@ -349,7 +351,7 @@ export class Doc {
   // Static lint of an artboard or of one node's subtree. Returns an array of one-line issues.
   // opts: { grid, mode }. `mode` lints against that mode's token values (default: the base tokens).
   lint(id, { mode, ...opts } = {}) {
-    opts = { ...opts, tokens: resolveTokens(this.data.theme, mode) };
+    opts = { ...opts, tokens: resolveTokens(this.data.theme, mode), fonts: this.fonts() };
     const ab = this.getArtboard(id);
     if (ab) return lintArtboard(ab, this._artboardRoot(ab), opts);
     const hit = this._find(id);

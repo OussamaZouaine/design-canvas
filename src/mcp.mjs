@@ -12,6 +12,7 @@ import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
 import { guideText, TOPICS } from './guide.mjs';
+import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -36,7 +37,7 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
 
-export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
+export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
@@ -547,6 +548,43 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)'), grid: z.union([z.literal(2), z.literal(4)]).optional().describe('Spacing grid in px (default 4).'), mode: z.string().optional().describe('Token mode to check, e.g. dark (default: base tokens).') },
   }, safe(({ project_id, id, grid, mode }) => text(formatIssues(target(project_id).doc.lint(id, { grid, mode })))));
 
+  // ---- fonts -------------------------------------------------------------
+  server.registerTool('list_fonts', {
+    description: 'Fonts you may use: system stacks (always available), this project\'s loaded Google Fonts (with the exact font-family value) and a short Google shortlist by category. Any other font name silently falls back, and lint flags it. Load a Google Font with use_font.',
+    inputSchema: { ...pid },
+  }, safe(({ project_id }) => {
+    const { meta } = target(project_id);
+    return text({
+      system: ['system-ui, -apple-system, "Segoe UI", sans-serif', 'ui-serif, Georgia, serif', 'ui-monospace, Menlo, Consolas, monospace', ...SYSTEM_FAMILIES.map((f) => `"${f}"`)],
+      project: (meta.fonts ?? []).map((f) => ({ family: f.family, css: fontStack(f.family), weights: [...new Set(f.faces.map((x) => x.weight))], italic: f.faces.some((x) => x.style === 'italic') })),
+      google_shortlist: SHORTLIST,
+      note: 'Call use_font({family, weights}) before using a shortlist or any other Google family.',
+    });
+  }));
+
+  server.registerTool('use_font', {
+    description: 'Load a Google Font into the project so boards and screenshots render it. The server downloads the files once (latin subset, cached on disk) and returns the exact font-family value to paste. Call it before styling with the family; ask for every weight you will use. Errors (unknown family, offline, bad weight) are returned instead of a silent fallback.',
+    inputSchema: {
+      ...pid,
+      family: z.string().describe('Google Fonts family name, e.g. "DM Sans".'),
+      weights: z.array(z.number().int()).min(1).max(6).optional().describe('Weights to load, 100-900 in steps of 100 (default 400 and 700).'),
+      italic: z.boolean().optional().describe('Also load italics for these weights.'),
+      category: z.enum(['sans', 'serif', 'mono', 'display']).optional().describe('Picks the generic fallback in the returned stack (default: from the shortlist, else sans).'),
+    },
+  }, safe(async ({ project_id, family, weights, italic, category }) => {
+    const { meta, doc } = target(project_id);
+    const font = await fonts.ensure(family, weights, italic);
+    store.addFont(meta.id, font);
+    store.logAction(meta.id, { tool: 'use_font', detail: `${font.family} ${[...new Set(font.faces.map((f) => f.weight))].join(',')}` });
+    return text({
+      family: font.family,
+      css: fontStack(font.family, category),
+      weights: [...new Set(font.faces.map((f) => f.weight))],
+      italic: font.faces.some((f) => f.style === 'italic'),
+      note: 'Paste css as the font-family value. Only the listed weights exist; others are synthesized.',
+    });
+  }));
+
   server.registerTool('undo', {
     description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',
     inputSchema: { ...pid, steps: z.number().int().min(1).max(20).optional() },
@@ -672,26 +710,28 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     description: 'Return an artboard as a React component (JSX). Each inline style becomes one Tailwind arbitrary-property class, so it renders like the canvas; replace them with your own utilities or tokens afterwards. Needs Tailwind in the target app.',
     inputSchema: { ...pid, artboard_id: z.string() },
   }, safe(({ project_id, artboard_id }) => {
-    const { doc } = target(project_id);
+    const { meta, doc } = target(project_id);
     const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
-    return text(artboardToReact(ab, doc.theme));
+    return text(artboardToReact(ab, doc.theme, usedProjectFonts(ab.html, meta.fonts).map(productionUrl)));
   }));
 
   server.registerTool('export_html', {
     description: 'Return a standalone HTML document for an artboard, ready to save or hand to a codebase.',
     inputSchema: { ...pid, artboard_id: z.string() },
   }, safe(({ project_id, artboard_id }) => {
-    const { doc } = target(project_id);
+    const { meta, doc } = target(project_id);
     const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    // Google Fonts the board uses: in production they load from Google, so link them (the canvas serves local copies).
+    const fontLinks = usedProjectFonts(ab.html, meta.fonts).map((f) => `<link rel="stylesheet" href="${productionUrl(f)}">`).join('');
     const clean = ab.html.replace(/ data-pid="[^"]*"/g, '');
     // Tokens become :root custom properties; a "dark" mode (if any) follows the OS setting.
     const { tokens, modes } = doc.theme;
     const css = Object.keys(tokens).length
       ? `<style>:root{${toCssDeclarations(tokens)}}${modes.dark ? `@media (prefers-color-scheme:dark){:root{${toCssDeclarations(modes.dark)}}}` : ''}</style>`
       : '';
-    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title><style>${BOARD_CSS}</style>${css}</head>\n<body style="margin:0"><div style="width:${ab.width}px;min-height:${ab.height}px;display:flex;flex-direction:column">${boardRoot(true, clean)}</div></body></html>`);
+    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title><style>${BOARD_CSS}</style>${fontLinks}${css}</head>\n<body style="margin:0"><div style="width:${ab.width}px;min-height:${ab.height}px;display:flex;flex-direction:column">${boardRoot(true, clean)}</div></body></html>`);
   }));
 
   return server;
