@@ -74,10 +74,10 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 ## Next work, split into sessions (start a fresh session per area; each one reads CLAUDE.md + this file)
 Order is a suggestion; the user decides.
-0. **Generation quality (Phases A and C done 2026-10-21; next is D, the skill rewrite; then B, F, E):** follow `docs/PAPER-QUALITY-PLAN.md`
+0. **Generation quality (Phases A, C, D done 2026-10-21; next is B, the layout dialect; then F, E):** follow `docs/PAPER-QUALITY-PLAN.md`
    (stop frame clipping with fit-height boards + measured overflow report, taste guide served by the MCP, skill rewrite, evals).
    Decisions answered 2026-10-21 (section 5): auto-grow boards by default, soft brief reminder, system + Google Fonts
-   (server fetches and caches woff2, embedded for screenshots, Phase E), merged house style. Recommended order: A (done), C (done), D, B, F, E. Phase A leftover: user hand-edits do not auto-grow a fit board (add a ResizeObserver in the engine).
+   (server fetches and caches woff2, embedded for screenshots, Phase E), merged house style. Recommended order: A (done), C (done), D (done), B, F, E. Phase A leftover: user hand-edits do not auto-grow a fit board (add a ResizeObserver in the engine).
 1. **Use it for real** (no code): run Claude Code against the canvas on a real task (Trove), note what is slow, token-hungry or
    wrong, then turn that into issues here. The plan itself said to stop after Phase 3 and do this.
 2. **React rewrite: APPROVED 2026-10-20, in progress.** Follow `docs/REACT-REWRITE.md` (phases 0-8, one session per phase;
