@@ -6,6 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
 import { formatIssues } from './lint.mjs';
+import { dialectNote, dialectStylesNote } from './dialect.mjs';
 import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
@@ -253,7 +254,9 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     const { meta, doc } = target(project_id);
     const created = doc.writeHtml(target_id, html, mode);
     log(meta, doc, 'write_html', target_id);
-    return text({ created, ...(await layoutNote(meta, doc, target_id)) });
+    // Dialect notes only for projects that normalize (new ones); Sprig and imports keep their own style.
+    const dialect = meta.normalize ? dialectNote(html) : '';
+    return text({ created, ...(dialect && { dialect }), ...(await layoutNote(meta, doc, target_id)) });
   }));
 
   server.registerTool('get_tree', {
@@ -352,9 +355,12 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     inputSchema: { ...pid, node_id: z.string(), target_id: z.string(), position: z.enum(['before', 'after', 'start', 'end']).optional().describe('Default end (last child of the target).') },
   }, safe(({ project_id, node_id, target_id, position }) => {
     const { meta, doc } = target(project_id);
+    const from = doc.parentOf(node_id); // read before the move: afterwards the old parent is gone from the node
     doc.moveNode(node_id, target_id, position);
     log(meta, doc, 'move_node', node_id);
-    return text('ok');
+    // Both parents change size/layout, so name them (Paper's affectedParents) for the follow-up check.
+    const to = doc.parentOf(node_id);
+    return text({ ok: true, affectedParents: [...new Set([from, to].filter(Boolean))] });
   }));
 
   server.registerTool('set_flags', {
@@ -584,7 +590,8 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     doc.updateStyles(node_ids, styles);
     log(meta, doc, 'update_styles', node_ids);
     const note = await layoutNote(meta, doc, node_ids[0]);
-    return text(note.layout ? { ok: true, ...note } : 'ok');
+    const dialect = meta.normalize ? dialectStylesNote(styles) : '';
+    return text(note.layout || dialect ? { ok: true, ...note, ...(dialect && { dialect }) } : 'ok');
   }));
 
   server.registerTool('set_text_content', {
@@ -612,9 +619,10 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
   }, safe(({ project_id, ids }) => {
     const { meta, doc } = target(project_id);
-    const created = doc.duplicateNodes(ids);
+    const { created, idMap } = doc.duplicateNodes(ids, { withMap: true });
     log(meta, doc, 'duplicate_nodes', created);
-    return text({ created });
+    // idMap: original id -> copy id for every descendant, so the copy can be edited without a get_tree.
+    return text({ created, descendantIdMap: idMap });
   }));
 
   server.registerTool('delete_nodes', {

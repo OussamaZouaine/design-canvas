@@ -2,6 +2,7 @@
 // It reads only inline styles (the one place styling lives in this app), so it cannot see
 // real layout: overflow/clipping still needs a screenshot. Each issue is one short line.
 import { HTMLElement } from 'node-html-parser';
+import { dialectKind } from './dialect.mjs';
 
 // ---- colour parsing ---------------------------------------------------------
 
@@ -160,6 +161,32 @@ export function lintArtboard(ab, rootEl, { grid = 4, tokens = {} } = {}) {
         const left = px(st.get('left'));
         const top = px(st.get('top'));
         if ((left !== null && left < 0) || (top !== null && top < 0)) add(child, 'absolutely positioned outside the artboard (negative offset)');
+      }
+
+      // Layout dialect (see dialect.mjs): these make final sizes depend on neighbours, which is how content gets clipped.
+      const kind = dialectKind(tag, st);
+      if (kind === 'margin') add(child, 'margin is outside the layout dialect: use gap on the parent or padding');
+      else if (kind === 'table') add(child, 'table layout is outside the layout dialect: use flex rows with fixed-width slots');
+      else if (kind === 'inline') add(child, 'display inline / inline-block is outside the layout dialect: use a flex row');
+
+      // An absolute child that fills the board hides everything behind it and is usually a stray overlay.
+      if (st.get('position') === 'absolute' && !inherit.positioned) {
+        const edges = ['top', 'right', 'bottom', 'left'].filter((k) => px(st.get(k)) === 0 || st.get(k) === '0').length; // px() needs a unit, a bare 0 has none
+        const full = edges === 4 || (px(st.get('width')) >= ab.width && px(st.get('height')) >= ab.height);
+        if (full) add(child, 'absolutely positioned element covers the whole artboard');
+      }
+
+      // Fixed-width children of a flex row that cannot shrink and add up to more than the row's own width overflow it.
+      if (/flex/.test(st.get('display') || '') && !/column/.test(st.get('flex-direction') || '') && !/wrap/.test(st.get('flex-wrap') || '')) {
+        const rowW = px(st.get('width'));
+        if (rowW !== null) {
+          const gap = px(st.get('column-gap') ?? st.get('gap')?.split(/\s+/).pop()) ?? 0;
+          const kids = child.childNodes.filter((n) => n instanceof HTMLElement);
+          const widths = kids.map((k) => { const ks = styleMap(k, tokens); return ks.get('flex-shrink') === '0' || ks.get('flex') === 'none' ? px(ks.get('width')) : null; });
+          const fixed = widths.filter((w) => w !== null);
+          const sum = fixed.reduce((a, b) => a + b, 0) + gap * Math.max(0, kids.length - 1);
+          if (fixed.length && sum > rowW) add(child, `fixed-width children (${sum}px with gaps) are wider than their row (${rowW}px)`);
+        }
       }
 
       // Spacing off the grid (default 4px, the plan's scale) usually means a guess. Designs that
