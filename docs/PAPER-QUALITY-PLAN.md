@@ -1,6 +1,6 @@
 # Plan: make Claude's designs on Design Canvas good and never clipped
 
-Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide) and D (skill) implemented 2026-10-21, see their sections; B, E, F not started. One phase per session.
+Status: research done 2026-10-21. Phases A (stop clipping), C (taste guide), D (skill) and B (dialect report) implemented 2026-10-21, see their sections; E, F not started. One phase per session.
 Goal: (1) generations stay inside their frame, (2) generations have taste, (3) both hold for any agent, not only Claude Code.
 
 ## 1. Research: how Paper connects an agent to its canvas
@@ -84,7 +84,13 @@ Original list:
 5. `finish_working` gate: if measured overflow remains, return it instead of a plain ok.
 6. Tests: overflow detection on fixtures (tall content, wide child, absolute child), fit growth, raster parity.
 
-### Phase B: Layout dialect (predictable boxes)
+### Phase B: Layout dialect (predictable boxes) - DONE 2026-10-21 (reporting only)
+Built: `src/dialect.mjs` (`dialectNote`, `dialectStylesNote`, `dialectKind`). `write_html` / `update_styles` add a `dialect` line
+(counts of margin, grid, inline, table) only for projects with `meta.normalize`; nothing is rewritten. `lint` flags margin, tables,
+inline boxes, a full-board absolute element, and non-shrinking fixed-width children wider than their flex row. `move_node` returns
+`affectedParents`; `duplicate_nodes` returns `descendantIdMap` (`Doc.parentOf`, `duplicateNodes(ids, {withMap})`). Tests: `test/dialect.test.mjs`.
+Not built: text with no wrap room, repeated rows without fixed icon slots, safe margin-to-padding rewriting.
+Original list:
 1. Extend normalization (always on for new projects): drop/convert `margin` to padding/gap hints, flag `display:grid`, tables, `inline`.
    Prefer reporting over silent rewriting at first (`ignoredStyles`-style list in the tool result), rewriting only the safe cases.
 2. Lint additions: sibling fixed widths summing past parent width, text nodes with no wrap room, repeated rows without fixed icon slots,
