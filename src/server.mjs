@@ -45,6 +45,7 @@ const ui = {
   lastRead: new Map(), // projectId -> journal version Claude last saw through get_changes
   currentPage: new Map(), // projectId -> page id that create_artboard targets by default
   agentTimers: new Map(), // projectId -> timer that clears the "Claude is editing" highlight
+  touched: new Map(), // projectId -> Set of artboard ids Claude edited since its last finish_working (the layout gate checks these)
 };
 const meter = new Meter(); // per-tool token estimates, shown by /api/status
 
@@ -78,7 +79,7 @@ store.on((type, payload) => {
 
 // Ask an open tab of this project to do something only a browser can (rasterize an artboard,
 // read computed styles): it needs real layout. The tab answers via POST /api/p/:id/reply.
-function askBrowser(projectId, event, payload) {
+function askBrowser(projectId, event, payload, timeoutMs = 15000) {
   const tabs = [...ui.clients].filter((c) => c.projectId === projectId);
   if (!tabs.length) {
     return Promise.reject(new Error(`Open the project in a browser tab first: http://localhost:${PORT}/p/${projectId}`));
@@ -88,13 +89,15 @@ function askBrowser(projectId, event, payload) {
     const timer = setTimeout(() => {
       ui.pendingShots.delete(id);
       reject(new Error(`Browser did not answer ${event} in time`));
-    }, 15000);
+    }, timeoutMs);
     ui.pendingShots.set(id, { resolve, reject, timer });
     send(tabs[0].res, event, { id, ...payload });
   });
 }
 const requestScreenshot = (projectId, artboardId, opts = {}) => askBrowser(projectId, 'screenshot', { artboardId, ...opts });
 const requestCompare = (projectId, artboardId, refId) => askBrowser(projectId, 'compare', { artboardId, refId });
+// Layout checks run on every write, so a hung tab must not stall the tool call for the full 15 s.
+const requestMeasure = (projectId, boards) => askBrowser(projectId, 'measure', { boards }, 5000);
 const requestComputed = (projectId, nodeIds, props) => askBrowser(projectId, 'computed', { nodeIds, props });
 
 // Light up the nodes Claude just touched in every tab of the project. They clear on
@@ -105,7 +108,7 @@ function highlight(projectId, ids) {
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
-const mcpDeps = { store, ui, requestScreenshot, requestComputed, requestCompare, highlight, meter, port: PORT };
+const mcpDeps = { store, ui, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',

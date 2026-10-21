@@ -1,5 +1,7 @@
 // The MCP tool surface Claude sees. Designs live inside projects: Claude picks or
 // creates a project first, then uses the artboard tools against it.
+import { applyGrowth, formatReports } from './layout.mjs';
+import { BOARD_CSS, boardRoot } from './contract.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
@@ -17,7 +19,8 @@ const GUIDE = `Design Canvas workflow:
 2. create_artboard, then write_html into it. Add roughly one visual group (header, hero, card row) per call.
 3. Style with inline style attributes only (flexbox/grid are fine). No <script>, <link> or event handlers: they are stripped.
 4. Every element gets a stable id (data-pid). Use get_tree_summary to see ids, then update_styles / set_text_content / delete_nodes to refine instead of rewriting. Repeat a block with <x-clone node-id="N5"></x-clone> in write_html; undo reverts a bad change. Nodes marked data-locked can't be edited.
-5. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
+5. LAYOUT: boards default to height_mode fit (height is a minimum, the board grows with its content). Every board root is a flex column with border-box sizing. write_html / update_styles add a "layout" line to their result when something does not fit; check_layout measures real boxes on demand; fit_artboard fixes a clipped board in one call. Never delete and rebuild a board for an overflow. finish_working refuses to finish while content is clipped.
+5b. After meaningful changes call lint (text, cheap) and fix what it reports, then one get_screenshot to critique the result (needs the project open in the browser). Stop after 3 fix rounds or when lint says clean.
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...). Build a ramp by holding C and H and stepping L.
 Tips: pick a palette, type scale and spacing scale first; use px units; give containers explicit widths; use system fonts (Inter, system-ui) because custom fonts are not loaded.
 Feedback: the user can pin comments on elements. Call get_comments at the start of a task and after finishing; fix what open comments ask, then reply_comment and resolve_comment.
@@ -26,7 +29,7 @@ Safety net: the app auto-saves version history, so a bad generation can be rolle
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
-Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt -> get_basic_info -> get_tree -> write_html / update_styles -> lint -> one get_screenshot -> finish_working.
+Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt -> get_basic_info -> get_tree -> write_html / update_styles -> lint -> one get_screenshot -> check_layout -> finish_working.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>; check get_comments and get_changes before starting. Call get_guide for the full guide.`;
 
 const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
@@ -43,7 +46,7 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
 
-export function createMcpServer({ store, ui, requestScreenshot, requestComputed, requestCompare, highlight, meter, port }) {
+export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
@@ -73,7 +76,29 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
     store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
     doc.record('claude', tool, ids);
+    // Remember which boards were edited so finish_working can check that their content still fits.
+    const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
+    for (const id of ids) { const a = doc.artboardOf(id); if (a) set.add(a.id); }
     if (tool !== 'delete_nodes') highlight?.(meta.id, ids);
+  };
+  // Ask the browser whether these boards' content fits their frames. `fit` boards are grown to their content
+  // here. Returns { text } with one line per problem, or null when no tab is open / it did not answer.
+  const checkLayout = async (meta, doc, boardIds) => {
+    const boards = boardIds.map((id) => doc.getArtboard(id)).filter((a) => a && !a.generated);
+    if (!boards.length) return { text: 'ok: nothing to check' };
+    let reports;
+    try {
+      reports = await requestMeasure(meta.id, boards.map((a) => ({ id: a.id, html: a.html, width: a.width, height: a.height, fit: a.heightMode === 'fit' })));
+    } catch { return null; }
+    const grown = applyGrowth(doc, reports);
+    return { text: formatReports(reports, doc, grown), reports, grown };
+  };
+  // After a write: one `layout` line only when something does not fit (silent when fine or no tab is open,
+  // so the common case costs no tokens).
+  const layoutNote = async (meta, doc, anyId) => {
+    const ab = doc.artboardOf(anyId);
+    const r = ab ? await checkLayout(meta, doc, [ab.id]) : null;
+    return r && !r.text.startsWith('ok') ? { layout: r.text } : {};
   };
   const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
 
@@ -202,20 +227,21 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
   }));
 
   server.registerTool('create_artboard', {
-    description: 'Create an empty artboard (a frame on the canvas). Returns its id.',
+    description: 'Create an empty artboard (a frame on the canvas). Returns its id. By default the board is height_mode "fit": height is a MINIMUM and the board grows with its content, so nothing is ever cut off. Use "fixed" only when the height must be exact (a 844px phone mockup).',
     inputSchema: {
       ...pid,
       name: z.string().optional(),
       width: z.number().min(40).max(5000).optional(),
-      height: z.number().min(40).max(10000).optional(),
+      height: z.number().min(40).max(10000).optional().describe('Height in px (minimum height for a fit board). Default 900.'),
+      height_mode: z.enum(['fit', 'fixed']).optional().describe('fit (default): grows with content. fixed: exactly this tall; extra content is clipped.'),
       page_id: z.string().optional().describe('Page for the new board (default: the page chosen with set_page, else the first).'),
       x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
       y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
     },
   }, safe(({ project_id, ...a }) => {
     const { meta, doc } = target(project_id);
-    const { page_id, ...rest } = a;
-    const ab = doc.createArtboard({ ...rest, page: page_id ?? ui.currentPage.get(meta.id) });
+    const { page_id, height_mode = 'fit', ...rest } = a;
+    const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'create_artboard', ab.id);
     return text(ab);
   }));
@@ -229,11 +255,11 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
       html: z.string().max(200_000),
       mode: z.enum(['append', 'prepend', 'replace', 'before', 'after']).optional(),
     },
-  }, safe(({ project_id, target_id, html, mode }) => {
+  }, safe(async ({ project_id, target_id, html, mode }) => {
     const { meta, doc } = target(project_id);
     const created = doc.writeHtml(target_id, html, mode);
     log(meta, doc, 'write_html', target_id);
-    return text({ created });
+    return text({ created, ...(await layoutNote(meta, doc, target_id)) });
   }));
 
   server.registerTool('get_tree', {
@@ -472,12 +498,51 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
   }));
 
   server.registerTool('finish_working', {
-    description: 'Call when you are done with a task: clears the highlight the canvas shows on nodes you were editing.',
+    description: 'Call when you are done with a task: clears the highlight the canvas shows on nodes you were editing, and checks that every board you edited still fits its frame. If it reports a problem, fix it (fit_artboard, narrower widths) and call finish_working again.',
     inputSchema: { ...pid },
-  }, safe(({ project_id }) => { highlight?.(target(project_id).meta.id, []); return text('ok'); }));
+  }, safe(async ({ project_id }) => {
+    const { meta, doc } = target(project_id);
+    highlight?.(meta.id, []);
+    const ids = [...(ui.touched.get(meta.id) ?? [])];
+    const r = ids.length ? await checkLayout(meta, doc, ids) : null;
+    // Clear only when the check ran: with no browser tab the boards stay "touched" for the next attempt.
+    if (r || !ids.length) ui.touched.delete(meta.id);
+    if (!r) return text(ids.length ? 'ok (layout not checked: open the project in a browser tab to verify nothing is clipped)' : 'ok');
+    return text(r.text.startsWith('ok') ? 'ok' : `Not finished, content does not fit:\n${r.text}`);
+  }));
+
+  server.registerTool('check_layout', {
+    description: 'Measure real layout in the browser and report content that does not fit its artboard: content taller or wider than the frame, nodes that extend past it, nodes that clip their own content. Boards in fit mode are grown to their content automatically. Omit artboard_id to check every board on the current page (max 20). Needs the project open in a browser tab.',
+    inputSchema: { ...pid, artboard_id: z.string().optional() },
+  }, safe(async ({ project_id, artboard_id }) => {
+    const { meta, doc } = target(project_id);
+    if (artboard_id && !doc.getArtboard(artboard_id)) throw new Error(`Artboard ${artboard_id} not found`);
+    const page = doc._pageId(ui.currentPage.get(meta.id));
+    const ids = artboard_id ? [artboard_id] : doc.data.artboards.filter((a) => doc.pageOf(a) === page).slice(0, 20).map((a) => a.id);
+    const r = await checkLayout(meta, doc, ids);
+    if (!r) throw new Error(`Open the project in a browser tab first: ${url(meta.id)}`);
+    return text(r.text);
+  }));
+
+  server.registerTool('fit_artboard', {
+    description: 'Make a board fit its content: switches it to fit mode and sets its height to exactly what the content needs (not below min_height). This is the one-call fix for a clipped board; never delete and rebuild a board for an overflow. Needs the project open in a browser tab to measure; without one it only switches the mode.',
+    inputSchema: { ...pid, artboard_id: z.string(), min_height: z.number().min(40).max(10000).optional() },
+  }, safe(async ({ project_id, artboard_id, min_height }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.getArtboard(artboard_id);
+    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    let content = null;
+    try {
+      const [r] = await requestMeasure(meta.id, [{ id: ab.id, html: ab.html, width: ab.width, height: ab.height, fit: true }]);
+      content = r.contentHeight;
+    } catch { /* no tab: mode only */ }
+    doc.fitArtboard(ab.id, content, min_height);
+    log(meta, doc, 'fit_artboard', ab.id);
+    return text({ artboard_id: ab.id, height: ab.height, height_mode: 'fit', measured: content != null });
+  }));
 
   server.registerTool('lint', {
-    description: 'Check an artboard or node (var(--token) values are resolved; mode checks a token mode) for undefined tokens, text contrast below WCAG AA, text under 12px, spacing off the grid (4px by default, grid 2 for designs that use half-steps), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only, so overflow/clipping still needs a screenshot.',
+    description: 'Check an artboard or node (var(--token) values are resolved; mode checks a token mode) for undefined tokens, text contrast below WCAG AA, text under 12px, spacing off the grid (4px by default, grid 2 for designs that use half-steps), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only: for overflow and clipping use check_layout.',
     inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)'), grid: z.union([z.literal(2), z.literal(4)]).optional().describe('Spacing grid in px (default 4).'), mode: z.string().optional().describe('Token mode to check, e.g. dark (default: base tokens).') },
   }, safe(({ project_id, id, grid, mode }) => text(formatIssues(target(project_id).doc.lint(id, { grid, mode })))));
 
@@ -520,11 +585,12 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
       node_ids: z.array(z.string()).min(1),
       styles: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
     },
-  }, safe(({ project_id, node_ids, styles }) => {
+  }, safe(async ({ project_id, node_ids, styles }) => {
     const { meta, doc } = target(project_id);
     doc.updateStyles(node_ids, styles);
     log(meta, doc, 'update_styles', node_ids);
-    return text('ok');
+    const note = await layoutNote(meta, doc, node_ids[0]);
+    return text(note.layout ? { ok: true, ...note } : 'ok');
   }));
 
   server.registerTool('set_text_content', {
@@ -622,7 +688,7 @@ export function createMcpServer({ store, ui, requestScreenshot, requestComputed,
     const css = Object.keys(tokens).length
       ? `<style>:root{${toCssDeclarations(tokens)}}${modes.dark ? `@media (prefers-color-scheme:dark){:root{${toCssDeclarations(modes.dark)}}}` : ''}</style>`
       : '';
-    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title>${css}</head>\n<body style="margin:0"><div style="position:relative;width:${ab.width}px;min-height:${ab.height}px">${clean}</div></body></html>`);
+    return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title><style>${BOARD_CSS}</style>${css}</head>\n<body style="margin:0"><div style="width:${ab.width}px;min-height:${ab.height}px;display:flex;flex-direction:column">${boardRoot(true, clean)}</div></body></html>`);
   }));
 
   return server;
