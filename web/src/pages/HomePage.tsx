@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { useNavigate } from '@tanstack/react-router';
+import { LayoutGrid, List, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createProject, importProject, listAllComments, listProjects, projectAction, type ProjectSummary } from '@/api/projects';
 import { useLiveReload } from '@/hooks/useLiveReload';
 import { toast } from '@/store/toast';
-import { AppHeader } from '@/ui/AppHeader';
-import { ProjectCard, type CardActions } from './home/ProjectCard';
+import { cn } from '@/lib/utils';
+import { HomeSidebar } from './home/HomeSidebar';
+import { ProjectCard, type CardActions, type View } from './home/ProjectCard';
 
 type Sort = 'recent' | 'created' | 'name';
 const SORTS = [
@@ -39,6 +40,9 @@ export function HomePage() {
   const [animateIn, setAnimateIn] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Grid/list choice is remembered; localStorage can throw (private mode), so it is guarded.
+  const [view, setView] = useState<View>(() => { try { return localStorage.getItem('dc-home-view') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } });
+  const changeView = (v: View) => { setView(v); try { localStorage.setItem('dc-home-view', v); } catch { /* not persisted */ } };
 
   const load = () => {
     Promise.all([listProjects(), listProjects({ trashed: true })])
@@ -89,43 +93,56 @@ export function HomePage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-muted/30">
-      <AppHeader
+    <div className="flex h-full flex-col md:flex-row">
+      <HomeSidebar
+        query={query}
+        onQuery={setQuery}
+        inTrash={inTrash}
+        onSection={setInTrash}
+        liveCount={live.length}
+        trashCount={trashed.length}
+        openComments={openComments}
         connection={connection}
-        actions={
-          <>
-            <Link to="/comments" className={buttonVariants({ variant: 'outline' })}>
-              Comments
-              {openComments > 0 && <span className="rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{openComments}</span>}
-            </Link>
-            <Button variant="outline" title="Import a .dcproject.json file" onClick={() => fileRef.current?.click()}>Import</Button>
-            <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
-            <Button onClick={() => setNewOpen(true)}>+ New project</Button>
-          </>
-        }
-      >
-        <Input type="search" placeholder="Search projects" aria-label="Search projects" className="w-64" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
-          <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
-          <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
-        </Select>
-      </AppHeader>
+        onImport={() => fileRef.current?.click()}
+      />
+      <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
 
-      <main className="mx-auto max-w-[1280px] px-7 pt-6 pb-16">
-        <Tabs value={inTrash ? 'trash' : 'all'} onValueChange={(v) => setInTrash(v === 'trash')} className="mb-5">
-          <TabsList>
-            <TabsTrigger value="all">Projects <span className="tnum opacity-70">{live.length || ''}</span></TabsTrigger>
-            <TabsTrigger value="trash">Trash <span className="tnum opacity-70">{trashed.length || ''}</span></TabsTrigger>
-          </TabsList>
-        </Tabs>
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-[1280px] px-8 pt-10 pb-16">
+          <div className="mb-6 flex flex-wrap items-center gap-2">
+            <h1 className="mr-auto text-[22px] font-medium tracking-tight">{inTrash ? 'Trash' : 'Recents'}</h1>
+            <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
+              <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
+              <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button onClick={() => setNewOpen(true)}><Plus />New project</Button>
+            <div role="group" aria-label="View" className="flex rounded-lg bg-muted p-0.5">
+              {([['grid', LayoutGrid, 'Grid view'], ['list', List, 'List view']] as const).map(([v, Icon, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-label={label}
+                  aria-pressed={view === v}
+                  onClick={() => changeView(v)}
+                  className={cn('grid size-7 place-items-center rounded-md text-muted-foreground transition-colors duration-150', view === v && 'bg-background text-foreground shadow-sm')}
+                >
+                  <Icon className="size-4" />
+                </button>
+              ))}
+            </div>
+          </div>
 
-        <div className="grid justify-start gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, 320px)' }}>
-          {shown.map((p, i) => (
-            <ProjectCard key={p.id} project={p} inTrash={inTrash} index={i} animateIn={animateIn} actions={actions} />
-          ))}
+          <div
+            className={cn('gap-6', view === 'grid' ? 'grid justify-start' : 'flex flex-col gap-2')}
+            style={view === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, 256px)' } : undefined}
+          >
+            {shown.map((p, i) => (
+              <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
+            ))}
+          </div>
+
+          {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} />}
         </div>
-
-        {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} />}
       </main>
 
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
