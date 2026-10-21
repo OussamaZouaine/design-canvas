@@ -1,6 +1,6 @@
 // Generation-quality evals: run fixed briefs through fresh Claude Code sessions and record numbers.
 //
-//   node examples/evals/run.mjs run <label> [--only id,id] [--no-open]   run the briefs, save results/<label>.json
+//   node examples/evals/run.mjs run <label> [--only id,id] [--repeat n] [--no-open]   run the briefs, save results/<label>.json
 //   node examples/evals/run.mjs report <labelA> <labelB> ...             side-by-side table of saved runs
 //
 // Needs the server running (pnpm start) and `design-canvas` registered in Claude Code. Each brief gets its own
@@ -27,7 +27,7 @@ const api = async (p, body) => {
 // The agent measures nothing here: it just designs. The wording asks for the normal workflow so the eval
 // exercises the same path a user gets (guide, brief, review loop) instead of a special eval mode.
 const promptFor = (brief, projectId) =>
-  `Use the design-canvas MCP server. Work in the existing project ${projectId} (do not create another project). ` +
+  `Use the design-canvas MCP server. Work in project ${projectId}: it is a NEW, EMPTY project made for this task (do not create another one; there are no existing boards or comments to read).` +
   `Follow the server's guide. Brief: ${brief.prompt}\nWork autonomously, do not ask questions, and call finish_working when done.`;
 
 // `claude -p` reads the prompt from stdin, which avoids shell-quoting the brief on Windows.
@@ -60,14 +60,16 @@ async function ensureTab(projectId, open) {
   return false;
 }
 
-async function run(label, only, open) {
+async function run(label, only, open, repeat) {
   const briefs = JSON.parse(fs.readFileSync(path.join(HERE, 'briefs.json'), 'utf8')).filter((b) => !only || only.includes(b.id));
   if (!briefs.length) throw new Error('no briefs selected');
   fs.mkdirSync(RESULTS, { recursive: true });
   const results = [];
-  for (const brief of briefs) {
-    console.log(`\n== ${brief.id}: ${brief.title}`);
-    const project = await api('/api/projects', { name: `eval ${label} ${brief.id}` });
+  // Repeats go one after another (never in parallel: the token meter is global). Each gets its own project.
+  const jobs = briefs.flatMap((b) => Array.from({ length: repeat }, (_, i) => ({ brief: b, n: i + 1 })));
+  for (const { brief, n } of jobs) {
+    console.log(`\n== ${brief.id} #${n}: ${brief.title}`);
+    const project = await api('/api/projects', { name: `eval ${label} ${brief.id} ${n}` });
     const projectId = project.id;
     const tab = await ensureTab(projectId, open);
     if (!tab) console.log('  no browser tab connected: layout will not be measured');
@@ -78,7 +80,7 @@ async function run(label, only, open) {
     const after = (await api('/api/status')).meter;
     const quality = await api(`/api/p/${projectId}/eval`);
     const r = {
-      id: brief.id, projectId, seconds,
+      id: brief.id, repeat: n, projectId, seconds,
       turns: agent.num_turns ?? null,
       // Real token use from the CLI (the server meter only sees tool results, not the HTML the agent writes or the context it re-reads).
       inputTokens: agent.usage?.input_tokens ?? null, outputTokens: agent.usage?.output_tokens ?? null,
@@ -102,8 +104,14 @@ function report(labels) {
   const lines = [`| brief | run | ${cols.map((c) => c[1]).join(' | ')} |`, `|${'---|'.repeat(cols.length + 2)}`];
   for (const id of ids) {
     for (const run of runs) {
-      const x = run.results.find((r) => r.id === id);
-      lines.push(`| ${id} | ${run.label} | ${cols.map(([k]) => (x ? x[k] ?? '?' : '-')).join(' | ')} |`);
+      // With --repeat a brief has several results: average the numbers (one run alone is too noisy to compare).
+      const xs = run.results.filter((r) => r.id === id);
+      const avg = (k) => {
+        const v = xs.map((x) => x[k]).filter((n) => typeof n === 'number');
+        if (!v.length) return xs.length ? xs[0][k] ?? '?' : '-'; // non-numbers such as `brief`
+        return Math.round((v.reduce((a, b) => a + b, 0) / v.length) * 100) / 100;
+      };
+      lines.push(`| ${id} | ${run.label} (x${xs.length}) | ${cols.map(([k]) => avg(k)).join(' | ')} |`);
     }
   }
   console.log(lines.join('\n'));
@@ -112,10 +120,11 @@ function report(labels) {
 const [cmd, ...rest] = process.argv.slice(2);
 const flag = (name) => { const i = rest.indexOf(name); return i < 0 ? null : rest[i + 1]; };
 if (cmd === 'run' && rest[0] && !rest[0].startsWith('--')) {
-  await run(rest[0], flag('--only')?.split(','), !rest.includes('--no-open'));
+  const repeat = Math.max(1, Math.min(5, parseInt(flag('--repeat') ?? '1', 10) || 1));
+  await run(rest[0], flag('--only')?.split(','), !rest.includes('--no-open'), repeat);
 } else if (cmd === 'report' && rest.length) {
   report(rest);
 } else {
-  console.log('usage: run.mjs run <label> [--only id,id] [--no-open] | run.mjs report <label> [<label>...]');
+  console.log('usage: run.mjs run <label> [--only id,id] [--repeat n] [--no-open] | run.mjs report <label> [<label>...]');
   process.exit(1);
 }
