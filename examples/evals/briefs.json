@@ -1,0 +1,32 @@
+[
+  {
+    "id": "landing",
+    "title": "Landing page",
+    "prompt": "Design a desktop landing page (1440 wide) for Tidepool, a tool that turns meeting recordings into a shared, searchable team memory. Hero, three feature sections, a testimonial, pricing teaser and footer."
+  },
+  {
+    "id": "dashboard",
+    "title": "Analytics dashboard",
+    "prompt": "Design a desktop dashboard for a small online plant shop: revenue this week, orders, top products, a stock-low list and a recent orders table."
+  },
+  {
+    "id": "onboarding",
+    "title": "Mobile onboarding",
+    "prompt": "Design a 3-screen mobile onboarding flow (phone size) for a habit app that helps people drink more water. Welcome, set a daily goal, allow reminders."
+  },
+  {
+    "id": "settings",
+    "title": "Settings screen",
+    "prompt": "Design a desktop settings page for a note-taking app: profile, appearance (light/dark/auto), notifications toggles, connected accounts and a danger zone."
+  },
+  {
+    "id": "pricing",
+    "title": "Pricing page",
+    "prompt": "Design a desktop pricing page with three plans (Free, Team, Business), a monthly/yearly switch, a feature comparison and a short FAQ."
+  },
+  {
+    "id": "empty-state",
+    "title": "Empty states",
+    "prompt": "Design empty states for a project-management app: no projects yet, no search results, and an inbox at zero. One board each, desktop, with a clear next action."
+  }
+]

@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { ProjectStore, ID_RE } from './store.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { Meter } from './meter.mjs';
+import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
@@ -337,6 +338,18 @@ const server = http.createServer(async (req, res) => {
         }
         if (parts[3] === 'tokens') return json(res, 200, extractTokens(p.doc.data.artboards));
         if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id));
+        // Eval numbers for examples/evals. Read-only: boards are measured but never grown, so the run
+        // is judged on what the agent left behind, not on what this call would repair.
+        if (parts[3] === 'eval') {
+          const boards = p.doc.data.artboards.filter((a) => !a.generated);
+          const tabOpen = [...ui.clients].some((c) => c.projectId === p.meta.id);
+          let reports = null;
+          if (tabOpen && boards.length) {
+            try { reports = await requestMeasure(p.meta.id, boards.map((a) => ({ id: a.id, html: a.html, width: a.width, height: a.height, fit: a.heightMode === 'fit' }))); } catch { /* tab did not answer */ }
+          }
+          const issues = Object.fromEntries(boards.map((a) => [a.id, p.doc.lint(a.id)]));
+          return json(res, 200, { tabOpen, boards: boards.length, brief: Boolean(p.meta.brief), ...lintMetrics(issues), ...(reports ? layoutMetrics(reports) : { layout: 'not measured' }) });
+        }
         return json(res, 404, { error: 'Not found' });
       }
 
