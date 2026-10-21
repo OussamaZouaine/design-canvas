@@ -14,9 +14,9 @@ Claude Code version: it tells you the order and which guide topic to load at eac
 
 ## Step 0: load the guide (always first)
 
-Call `get_guide({topic: "start"})`, then load the topic for the step you are on: `brief` before a new design, `type` and
-`layout` before the first write, `review` before the first screenshot, `mobile` for phone screens. Load a topic once per
-session; they are small on purpose.
+Call `get_guide()` once: it returns the whole method (workflow, brief, type, layout, review) in a single call, because every
+call costs an agent turn. Only `mobile` is a separate topic (load it for phone screens). Send independent tool calls
+together in one turn, and in a project you just created skip `get_basic_info`, `get_tree` and `get_comments`.
 
 ## Workflow (one task per session keeps token cost down)
 

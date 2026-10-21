@@ -17,9 +17,10 @@ import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } fr
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
 // The first line is a gate: the process and taste rules live in the guide, and clients that skip it skip them.
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
-You MUST call get_guide() before any other tool, and get_guide({topic:"brief"}) before the first write of a new design: post a short brief (mood, palette, type, direction) in chat, then pass it as log_prompt.brief. Other topics: type, layout, review, mobile.
-Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt -> get_basic_info -> get_tree -> write_html / update_styles -> lint -> one get_screenshot -> check_layout -> finish_working.
-Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>; check get_comments and get_changes before starting. Call get_guide for the full guide.`;
+You MUST call get_guide() once before any other tool: it returns the whole method (workflow, brief, type, layout, review) in one call. Before the first write of a new design post a short brief in chat, then pass it as log_prompt.brief. Only get_guide({topic:"mobile"}) is separate.
+Be economical with turns: send independent tool calls together in one turn.
+Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard -> write_html / update_styles -> lint -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
+Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>. Call get_guide for the full guide.`;
 
 const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
 
@@ -93,7 +94,7 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
-    description: 'Read this first (no topic = the workflow). Topics with the design method: brief (mood, palette, direction: read before a new design), type, layout (flex dialect, fit height), review (checkpoints after each section), mobile (status bar, safe areas).',
+    description: 'Read this first, once. No topic = the whole method in one call (workflow, brief, type, layout, review). Single topics (brief, type, layout, review) re-read one part; mobile (status bar, safe areas) is only available as its own topic.',
     inputSchema: { topic: z.enum(Object.keys(TOPICS)).optional() },
   }, safe(({ topic }) => text(guideText(topic))));
 
@@ -237,7 +238,7 @@ export function createMcpServer({ store, ui, requestScreenshot, requestMeasure, 
     const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'create_artboard', ab.id);
     // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
-    const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, read get_guide({topic:"brief"}), post a brief in chat and pass it to log_prompt.' };
+    const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, follow the brief section of get_guide, post a brief in chat and pass it to log_prompt.' };
     return text({ ...ab, ...reminder });
   }));
 
