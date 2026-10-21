@@ -74,7 +74,7 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 
 ## Next work, split into sessions (start a fresh session per area; each one reads CLAUDE.md + this file)
 Order is a suggestion; the user decides.
-0. **Generation quality (Phases A, B, C, D done 2026-10-21; next is F, evals; then E, fonts):** follow `docs/PAPER-QUALITY-PLAN.md`
+0. **Generation quality (Phases A, B, C, D, F built 2026-10-21; F baseline runs still to do via `examples/evals/run.mjs`; next build is E, fonts):** follow `docs/PAPER-QUALITY-PLAN.md`
    (stop frame clipping with fit-height boards + measured overflow report, taste guide served by the MCP, skill rewrite, evals).
    Decisions answered 2026-10-21 (section 5): auto-grow boards by default, soft brief reminder, system + Google Fonts
    (server fetches and caches woff2, embedded for screenshots, Phase E), merged house style. Recommended order: A (done), C (done), D (done), B (done), F, E. Phase A leftover: user hand-edits do not auto-grow a fit board (add a ResizeObserver in the engine).
