@@ -353,11 +353,19 @@ export class ProjectStore {
   }
 
   // A user request. Also takes a restore point so "undo this whole request" is one click.
-  logPrompt(id, text) {
+  // `brief` (optional) is the design brief for a new design: kept on the project meta so later sessions
+  // (and the create_artboard reminder) know the intent, and on the entry so Activity can show it.
+  logPrompt(id, text, brief) {
     const clean = String(text).replace(/\s+/g, ' ').trim().slice(0, 500);
     if (!clean) throw new Error('prompt is required');
+    const cleanBrief = brief ? String(brief).trim().slice(0, 1500) : '';
     const snapshotId = this.snapshot(id, `Before: ${clean.slice(0, 60)}`) ?? this.lastSnap.get(id)?.at ?? null;
-    this._pushActivity(id, { kind: 'prompt', text: clean, snapshotId: snapshotId ? String(snapshotId) : null });
+    this._pushActivity(id, { kind: 'prompt', text: clean, brief: cleanBrief || undefined, snapshotId: snapshotId ? String(snapshotId) : null });
+    if (cleanBrief) {
+      const meta = this._meta(id);
+      meta.brief = cleanBrief;
+      this._saveMeta(id);
+    }
   }
 
   // Group the raw log into runs: each prompt starts a run; its actions are merged by tool.
@@ -369,7 +377,7 @@ export class ProjectStore {
     for (const e of raw) {
       const gap = cur && e.t - cur.end > 10 * 60 * 1000;
       if (e.kind === 'prompt') {
-        cur = { t: e.t, end: e.t, prompt: e.text, snapshotId: e.snapshotId, actions: [] };
+        cur = { t: e.t, end: e.t, prompt: e.text, brief: e.brief, snapshotId: e.snapshotId, actions: [] };
         runs.push(cur);
       } else {
         if (!cur || (!cur.prompt && gap)) { cur = { t: e.t, end: e.t, prompt: null, snapshotId: null, actions: [] }; runs.push(cur); }
