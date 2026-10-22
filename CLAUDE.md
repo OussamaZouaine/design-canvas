@@ -34,6 +34,8 @@ list: pick one area per session, keep sessions short, and update PROGRESS.md / R
 - `skills/design-canvas/SKILL.md` + `.claude-plugin/` + `.mcp.json`: the Claude Code plugin (skill carries the long guidance).
 - `docs/ROADMAP.md`: the build plan adapted to this Node codebase, with what is done and what is left.
 - `src/fonts.mjs` Google Fonts: `use_font` / `list_fonts` fetch the latin woff2 once into `data/fonts/` (gitignored), served at `/api/fonts/<slug>/<file>`, recorded in `meta.fonts`; browser side is `web/src/canvas/fonts.ts`.
+- `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `get_jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
+- `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
 - `web/` React 19 + Vite + Tailwind v4 + shadcn (Base UI) client: `src/canvas/` imperative engine + editor, `src/panels/`, `src/shell/`, `src/pages/`, `src/store/` (zustand), `src/api/`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
