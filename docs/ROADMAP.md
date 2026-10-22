@@ -60,9 +60,9 @@ and take the plan's *ideas*, not its rewrite. Status below is as of 2026-10-19.
 1. **Manual editing, remaining parts**: dragging to reorder inside flex parents on the canvas (the Layers panel does it), a
    toolbar for inserting frames, text, images and components, image upload into `assets/`, per-side padding fields and a
    colour picker. Resize handles, dragging absolute nodes, copy / paste, style fields, in-place text and undo / redo are done.
-2. **References, remaining part**: `capture_url` (copy a live page as an artboard). It needs a headless browser; the open tab
-   cannot fetch cross-origin pages, so it stays out until a Chrome dependency is acceptable. Reference images, paste / drop and
-   `compare_to_reference` are done.
+2. **References**: `capture_url` is done (2026-10-22): a throwaway headless Chrome/Edge over CDP (`src/capture.mjs`) copies a public page
+   as a flat inline-styled artboard plus a screenshot reference. Leftovers: table colspan/rowspan, web fonts, oklch conversion of the
+   copied colours. Reference images, paste / drop and `compare_to_reference` are done.
 3. Polish: keyboard shortcuts, 50+ board performance (cached thumbnails already exist), "commit version" button,
     Wails desktop wrapper (the plan's Go/Wails path does not apply; Electron or Tauri would be the equivalent).
 
