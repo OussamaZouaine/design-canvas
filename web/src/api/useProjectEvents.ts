@@ -12,7 +12,10 @@ export function useProjectEvents(projectId: string) {
     const s = useProject.getState();
     s.reset();
 
-    const es = new EventSource(`/events?project=${projectId}`);
+    // The server's headless render worker opens the page with ?headless=1. It is a tab like any other
+    // (it answers screenshots and measures) but must not claim "active project" from the user's tab.
+    const headless = new URLSearchParams(location.search).has('headless');
+    const es = new EventSource(`/events?project=${projectId}${headless ? '&headless=1' : ''}`);
     const parse = <T,>(e: Event) => JSON.parse((e as MessageEvent).data) as T;
 
     es.onopen = () => useProject.getState().setConnection('connected');
@@ -40,8 +43,10 @@ export function useProjectEvents(projectId: string) {
     // Claim "active project" when the tab loads or becomes visible, NOT on SSE reconnect, so a stale
     // background tab cannot steal it from the one the user is looking at.
     const claim = () => { if (document.visibilityState === 'visible') activateProject(projectId).catch(() => {}); };
-    claim();
-    document.addEventListener('visibilitychange', claim);
+    if (!headless) {
+      claim();
+      document.addEventListener('visibilitychange', claim);
+    }
 
     return () => {
       es.close();

@@ -14,6 +14,7 @@ import { Meter } from './meter.mjs';
 import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
+import { HeadlessWorker } from './headless.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,11 +82,25 @@ store.on((type, payload) => {
 
 // Ask an open tab of this project to do something only a browser can (rasterize an artboard,
 // read computed styles): it needs real layout. The tab answers via POST /api/p/:id/reply.
-function askBrowser(projectId, event, payload, timeoutMs = 15000) {
-  const tabs = [...ui.clients].filter((c) => c.projectId === projectId);
-  if (!tabs.length) {
-    return Promise.reject(new Error(`Open the project in a browser tab first: http://localhost:${PORT}/p/${projectId}`));
+// With no tab open, the headless worker (headless.mjs) starts one in the background.
+const headless = new HeadlessWorker({
+  port: PORT,
+  hasTab: (projectId) => [...ui.clients].some((c) => c.projectId === projectId),
+});
+
+async function askBrowser(projectId, event, payload, timeoutMs = 15000) {
+  if (![...ui.clients].some((c) => c.projectId === projectId)) {
+    try {
+      await headless.ensure(projectId);
+    } catch (e) {
+      throw new Error(`Open the project in a browser tab first (http://localhost:${PORT}/p/${projectId}). Headless fallback failed: ${e.message}`);
+    }
+  } else {
+    headless.touch(projectId);
   }
+  // A real tab the user is looking at wins over the headless one.
+  const tabs = [...ui.clients].filter((c) => c.projectId === projectId).sort((a, b) => Number(!!a.headless) - Number(!!b.headless));
+  if (!tabs.length) throw new Error('The browser tab closed before it could answer');
   return new Promise((resolve, reject) => {
     const id = randomUUID();
     const timer = setTimeout(() => {
@@ -257,7 +272,7 @@ const server = http.createServer(async (req, res) => {
       const projectId = url.searchParams.get('project');
       if (projectId && !(ID_RE.test(projectId) && store.get(projectId))) { res.writeHead(404).end(); return; }
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-      const client = { res, projectId: projectId || null };
+      const client = { res, projectId: projectId || null, headless: url.searchParams.has('headless') };
       if (projectId) {
         const p = store.get(projectId);
         send(res, 'meta', p.meta);
@@ -292,7 +307,7 @@ const server = http.createServer(async (req, res) => {
 
       // Server health for the MCP panel: open tabs and where Claude's tokens go.
       if (parts[1] === 'status' && req.method === 'GET') {
-        return json(res, 200, { ok: true, tabs: [...ui.clients].filter((c) => c.projectId).length, meter: meter.snapshot() });
+        return json(res, 200, { ok: true, tabs: [...ui.clients].filter((c) => c.projectId && !c.headless).length, headless: { available: headless.available, running: headless.procs.size }, meter: meter.snapshot() });
       }
 
       // Downloaded font files: /api/fonts/<slug>/<style>-<weight>.woff2. FontCache.file only accepts strict
@@ -356,9 +371,10 @@ const server = http.createServer(async (req, res) => {
         // is judged on what the agent left behind, not on what this call would repair.
         if (parts[3] === 'eval') {
           const boards = p.doc.data.artboards.filter((a) => !a.generated);
-          const tabOpen = [...ui.clients].some((c) => c.projectId === p.meta.id);
+          // tabOpen reports whether a real (non-headless) tab was there; the measure itself may use the headless worker.
+          const tabOpen = [...ui.clients].some((c) => c.projectId === p.meta.id && !c.headless);
           let reports = null;
-          if (tabOpen && boards.length) {
+          if (boards.length) {
             try { reports = await requestMeasure(p.meta.id, boards.map((a) => ({ id: a.id, html: a.html, width: a.width, height: a.height, fit: a.heightMode === 'fit' }))); } catch { /* tab did not answer */ }
           }
           const issues = Object.fromEntries(boards.map((a) => [a.id, p.doc.lint(a.id)]));
@@ -408,7 +424,7 @@ const server = http.createServer(async (req, res) => {
 
 // Don't lose the last few edits: debounced writes are flushed when the process is stopped.
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { store.flushAll(); process.exit(0); });
+  process.on(sig, () => { headless.stopAll(); store.flushAll(); process.exit(0); });
 }
 
 server.listen(PORT, HOST, () => {
