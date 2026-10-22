@@ -104,7 +104,7 @@ Order is a suggestion; the user decides.
    `capture_url` needs a headless browser (not built).
 5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
    paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
-6. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+6. Small Paper-inspired tools: `find_nodes`, `get_jsx`, `export` (PNG) and `scripts/setup-mcp.mjs` + stdio shim built 2026-10-22 (restart Claude Code to see the tools). Not done: PDF export. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
