@@ -104,11 +104,11 @@ Order is a suggestion; the user decides.
    `capture_url` is done (2026-10-22, `src/capture.mjs`; known gaps: table colspan/rowspan, web fonts, rgb colours, no oklch conversion).
 5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
    paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
-6. **Ideas from the Paper desktop analysis (2026-10-22, `docs/PAPER-QUALITY-PLAN.md` 1.1b):** headless render worker DONE 2026-10-22
-   (`src/headless.mjs`, see CLAUDE.md "Browser round-trips"; verified: measure 1.3 s and get_screenshot with no tab open; MCP tool
-   descriptions still say "needs a browser tab", reword on the next schema change; `capture_url` can now build on it, not built);
-   still open: per-MCP-session project binding + agent identity/presence;
-   make `askBrowser` handlers work in hidden tabs; `find_nodes`, `get_jsx` for a subtree, PNG/PDF `export`; stdio shim / setup script.
+6. **Ideas from the Paper desktop analysis (2026-10-22, `docs/PAPER-QUALITY-PLAN.md` 1.1b):** DONE 2026-10-22: headless render worker
+   (`src/headless.mjs`, see CLAUDE.md "Browser round-trips"), `capture_url`, `find_nodes`, `get_jsx`, `export` (PNG) and
+   `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
+   reword on the next schema change. Still open: PDF export; per-MCP-session project binding + agent identity/presence;
+   make `askBrowser` handlers work in hidden tabs.
 7. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
