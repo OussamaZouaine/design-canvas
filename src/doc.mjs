@@ -652,11 +652,12 @@ export class Doc {
   // Add HTML into an artboard or relative to a node.
   //   append / prepend: inside the target, last / first   replace: swap the target's children
   //   before / after:   next to the target (nodes only, an artboard has no siblings)
-  writeHtml(targetId, html, mode = 'append') {
+  // `opts.normalize` overrides the project setting for this write (capture_url keeps a copied page as it is).
+  writeHtml(targetId, html, mode = 'append', opts = {}) {
     const ab = this.getArtboard(targetId);
     if (ab) {
       if (mode === 'before' || mode === 'after') throw new Error('before/after need a node id, not an artboard id');
-      const prepared = this._prepare(html);
+      const prepared = this._prepare(html, opts.normalize);
       this._checkpoint('write_html');
       const out = prepared.toString();
       ab.html = mode === 'replace' ? out : mode === 'prepend' ? out + ab.html : ab.html + out;
@@ -667,7 +668,7 @@ export class Doc {
     if (!hit) throw new Error(`Target ${targetId} is neither an artboard nor a node`);
     // Inserting beside a locked node is fine; changing what is inside one is not.
     if (mode !== 'before' && mode !== 'after') this._assertUnlocked(hit.el, targetId);
-    const prepared = this._prepare(html);
+    const prepared = this._prepare(html, opts.normalize);
     this._checkpoint('write_html');
     if (mode === 'replace') hit.el.set_content(prepared.toString());
     else {
