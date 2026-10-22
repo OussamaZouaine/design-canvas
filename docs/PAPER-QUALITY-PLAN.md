@@ -21,6 +21,25 @@ so it is the real artifact. We write our own text; we do not copy Paper's.
   `get_guide("paper-mcp-instructions")` first", and the guide holds all the taste and process. It works for any MCP client.
   Other topics are loaded on demand: `mobile-status-bar`, `figma-import`, `image-generation`.
 
+### 1.1b Desktop internals (REA pass 2, 2026-10-22, app.asar v0.5.16, `dist/main.cjs` read directly)
+Observed in the shipped code (the canvas, tool list and tool logic are NOT in the asar: they are the remote web app `app.paper.design`):
+- Main process = thin proxy. Hono + MCP SDK on `127.0.0.1:29979/mcp`, **stateful** sessions (`mcp-session-id`), one MCP `Server` per session.
+  `tools/list` returns `config.tools` and `instructions` that the web app supplies via `getMCPServerConfig`; every `tools/call` is
+  forwarded as `handleToolCall(sessionId, tool, args, clientIdentity)`.
+- The bridge is `webContents.executeJavaScript` calling `window.resolveMCPHandlers.<method>(...)` in the target tab (waits up to 10 s for the
+  handlers to exist; errors "Could not find Paper. Is it running?"). So tools run inside the live editor, next to the real layout engine.
+- Routing: each MCP session is bound to a window+tab (`fileId`/`pageId` args pick or open the tab; else the active tab). `removeAgent` runs
+  when the session closes, which lets the editor drop that agent's presence. Client identity (`clientInfo` / query param) and transport
+  (`x-paper-from: CLI` = stdio shim, else http) are passed on every call, so several agents (log shows up to 5 sessions) are told apart.
+- During a call the target tab gets `disableBackgroundThrottling()` plus a hold/release counter, so a hidden or occluded tab still answers
+  and renders. The app also sets `CalculateNativeWinOcclusion` off and `enable-blink-features=CanvasDrawElement` (HTML-in-canvas).
+  (Inference: screenshots use it; the usage itself is in the remote web app and was not seen.)
+- Guards: refuses any request with an `Origin` header, Host allowlist (DNS rebinding), 403 on CORS preflight. Headless mode
+  (`PAPER_HEADLESS_MCP=true`, no desktop window, own single-instance lock) needs a bearer token.
+- Distribution: `~/.paper/bin/paper` CLI (`paper mcp` = stdio shim to the same HTTP server), a `.mcpb` bundle for Claude Desktop, and a
+  `updateMCPConfig` IPC that writes MCP config for clients (claude-code, claude-desktop, opencode, antigravity found by name).
+- Telemetry: PostHog, WorkOS auth. Not relevant to us.
+
 ### 1.2 Why Paper's output stays inside the frame (the part that matters most)
 1. **A constrained layout dialect.** write_html bans `margin`, `display:grid`, `display:inline`, tables; flex + padding + gap only;
    border-box everywhere. Predictable boxes mean predictable heights. Inert styles are dropped and reported (`ignoredStyles`).

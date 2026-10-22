@@ -104,7 +104,12 @@ Order is a suggestion; the user decides.
    `capture_url` needs a headless browser (not built).
 5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
    paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
-6. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+6. **Ideas from the Paper desktop analysis (2026-10-22, `docs/PAPER-QUALITY-PLAN.md` 1.1b):** headless render worker DONE 2026-10-22
+   (`src/headless.mjs`, see CLAUDE.md "Browser round-trips"; verified: measure 1.3 s and get_screenshot with no tab open; MCP tool
+   descriptions still say "needs a browser tab", reword on the next schema change; `capture_url` can now build on it, not built);
+   still open: per-MCP-session project binding + agent identity/presence;
+   make `askBrowser` handlers work in hidden tabs; `find_nodes`, `get_jsx` for a subtree, PNG/PDF `export`; stdio shim / setup script.
+7. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway

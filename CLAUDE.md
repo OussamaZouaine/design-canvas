@@ -7,6 +7,9 @@ elements, and Claude reads and answers those comments. Local only, no database (
 **Read `PROGRESS.md` first** for what has been done, current state and what to do next (it has a "Next work, split into sessions"
 list: pick one area per session, keep sessions short, and update PROGRESS.md / ROADMAP.md before ending a session).
 
+**Paper (paper.design) research** is in `docs/PAPER-QUALITY-PLAN.md` (section 1.1b = desktop/MCP internals found with REA on 2026-10-22);
+the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (headless render worker, hidden-tab fix, per-session project binding).
+
 **The UI is a React app in `web/` (the rewrite of the old `public/` finished in Phase 8; plan and per-phase notes in `docs/REACT-REWRITE.md`).**
 
 ## Run
@@ -93,7 +96,10 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
 - **Doc history:** `Doc` keeps an in-memory undo stack (50 steps, not saved to disk) and a change journal (`record`,
   `changesSince`) that backs `get_changes`. Nodes with `data-locked` refuse edits. `write_html` expands `<x-clone node-id>`.
 - **Browser round-trips:** screenshots and `get_computed_styles` need real layout, so the server asks an open tab over SSE
-  (`askBrowser`) and the tab answers via POST `/reply`.
+  (`askBrowser`) and the tab answers via POST `/reply`. With no tab open, `src/headless.mjs` (`HeadlessWorker`) spawns the machine's
+  Chrome/Edge headless on `/p/<id>?headless=1` (own temp profile, killed after 2 min idle or on SIGINT/SIGTERM). That page is an
+  ordinary SSE client flagged `headless` (it never claims the active project, and real tabs win in `askBrowser`). `DC_BROWSER=<exe>`
+  picks the browser, `DC_HEADLESS=0` disables it. Needs `pnpm build:web`. A hard kill of the server (taskkill /F) orphans the browser.
 - **Active project:** the browser claims it via POST `/activate` on load/visibility, not on SSE reconnect.
 - **Artboard ids change when artboards are deleted and recreated** (build scripts do this). Comments pinned to the old
   ids become orphaned (shown as "replaced or deleted" on `/comments`).
