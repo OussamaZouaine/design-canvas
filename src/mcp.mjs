@@ -11,6 +11,7 @@ import { artboardToReact } from './export.mjs';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
+import { captureUrl } from './capture.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
@@ -462,6 +463,29 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const { ref, board } = store.addReference(meta.id, { name: name || file.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''), buffer: fs.readFileSync(file), page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'add_reference_image', board.id);
     return text({ reference_id: ref.id, artboard_id: board.id, width: ref.width, height: ref.height });
+  }));
+
+  // Copy a live web page: headless browser -> flat inline-styled HTML -> artboard (+ screenshot as a reference board).
+  server.registerTool('capture_url', {
+    description: 'Copy a live web page into a new artboard, plus a screenshot of it as a locked reference board (so compare_to_reference works). Starts a throwaway headless Chrome/Edge, so no tab is needed. The copy is a frozen, flat layout (divs and spans with inline styles; no links, forms or scripts) at the given width: use it to study or restyle a real page, not as production markup. Colours stay as the page had them (rgb) and web fonts are not loaded (use_font if needed). Only public http(s) pages; localhost and private networks need allow_private: true. Takes up to ~30 s.',
+    inputSchema: {
+      ...pid,
+      url: z.string().max(2000).describe('http(s) address of the page'),
+      width: z.number().int().min(320).max(2560).optional().describe('Viewport width in px (default 1280). Use 390 for a mobile layout.'),
+      name: z.string().max(80).optional().describe('Artboard name (default: the page title).'),
+      page_id: z.string().optional(),
+      allow_private: z.boolean().optional().describe('Allow localhost / private network addresses. Only when the user clearly means a local page.'),
+    },
+  }, safe(async ({ project_id, url: pageUrl, width, name, page_id, allow_private }) => {
+    const { meta, doc } = target(project_id);
+    const cap = await captureUrl(pageUrl, { width, allowPrivate: allow_private });
+    const page = page_id ?? ui.currentPage.get(meta.id);
+    const ab = doc.createArtboard({ name: (name || cap.title || 'Captured page').slice(0, 80), width: cap.width, height: Math.max(40, cap.height), heightMode: 'fit', page });
+    // normalize:false -> the copy is written as captured; the sanitizer still runs on it.
+    doc.writeHtml(ab.id, cap.html, 'replace', { normalize: false });
+    const { ref, board } = store.addReference(meta.id, { name: `${ab.name} (screenshot)`.slice(0, 80), buffer: cap.screenshot, page });
+    log(meta, doc, 'capture_url', ab.id, cap.finalUrl);
+    return text({ artboard_id: ab.id, reference_id: ref.id, reference_artboard_id: board.id, width: cap.width, height: cap.height, nodes: cap.nodes, url: cap.finalUrl, ...(cap.truncated && { warning: 'The page was larger than the capture limits, so the copy is cut off.' }) });
   }));
 
   server.registerTool('compare_to_reference', {
