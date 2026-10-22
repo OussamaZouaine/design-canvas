@@ -101,7 +101,7 @@ Order is a suggestion; the user decides.
    Node server (Electron or Tauri, or Wails with a Node sidecar). Open question for the user: is the Go rewrite itself a goal?
 4. **Roadmap leftovers** (`docs/ROADMAP.md`): insert toolbar (frame/text/image/component), canvas drag-reorder inside flex parents,
    image upload to `assets/`, per-side padding + colour picker, extra shortcuts, "commit version" button, 50+ board performance.
-   `capture_url` needs a headless browser (not built).
+   `capture_url` is done (2026-10-22, `src/capture.mjs`; known gaps: table colspan/rowspan, web fonts, rgb colours, no oklch conversion).
 5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
    paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
 6. **Ideas from the Paper desktop analysis (2026-10-22, `docs/PAPER-QUALITY-PLAN.md` 1.1b):** headless render worker DONE 2026-10-22

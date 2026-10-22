@@ -48,7 +48,8 @@ together in one turn, and in a project you just created skip `get_basic_info`, `
 
 `add_reference_image` (absolute path) puts the picture on a locked board. Build your own artboard at the same width next to it,
 then loop: `compare_to_reference` -> fix the worst areas it lists (and look at the diff image) -> compare again. Stop after 3
-rounds or when different is under about 5%. The user can also paste or drop an image on the canvas to add a reference.
+rounds or when different is under about 5%. The user can also paste or drop an image on the canvas to add a reference. `capture_url` copies a live public page into an artboard (flat, frozen
+copy) and adds its screenshot as a reference, so you can study or restyle a real page and compare.
 
 ## Hard rules (the full list is in the guide)
 
