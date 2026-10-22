@@ -7,7 +7,11 @@ import { z } from 'zod';
 import { extractTokens } from './tokens.mjs';
 import { formatIssues } from './lint.mjs';
 import { dialectNote, dialectStylesNote } from './dialect.mjs';
-import { artboardToReact } from './export.mjs';
+import { artboardToReact, nodeToReact } from './export.mjs';
+import { findNodes } from './find.mjs';
+import { parse } from 'node-html-parser';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
@@ -756,6 +760,63 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       ? `<style>:root{${toCssDeclarations(tokens)}}${modes.dark ? `@media (prefers-color-scheme:dark){:root{${toCssDeclarations(modes.dark)}}}` : ''}</style>`
       : '';
     return text(`<!doctype html>\n<html><head><meta charset="utf-8"><title>${ab.name.replace(/[<>&]/g, '')}</title><style>${BOARD_CSS}</style>${fontLinks}${css}</head>\n<body style="margin:0"><div style="width:${ab.width}px;min-height:${ab.height}px;display:flex;flex-direction:column">${boardRoot(true, clean)}</div></body></html>`);
+  }));
+
+
+  // ---- find / subtree export / file export (small tools; kept in one block) ---------------
+  server.registerTool('find_nodes', {
+    description: 'Search nodes by text or name (query), tag, data-component or an inline-style substring (e.g. "flex", "oklch(0.6"). Filters combine with AND. Returns ids with short labels, so you can pick edit targets without reading a whole tree. Scope with artboard_id or page; default is the whole project.',
+    inputSchema: {
+      ...pid,
+      query: z.string().optional().describe("Matches a node's data-name or its own text, case-insensitive."),
+      name: z.string().optional().describe('Substring of data-name.'),
+      tag: z.string().optional().describe('Exact tag, e.g. button, img, h1.'),
+      component: z.string().optional().describe('Exact data-component name.'),
+      style: z.string().optional().describe('Substring of the inline style, e.g. "display: flex" or "border-radius".'),
+      artboard_id: z.string().optional(),
+      page: z.string().optional().describe('Page id.'),
+      limit: z.number().int().min(1).max(100).optional(),
+    },
+  }, safe(({ project_id, ...opts }) => text(findNodes(target(project_id).doc, opts))));
+
+  server.registerTool('get_jsx', {
+    description: 'React + Tailwind (JSX) for ONE node and its subtree, same output style as export_react (each inline style becomes an arbitrary-property class). Use it to hand a single component to a codebase instead of the whole board.',
+    inputSchema: { ...pid, node_id: z.string() },
+  }, safe(({ project_id, node_id }) => {
+    const { meta, doc } = target(project_id);
+    if (doc.getArtboard(node_id)) throw new Error(`${node_id} is an artboard: use export_react`);
+    const info = doc.nodeInfo(node_id);
+    const el = parse(info.html, { comment: false }).firstChild;
+    return text(nodeToReact(el, info.name || info.tag, doc.theme, usedProjectFonts(info.html, meta.fonts).map(productionUrl)));
+  }));
+
+  // PNG only: the render round-trip yields a bitmap. A PDF would need the browser's print pipeline
+  // (and would lose the exact canvas rendering), so it is deliberately not offered.
+  const EXPORT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'exports');
+  server.registerTool('export', {
+    description: 'Render an artboard (or one node via node_id) to a PNG file on disk and return its path. Default scale 2 (retina). Works without an open tab when Chrome/Edge is installed. Files go to data/exports/<project_id>/ unless dir is given.',
+    inputSchema: {
+      ...pid,
+      artboard_id: z.string(),
+      node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
+      scale: z.number().min(0.25).max(4).optional(),
+      dir: z.string().optional().describe('Absolute output folder (created if missing). Default data/exports/<project_id>.'),
+    },
+  }, safe(async ({ project_id, artboard_id, node_id, scale = 2, dir }) => {
+    const { meta, doc } = target(project_id);
+    const ab = doc.getArtboard(artboard_id);
+    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    if (node_id && doc.artboardOf(node_id)?.id !== artboard_id) throw new Error(`Node ${node_id} is not inside ${artboard_id}`);
+    if (dir && !path.isAbsolute(dir)) throw new Error('dir must be an absolute path');
+    const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: 8000, format: 'png' });
+    const out = dir ? path.resolve(dir) : path.join(EXPORT_DIR, meta.id);
+    fs.mkdirSync(out, { recursive: true });
+    // The file name is generated from the board/node name, never taken from the caller (no path tricks).
+    const label = (node_id ? doc.nodeInfo(node_id).name ?? '' : ab.name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'export';
+    const file = path.join(out, `${label}-${node_id ?? artboard_id}@${scale}x.png`);
+    const buf = Buffer.from(dataUrl.split(',')[1], 'base64');
+    fs.writeFileSync(file, buf);
+    return text({ path: file, bytes: buf.length });
   }));
 
   return server;

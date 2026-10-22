@@ -83,3 +83,22 @@ ${body}
 }
 `;
 }
+
+// JSX for one node (get_jsx): the same rendering as a whole board, without the board wrapper.
+// `name` becomes the component name (the node's data-name, else its tag).
+export function nodeToReact(el, name, theme, fontUrls = []) {
+  const fontLines = fontUrls.map((u) => `//   <link rel="stylesheet" href="${u}" />`);
+  const fontNote = fontUrls.length ? ['// Google Fonts used (load once in your app\'s <head>):', ...fontLines, ''].join('\n') : '';
+  // Token variables are declared on a wrapper only when the node actually references one.
+  const tokenClasses = /var\(--/.test(el.toString()) ? styleToClasses(toCssDeclarations(theme?.tokens ?? {})) : [];
+  const body = render(el, tokenClasses.length ? 3 : 2);
+  const inner = tokenClasses.length
+    ? `    <div className=${JSON.stringify(tokenClasses.join(' '))}>\n${body}\n    </div>`
+    : body;
+  return `${fontNote}export function ${componentName(name)}() {
+  return (
+${inner}
+  );
+}
+`;
+}
