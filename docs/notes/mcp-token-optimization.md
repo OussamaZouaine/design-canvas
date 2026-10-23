@@ -1,6 +1,6 @@
 # MCP token and turn optimization (analysis 2026-10-24)
 
-Nothing here is implemented yet. Numbers come from a measurement script run against a copy of `data/` (Sprig project, 46 boards)
+A1-A3 are done (marked below); the rest is not implemented yet. Numbers come from a measurement script run against a copy of `data/` (Sprig project, 46 boards)
 and from `examples/evals/results/turns-cut.json`. Token counts are bytes/4 estimates.
 
 ## Where the cost actually is
@@ -31,10 +31,14 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
 
 ## Recommendations, highest value per effort first
 ### A. Quick wins (small, low risk)
-1. **Compact JSON**: `text()` in `src/mcp.mjs` uses `JSON.stringify(t, null, 2)`. Drop the indent: about 35-40% less on every JSON result.
-2. **Fix the meter for JPEG**: parse the SOF0/SOF2 marker for the size, so evals see the real screenshot cost.
-3. **Lean screenshot defaults**: max_width 800 (from 1000) and a height cap, with a note that the image was cropped and `node_id` shows the rest.
+1. **Done.** **Compact JSON**: `text()` in `src/mcp.mjs` uses `JSON.stringify(t, null, 2)`. Drop the indent: about 35-40% less on every JSON result.
+   Done: `text()` and the `compare_to_reference` JSON are compact; `/api/p/<id>/export` stays pretty (a file for people).
+2. **Done.** **Fix the meter for JPEG**: parse the SOF0/SOF2 marker for the size, so evals see the real screenshot cost.
+   Done: `imageSize` walks the JPEG segment chain (decoding more base64 as needed, EXIF can be KBs) to SOF0/1/2; both formats use w*h/750. Older eval meter numbers undercount images.
+3. **Done.** **Lean screenshot defaults**: max_width 800 (from 1000) and a height cap, with a note that the image was cropped and `node_id` shows the rest.
    Tokens scale with pixels, so 800 instead of 1000 is about 36% less.
+   Done: browser default maxWidth 800 (`web/src/canvas/replies.ts`), new `max_height` (default 1600) cuts the crop at the bottom; the reply is still a plain
+   data URL, so the server detects the cut from the image height (via `imageSize`) and adds a text note. Checked live with the headless worker (1200x3000 board -> 800x1600 + note).
 4. **One ToolSearch for the core set**: add a line to `INSTRUCTIONS` that lists the ~10 core tools to load in one
    `select:` query (the Claude in Chrome server does exactly this). That cuts the 2-8 extra ToolSearch turns per run.
 5. **First turn in parallel**: the instructions say "get_guide before any other tool", which forces a serial turn. Say instead
