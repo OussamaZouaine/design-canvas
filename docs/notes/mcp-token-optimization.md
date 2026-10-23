@@ -32,7 +32,7 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
 ## Recommendations, highest value per effort first
 ### A. Quick wins (small, low risk)
 1. **Done.** **Compact JSON**: `text()` in `src/mcp.mjs` uses `JSON.stringify(t, null, 2)`. Drop the indent: about 35-40% less on every JSON result.
-   Done: `text()` and the `compare_to_reference` JSON are compact; `/api/p/<id>/export` stays pretty (a file for people).
+   Done: `text()` and the `compare_to_reference` JSON are compact; the HTTP project export (`/api/projects/<id>/export`) stays pretty (a file for people).
 2. **Done.** **Fix the meter for JPEG**: parse the SOF0/SOF2 marker for the size, so evals see the real screenshot cost.
    Done: `imageSize` walks the JPEG segment chain (decoding more base64 as needed, EXIF can be KBs) to SOF0/1/2; both formats use w*h/750. Older eval meter numbers undercount images.
 3. **Done.** **Lean screenshot defaults**: max_width 800 (from 1000) and a height cap, with a note that the image was cropped and `node_id` shows the rest.
