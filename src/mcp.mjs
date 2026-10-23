@@ -16,6 +16,7 @@ import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
 import { captureUrl } from './capture.mjs';
+import { imageSize } from './meter.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
@@ -705,21 +706,31 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_screenshot', {
-    description: 'Render an artboard (or just one node, via node_id) so you can review your work. Defaults are token-lean: 1x, max 1000 px wide, JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
+    description: 'Render an artboard (or just one node, via node_id) so you can review your work. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
     inputSchema: {
       ...pid,
       artboard_id: z.string(),
       node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
       scale: z.number().min(0.25).max(2).optional(),
       max_width: z.number().int().min(200).max(2000).optional(),
+      max_height: z.number().int().min(400).max(8000).optional().describe('Output px; taller images are cut at the bottom. Default 1600.'),
       format: z.enum(['jpeg', 'png']).optional(),
     },
-  }, safe(async ({ project_id, artboard_id, node_id, scale, max_width, format = 'jpeg' }) => {
+  }, safe(async ({ project_id, artboard_id, node_id, scale, max_width, max_height = 1600, format = 'jpeg' }) => {
     const { meta, doc } = target(project_id);
     if (!doc.getArtboard(artboard_id)) throw new Error(`Artboard ${artboard_id} not found`);
     if (node_id && doc.artboardOf(node_id)?.id !== artboard_id) throw new Error(`Node ${node_id} is not inside ${artboard_id}`);
-    const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: max_width, format });
-    return { content: [{ type: 'image', data: dataUrl.split(',')[1], mimeType: format === 'png' ? 'image/png' : 'image/jpeg' }] };
+    const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: max_width, maxHeight: max_height, format });
+    const data = dataUrl.split(',')[1], mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+    const content = [{ type: 'image', data, mimeType }];
+    // Tokens grow with pixel area, so tall boards are cut, not shrunk. The browser cuts at exactly max_height and
+    // still replies with a plain data URL, so an image that tall is taken as cut (a board exactly that tall is rare).
+    const size = imageSize(data, mimeType);
+    if (size && size.h >= max_height) {
+      const where = node_id ? `${size.h} px into the node` : `y=${Math.round((size.h * doc.getArtboard(artboard_id).width) / size.w)} of the board`;
+      content.push({ type: 'text', text: `Image cut at ${size.h} px tall (${where}). Use node_id on a lower section, or a larger max_height, to see the rest.` });
+    }
+    return { content };
   }));
 
   server.registerTool('get_computed_styles', {
