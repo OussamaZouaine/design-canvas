@@ -17,14 +17,16 @@ export interface ReplyHost {
   reference: (refId: string) => { id: string; width: number; height: number } | undefined;
 }
 
-// Token-lean defaults (an image costs about one token per 28x28 px patch): 1x, at most 1000 px wide,
+// Token-lean defaults (an image costs about width*height/750 tokens): 1x, at most 800 px wide,
 // JPEG at quality 0.8 (heavier compression blurs small text). Callers can ask for more.
+// maxHeight (output px) cuts tall boards at the bottom instead of shrinking them, so text stays readable;
+// the server notices the cut from the image height and tells Claude to use nodeId for the rest.
 // With nodeId the picture is cropped to that node's box, measured from the live DOM, so the board
 // is mounted first if it was showing a bitmap.
 export async function screenshot(
   host: ReplyHost,
   artboardId: string,
-  { nodeId, scale = 1, maxWidth = 1000, format = 'jpeg' }: { nodeId?: string; scale?: number; maxWidth?: number; format?: string } = {},
+  { nodeId, scale = 1, maxWidth = 800, maxHeight, format = 'jpeg' }: { nodeId?: string; scale?: number; maxWidth?: number; maxHeight?: number; format?: string } = {},
 ) {
   const ab = host.findBoard(artboardId);
   if (!ab) throw new Error('Artboard not found');
@@ -39,6 +41,8 @@ export async function screenshot(
   }
   const w = crop?.w ?? ab.width;
   const eff = Math.min(scale, maxWidth / w); // never exceed maxWidth, whatever scale was asked
+  const h = crop?.h ?? ab.height;
+  if (maxHeight && h * eff > maxHeight) crop = { ...(crop ?? { x: 0, y: 0, w: ab.width }), h: maxHeight / eff };
   const canvas = await rasterizeCanvas(host.projectId, ab, eff, host.themeDecls(), crop);
   return format === 'png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.8);
 }
