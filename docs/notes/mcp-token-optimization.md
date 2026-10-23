@@ -81,3 +81,8 @@ Trade-off: an action-enum tool has one shared description, so the edge-case word
 ## How to verify
 Run `node examples/evals/run.mjs run <label>` before and after each group (A, B, C), then `report turns-cut <label>`. Fix the meter (A2) first,
 or the screenshot savings are invisible. Compare turns, cache-read and output, not only `toolTokens`.
+
+## How this is being executed (orchestration rules from the user)
+- One session per task (A1-A3, A4-A9, B1+B2, B3+B4, B5, B6, C), strictly one at a time, all on branch `perf/mcp-tokens`, no pushes.
+- New sessions start on Sonnet 5.5 (`model: claude-sonnet-5-5`); session 1 (A1-A3) was started before this choice.
+- Progress is recorded by each session as one-line "done" marks next to the items above.
