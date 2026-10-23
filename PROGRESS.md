@@ -109,7 +109,9 @@ Order is a suggestion; the user decides.
    `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
    reword on the next schema change. Still open: PDF export; per-MCP-session project binding + agent identity/presence;
    make `askBrowser` handlers work in hidden tabs.
-7. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+7. **MCP token/turn optimization (analysed 2026-10-24, nothing built):** ranked plan in `docs/notes/mcp-token-optimization.md`
+   (quick wins A1-A9 first; the meter undercounts JPEG screenshots ~10x, fix that before measuring).
+8. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
