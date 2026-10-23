@@ -28,7 +28,8 @@ Be economical with turns: send independent tool calls together in one turn.
 Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard -> write_html / update_styles -> lint -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>. Call get_guide for the full guide.`;
 
-const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t, null, 2) }] });
+// Compact JSON: every result is re-read on each later turn, and pretty-printing adds ~35-40% for nothing the model needs.
+const text = (t) => ({ content: [{ type: 'text', text: typeof t === 'string' ? t : JSON.stringify(t) }] });
 
 // Wrap handlers so a thrown error becomes a readable tool error instead of a protocol failure.
 const safe = (fn) => async (args) => {
@@ -504,7 +505,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     if (!ref) throw new Error(doc.references.length ? `Reference ${reference_id} not found` : 'No reference images yet. Call add_reference_image first.');
     const r = await requestCompare(meta.id, artboard_id, ref.id);
     const { dataUrl, ...summary } = r;
-    return { content: [{ type: 'text', text: JSON.stringify({ reference_id: ref.id, ...summary }, null, 2) }, { type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/jpeg' }] };
+    return { content: [{ type: 'text', text: JSON.stringify({ reference_id: ref.id, ...summary }) }, { type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/jpeg' }] };
   }));
 
   server.registerTool('delete_reference', {
