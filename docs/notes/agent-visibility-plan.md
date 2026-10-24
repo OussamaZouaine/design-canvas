@@ -70,7 +70,8 @@ Built in `web/`: `store/agents.ts` (call feed from SSE `call`/`call-start` + see
 - Motion rules from CLAUDE.md apply (no animation on frequent updates; reduced-motion variant). Render agent names with text, not HTML.
 - Done = verified in the browser with a real Claude Code run, light + dark.
 
-### Phase 4: Activity history you can act on
+### Phase 4: Activity history you can act on — DONE 2026-10-24
+Implemented: `src/stepdiff.mjs` (span diff of the undo checkpoint vs live doc, trimmed to tokens, caps `SNIPPET_CAP` 3000 / 3 boards / diffs kept on the newest 60 entries only); `Doc.captureStep()` (called in mcp `log()`, no new tool-result fields) and `Doc.revertStep()` (newest step = plain undo, older = reverse patch located exactly once in the current markup, all-or-nothing, refused on conflict; the revert is itself one undo step); activity entries carry `n` (sequence), `agent`, `step`/`boot` (boot id guards stale seq after a restart), `diff`, `reverted`/`rev`. `GET /api/p/<id>/activity?since=<seq>` -> `{runs, seq}`; `POST /api/projects/<id>/revert-step {n}`. Panel: agent dot, expandable steps with "What changed" before/after and Revert, "Show every call" from `/calls`. Limits: a deleted board, theme/component changes and truncated spans are only revertable while they are the newest step; user hand edits are not in Activity. Tests `test/activity.test.mjs`.
 - Activity runs grouped by prompt *and* agent, expandable to the individual calls (from the call log).
 - Per-write diff: store the journal's before/after node HTML (or snapshot ids) so a row shows what changed, and "revert this step"
   works through `Doc` undo for the latest steps or a snapshot restore for older ones.
