@@ -190,7 +190,7 @@ export class Doc {
     for (const x of root.querySelectorAll('x-component')) {
       const name = x.getAttribute('name');
       const comp = this.components[name];
-      if (!comp) throw new Error(`x-component: no component named "${name}". Create it with set_component.`);
+      if (!comp) throw new Error(`x-component: no component named "${name}". Create it with components (action set).`);
       const variant = x.getAttribute('variant') || defaultVariant(comp);
       if (!comp.variants[variant]) throw new Error(`x-component: ${name} has no variant "${variant}" (has: ${Object.keys(comp.variants).join(', ')})`);
       const slots = {};
@@ -612,7 +612,7 @@ export class Doc {
 
   // The generated sheet that lists every component and variant (kept current by setComponent).
   createComponentsSheet() {
-    if (!Object.keys(this.components).length) throw new Error('No components yet. Call set_component first.');
+    if (!Object.keys(this.components).length) throw new Error('No components yet. Call components (action set) first.');
     let ab = this.data.artboards.find((a) => a.generated === 'components');
     if (!ab) {
       ab = this.createArtboard({ name: 'Components', width: 1200, height: 600 }); // checkpoints itself

@@ -426,7 +426,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       return `${name}: variants ${Object.keys(c.variants).join(', ')}${slots.length ? ` · slots ${slots.join(', ')}` : ''}`;
     });
     const out = [tokens, section && section !== 'components' ? '' : comps.length ? `components:\n${comps.join('\n')}` : ''].filter(Boolean).join('\n\n');
-    return text(out || 'No tokens or components yet. Call set_tokens (preset "starter") and set_component.');
+    return text(out || 'No tokens or components yet. Call set_tokens (preset "starter") and components (action set).');
   }));
 
   server.registerTool('set_tokens', {
@@ -454,14 +454,40 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text({ artboard_id: ab.id, width: ab.width, height: ab.height });
   }));
 
-  server.registerTool('set_component', {
-    description: 'Create a component or replace all of its variants, then update every instance in every artboard. variants maps a variant name to one HTML root element (inline styles, preferably var(--tokens)); mark text that differs per instance with data-slot="label". Example: {"default": "<button style=\"...\"><span data-slot=\"label\">Button</span></button>", "primary": "..."}. Insert instances with insert_component. Instance text in slots survives a master edit; other edits made inside an instance are replaced by the master.',
-    inputSchema: { ...pid, name: z.string(), variants: z.record(z.string(), z.string().max(20_000)) },
-  }, safe(({ project_id, name, variants }) => {
+  // Component masters in one tool (insert_component stays separate: it is the hot, cheap one). Same flat-schema
+  // pattern as `pages`; log() keeps the old names (set_component, ...) for the Activity panel.
+  server.registerTool('components', {
+    description: 'Manage component masters. action: set (name, variants) creates a component or replaces all its variants and updates every instance in every artboard; variants maps a variant name to ONE HTML root element (inline styles, preferably var(--tokens)), with data-slot="label" on text that differs per instance, e.g. {"default": "<button style=\"...\"><span data-slot=\"label\">Button</span></button>", "primary": "..."}; slot text survives a master edit, other edits inside an instance are replaced by the master. detach (node_id) turns one instance into ordinary nodes. delete (name) removes a component; its instances stay as ordinary nodes. sheet creates or refreshes the read-only "Components" artboard showing every variant. Insert instances with insert_component.',
+    inputSchema: {
+      ...pid,
+      action: z.enum(['set', 'detach', 'delete', 'sheet']),
+      name: z.string().optional(),
+      variants: z.record(z.string(), z.string().max(20_000)).optional(),
+      node_id: z.string().optional(),
+    },
+  }, safe(({ project_id, action, name, variants, node_id }) => {
     const { meta, doc } = target(project_id);
-    const r = doc.setComponent(name, variants);
-    log(meta, doc, 'set_component', []);
-    return text({ name, variants: Object.keys(variants), ...r });
+    if (action === 'set') {
+      need('components', action, { name, variants }, 'name', 'variants');
+      const r = doc.setComponent(name, variants);
+      log(meta, doc, 'set_component', []);
+      return text({ name, variants: Object.keys(variants), ...r });
+    }
+    if (action === 'detach') {
+      need('components', action, { node_id }, 'node_id');
+      doc.detach(node_id);
+      log(meta, doc, 'detach_component', node_id);
+      return text('ok');
+    }
+    if (action === 'delete') {
+      need('components', action, { name }, 'name');
+      doc.deleteComponent(name);
+      log(meta, doc, 'delete_component', []);
+      return text('ok');
+    }
+    const ab = doc.createComponentsSheet();
+    log(meta, doc, 'create_components_sheet', ab.id);
+    return text({ artboard_id: ab.id, height: ab.height });
   }));
 
   server.registerTool('insert_component', {
@@ -472,26 +498,6 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       mode: z.enum(['append', 'prepend', 'before', 'after']).optional(),
     },
   }, viaEdit('insert_component'));
-
-  server.registerTool('detach_component', {
-    description: 'Turn one component instance into ordinary nodes so it stops following its master.',
-    inputSchema: { ...pid, node_id: z.string() },
-  }, safe(({ project_id, node_id }) => { const { meta, doc } = target(project_id); doc.detach(node_id); log(meta, doc, 'detach_component', node_id); return text('ok'); }));
-
-  server.registerTool('delete_component', {
-    description: 'Delete a component. Its instances stay in the designs as ordinary nodes.',
-    inputSchema: { ...pid, name: z.string() },
-  }, safe(({ project_id, name }) => { const { meta, doc } = target(project_id); doc.deleteComponent(name); log(meta, doc, 'delete_component', []); return text('ok'); }));
-
-  server.registerTool('create_components_sheet', {
-    description: 'Create (or refresh) the read-only "Components" artboard that shows every component and variant. It updates itself when components change.',
-    inputSchema: { ...pid },
-  }, safe(({ project_id }) => {
-    const { meta, doc } = target(project_id);
-    const ab = doc.createComponentsSheet();
-    log(meta, doc, 'create_components_sheet', ab.id);
-    return text({ artboard_id: ab.id, height: ab.height });
-  }));
 
   server.registerTool('move_node', {
     description: 'Move a node (keeping its ids) before / after another node, or into it as first (start) or last (end) child. target_id may be an artboard with start or end. Reorders layers.',

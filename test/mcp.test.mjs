@@ -353,3 +353,18 @@ test('pages: create, set, update, move_boards, delete through one tool, with per
   assert.match(await h.call('pages', { project_id: pid, action: 'rename' }), /invalid|enum/i);
   h.close();
 });
+
+test('components: set, sheet, detach and delete through one tool; insert_component stays its own tool', async () => {
+  const h = await harness();
+  const { pid, board } = await withBoard(h);
+  const set = await h.call('components', { project_id: pid, action: 'set', name: 'button', variants: { default: '<button style="padding:8px"><span data-slot="label">Go</span></button>' } });
+  assert.deepEqual(set.variants, ['default'], JSON.stringify(set));
+  const ins = await h.call('insert_component', { project_id: pid, target_id: board, name: 'button', slots: { label: 'Save' } });
+  assert.equal(ins.created.length, 1);
+  assert.ok((await h.call('components', { project_id: pid, action: 'sheet' })).artboard_id);
+  assert.equal(await h.call('components', { project_id: pid, action: 'detach', node_id: ins.created[0] }), 'ok');
+  assert.equal(await h.call('components', { project_id: pid, action: 'delete', name: 'button' }), 'ok');
+  assert.match(await h.call('components', { project_id: pid, action: 'set', name: 'x' }), /components set needs variants/);
+  assert.match(await h.call('components', { project_id: pid, action: 'detach' }), /components detach needs node_id/);
+  h.close();
+});
