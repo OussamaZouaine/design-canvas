@@ -135,7 +135,7 @@ export class ProjectStore {
     let clean = ProjectStore.cleanName(name);
     const existing = this.findByName(clean);
     if (existing) {
-      if (unique === 'error') throw new Error(`A project named "${existing.name}" already exists (project_id ${existing.id}). Use open_project to continue it.`);
+      if (unique === 'error') throw new Error(`A project named "${existing.name}" already exists (project_id ${existing.id}). Use project (action open) to continue it.`);
       clean = this._uniqueName(clean);
     }
     const id = 'p_' + randomBytes(4).toString('hex');
@@ -265,7 +265,7 @@ export class ProjectStore {
       throw new Error('Not a Design Canvas project file');
     }
     const meta = this.create({ name: json.name || 'Imported project', description: json.description || '' });
-    meta.normalize = false; // imported markup is kept as written; switch on via rename_project if wanted
+    meta.normalize = false; // imported markup is kept as written; switch on via project (action update) if wanted
     this._saveMeta(meta.id);
     const doc = this._doc(meta.id);
     // Imported HTML is untrusted: keep only the fields we know, then re-sanitize.

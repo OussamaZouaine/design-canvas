@@ -278,7 +278,7 @@ test('batch stops at the first error and says what was applied', async () => {
 test('batch rejects tools outside the whitelist and a per-op project_id', async () => {
   const h = await harness();
   const { pid, node } = await withBoard(h);
-  const res = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'delete_project', args: { project_id: pid } }] } });
+  const res = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'project', args: { project_id: pid } }] } });
   assert.equal(res.isError, true);
   assert.match(res.content[0].text, /write_html/); // the validation error lists the allowed names
   const own = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'set_text_content', args: { project_id: pid, node_id: node, text: 'x' } }] } });
@@ -404,5 +404,20 @@ test('references: add from a file path and delete through one tool', async () =>
   assert.match(await h.call('references', { project_id: pid, action: 'add' }), /references add needs path/);
   assert.match(await h.call('references', { project_id: pid, action: 'delete' }), /references delete needs reference_id/);
   fs.rmSync(file, { force: true });
+  h.close();
+});
+
+test('project: open, update, save_version and delete; open and delete need an explicit project_id', async () => {
+  const h = await harness();
+  const { pid } = await withBoard(h);
+  const opened = await h.call('project', { project_id: pid, action: 'open' });
+  assert.equal(opened.project_id, pid);
+  const upd = await h.call('project', { action: 'update', name: 'Renamed' });
+  assert.equal(upd.name, 'Renamed');
+  assert.equal(await h.call('project', { action: 'save_version', label: 'v1' }), 'Version saved');
+  // No explicit id: delete must not fall back to the active project.
+  assert.match(await h.call('project', { action: 'delete' }), /project delete needs project_id/);
+  assert.match(await h.call('project', { action: 'open' }), /project open needs project_id/);
+  assert.equal(await h.call('project', { project_id: pid, action: 'delete' }), 'Moved to Trash');
   h.close();
 });
