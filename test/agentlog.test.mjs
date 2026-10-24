@@ -61,6 +61,14 @@ test('events: call always, call-start only for slow tools', () => {
   assert.equal(events[1][1].call.id, id);
 });
 
+// The UI tints the "waiting for screenshot" pill per agent, so call-start must say who started the call.
+test('call-start carries the agent', () => {
+  const { log, events } = mk();
+  const agent = { id: 'reviewer', name: 'reviewer', color: 'oklch(0.68 0.15 10)' };
+  log.start(PID, 'get_screenshot', {}, agent);
+  assert.deepEqual(events[0][1].call.agent, agent);
+});
+
 test('flush appends to calls.jsonl and a new log reloads it', () => {
   const { dir, log } = mk();
   log.finish(call({ args: { n: 1 } }));

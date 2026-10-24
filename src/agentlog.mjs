@@ -74,9 +74,9 @@ export class CallLog {
   _now() { this.lastT = Math.max(Date.now(), this.lastT + 1); return this.lastT; }
 
   // A slow call began: let tabs show "in progress". Returns the id to pass to `finish`.
-  start(project, tool, args) {
+  start(project, tool, args, agent = null) {
     const id = randomBytes(6).toString('hex');
-    if (project && SLOW_TOOLS.has(tool)) this.emit('call-start', { project, call: { id, t: this._now(), tool, args: summarizeArgs(args) } });
+    if (project && SLOW_TOOLS.has(tool)) this.emit('call-start', { project, call: { id, t: this._now(), tool, args: summarizeArgs(args), ...(agent && { agent }) } });
     return id;
   }
 
