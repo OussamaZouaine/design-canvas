@@ -12,6 +12,8 @@ export const DISPLAY_CAP = 500; // what the panel receives per side
 
 const clip = (s, n) => (s.length > n ? s.slice(0, n) : s);
 
+const DELIM = /[\s<>";]/;
+
 // The differing middle of two strings, plus context. Trimming from both ends keeps a one-attribute change
 // down to a few dozen characters even in a 100 kB board.
 export function spanDiff(a, b) {
@@ -20,6 +22,10 @@ export function spanDiff(a, b) {
   while (p < max && a.charCodeAt(p) === b.charCodeAt(p)) p++;
   let s = 0;
   while (s < max - p && a.charCodeAt(a.length - 1 - s) === b.charCodeAt(b.length - 1 - s)) s++;
+  // Widen the span to whole tokens (space, tag or attribute delimiters) so a changed colour reads as
+  // "oklch(0.5 0.2 25)" instead of "5 0.2 2". The cut-off ends are identical in both strings, so the patch stays exact.
+  while (p > 0 && !DELIM.test(a[p - 1])) p--;
+  while (s > 0 && !DELIM.test(a[a.length - s])) s--;
   const before = a.slice(p, a.length - s);
   const after = b.slice(p, b.length - s);
   return {
