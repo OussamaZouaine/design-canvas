@@ -142,18 +142,25 @@ const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestCom
 const sessions = new SessionMap();
 setInterval(() => sessions.sweep(), 60_000).unref();
 
-// An unknown/expired session id is answered with 404: per the MCP spec the client then re-initializes (this is also
-// what happens after a server restart, when the whole map is gone).
-const rpcError = (res, code, message, status) => {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ jsonrpc: '2.0', error: { code, message }, id: null }));
-};
+// A client may hold a session id this process no longer knows (server restart, idle TTL). Answering 404 would be
+// spec-correct but the SDK client does not re-initialize on it, so every restart would break the tools. Instead such
+// requests are served statelessly under a revived Session with the same id (see SessionMap.revive).
+async function handleStaleSession(req, res, url, sid) {
+  if (req.method === 'DELETE') { sessions.remove(sid); res.writeHead(204).end(); return; }
+  if (req.method !== 'POST') { res.writeHead(405).end(); return; } // no standalone SSE stream without a real session
+  const body = await readJson(req);
+  const mcp = createMcpServer({ ...mcpDeps, session: sessions.revive(sid, url.searchParams.get('agent')) });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close(); mcp.close(); });
+  await mcp.connect(transport);
+  await transport.handleRequest(req, res, body);
+}
 
 async function handleMcp(req, res, url) {
   const sid = req.headers['mcp-session-id'];
   if (sid) {
     const entry = sessions.get(String(sid));
-    if (!entry) return rpcError(res, -32001, 'Session not found', 404);
+    if (!entry) return handleStaleSession(req, res, url, String(sid));
     if (req.method === 'DELETE') { await entry.transport.handleRequest(req, res); sessions.remove(entry.session.id); return; }
     const body = req.method === 'POST' ? await readJson(req) : undefined;
     return entry.transport.handleRequest(req, res, body);

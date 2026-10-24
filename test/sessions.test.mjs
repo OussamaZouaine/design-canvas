@@ -112,3 +112,51 @@ test('tool results carry no identity fields (zero extra tokens)', async () => {
   assert.doesNotMatch(JSON.stringify(out), /alpha|agent|oklch/);
   h.close();
 });
+
+test('revive: an unknown id keeps one stable Session (same identity), expires with the TTL', () => {
+  let now = 0;
+  const m = new SessionMap({ ttl: 100, now: () => now });
+  const a = m.revive('old-id-1234', 'Reviewer');
+  assert.equal(m.revive('old-id-1234'), a); // same object, so a bound project survives between requests
+  assert.equal(a.agent.id, 'reviewer');
+  const anon = m.revive('abcd-5678');
+  assert.equal(anon.agent.id, 'agent-abcd'); // no clientInfo after a restart: stable suffix from the id
+  now += 500;
+  m.sweep();
+  assert.equal(m.revived.size, 0);
+  assert.notEqual(m.revive('old-id-1234'), a); // expired -> fresh Session
+});
+
+// End to end over real HTTP: initialize, restart the server, reuse the old session id without re-initializing.
+test('stale mcp-session-id after a server restart still answers tools/call', async () => {
+  const { spawn } = await import('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dc-stale-'));
+  const port = 3800 + Math.floor(Math.random() * 150);
+  const boot = async () => {
+    const p = spawn(process.execPath, ['src/server.mjs'], { env: { ...process.env, PORT: String(port), DC_DATA: dir, DC_HEADLESS: '0' }, stdio: 'ignore' });
+    for (let i = 0; i < 50; i++) {
+      try { await fetch(`http://127.0.0.1:${port}/api/projects`); return p; } catch { await new Promise((r) => setTimeout(r, 100)); }
+    }
+    throw new Error('server did not start');
+  };
+  const post = (body, sid) => fetch(`http://127.0.0.1:${port}/mcp?agent=Tester`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...(sid ? { 'mcp-session-id': sid } : {}) },
+    body: JSON.stringify(body),
+  });
+  let srv = await boot();
+  try {
+    const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'x', version: '1' } } });
+    const sid = init.headers.get('mcp-session-id');
+    assert.ok(sid);
+    srv.kill(); await new Promise((r) => srv.once('exit', r));
+    srv = await boot();
+    const r = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_projects', arguments: {} } }, sid);
+    assert.equal(r.status, 200);
+    assert.match(await r.text(), /"result"/);
+  } finally {
+    srv.kill();
+    await new Promise((r) => srv.once('exit', r));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

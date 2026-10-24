@@ -15,7 +15,7 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 ## Run
 - `pnpm build:web` once (and after any `web/` change), then `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777 (the server serves `web/dist`; without a build it answers 503). Stop it with a normal kill so it flushes `data/`.
 - UI dev: `pnpm dev:web` (Vite on http://localhost:5173 with HMR, proxies /api /events /mcp /reply to the 3777 server, which must be running).
-- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateful sessions: `src/sessions.mjs`; a session id gets an agent identity from `clientInfo` / `?agent=<name>` / `start({agent})` and a bound project; unknown ids get 404 so clients re-initialize; requests with no session fall back to the active project). Registered in Claude Code as `design-canvas`.
+- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateful sessions: `src/sessions.mjs`; a session id gets an agent identity from `clientInfo` / `?agent=<name>` / `start({agent})` and a bound project; unknown/expired ids (server restart, idle TTL) are served statelessly under a revived Session with the same id, never 404, because SDK clients do not re-initialize; requests with no session fall back to the active project). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
 - Pages: `/` projects home, `/p/<id>` canvas, `/comments` all comments.
