@@ -65,8 +65,9 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
    lint (only new issues, max 5 lines). The separate `lint` turn then goes away. **DONE** (`newLint` in `src/mcp.mjs`; default grid 4, no per-project grid yet; guide 5b says `lint` is only for a full pass).
 3. **`get_screenshot({review:true})`**: lint text + layout check + screenshot in one call, as one review step. **DONE** (lint text, `layout:` line only on problems, then the image; guide 5b updated).
 4. **`finish_working({screenshot_artboard_id})`**: the final look and finish in one turn. **DONE** (image only after a clean layout check; shares `shoot` with `get_screenshot`).
-5. **`batch` tool**: `batch({ops:[{tool, args}, ...]})` runs several edits (update_styles, set_text_content, rename...) in one call, with one result line
+5. **Done.** **`batch` tool**: `batch({ops:[{tool, args}, ...]})` runs several edits (update_styles, set_text_content, rename...) in one call, with one result line
    per op. The handlers are already registered, so it can dispatch to them internally. Anthropic's guidance is to consolidate operations that are always chained.
+   Done: `edits` map in `src/mcp.mjs` shared by the single tools and `batch` (10 whitelisted tools, max 30 ops, stop on first error, one layout check at the end, no per-op lint); tools/list 8.73k -> 9.02k tokens (+0.3k, 63 tools).
 6. **`start` shortcut**: `start({project_name|project_id, prompt, brief, artboard})` = list/create + log_prompt + create_artboard. Saves 2-3 turns
    on every new design.
 

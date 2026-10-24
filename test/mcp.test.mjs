@@ -232,3 +232,57 @@ test('write_html and update_styles report only NEW lint issues, silent otherwise
   assert.equal(m.lint.split('\n').length, 6);
   h.close();
 });
+
+// batch: several edits in one call, same handlers as the single tools.
+test('batch runs ops in order, one result line each, and checks layout once', async () => {
+  let measures = 0;
+  const h = await harness({ requestMeasure: async (...a) => { measures++; return measure(500)(...a); } });
+  const { pid, board, node } = await withBoard(h);
+  measures = 0; // withBoard's own writes measure too
+  const r = await h.call('batch', { project_id: pid, ops: [
+    { tool: 'update_styles', args: { node_ids: [node], styles: { color: 'red' } } },
+    { tool: 'set_text_content', args: { node_id: node, text: 'First' } },
+    { tool: 'write_html', args: { target_id: board, html: '<p style="padding:0">Second</p>' } },
+    { tool: 'set_text_content', args: { node_id: node, text: 'Last' } },
+  ] });
+  const lines = r.split('\n');
+  assert.equal(lines[0], '1 update_styles ok');
+  assert.equal(lines[1], '2 set_text_content ok');
+  assert.match(lines[2], /^3 write_html \{"created":\["N\d+"\]\}$/);
+  assert.equal(lines[3], '4 set_text_content ok');
+  assert.match(lines[4], /^layout: .*wide/); // measure(500) overflows: reported once, as the last line
+  assert.equal(measures, 1);
+  // Order: the last text write wins.
+  assert.equal((await h.call('get_node_info', { project_id: pid, node_id: node })).text, 'Last');
+  h.close();
+});
+
+test('batch stops at the first error and says what was applied', async () => {
+  const h = await harness();
+  const { pid, node } = await withBoard(h);
+  const res = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [
+    { tool: 'set_text_content', args: { node_id: node, text: 'Done' } },
+    { tool: 'set_text_content', args: { node_id: 'N9999', text: 'x' } },
+    { tool: 'set_text_content', args: { node_id: node, text: 'Never' } },
+  ] } });
+  assert.equal(res.isError, true);
+  const lines = res.content[0].text.split('\n');
+  assert.equal(lines[0], '1 set_text_content ok');
+  assert.match(lines[1], /^2 set_text_content error: /);
+  assert.match(lines[2], /Stopped at op 2; ops 1-1 stay applied.*undo/);
+  assert.equal(lines.length, 3);
+  assert.equal((await h.call('get_node_info', { project_id: pid, node_id: node })).text, 'Done');
+  h.close();
+});
+
+test('batch rejects tools outside the whitelist and a per-op project_id', async () => {
+  const h = await harness();
+  const { pid, node } = await withBoard(h);
+  const res = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'delete_project', args: { project_id: pid } }] } });
+  assert.equal(res.isError, true);
+  assert.match(res.content[0].text, /write_html/); // the validation error lists the allowed names
+  const own = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'set_text_content', args: { project_id: pid, node_id: node, text: 'x' } }] } });
+  assert.match(own.content[0].text, /project_id is not allowed/);
+  assert.match(own.content[0].text, /nothing was applied/);
+  h.close();
+});
