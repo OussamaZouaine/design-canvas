@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useJson } from '@/hooks/useJson';
 import { ago } from '@/lib/time';
 import { useNow } from '@/panels/AgentsPanel';
+import { EfficiencyPanel } from '@/panels/EfficiencyPanel';
 import { useAgents } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
@@ -93,7 +94,7 @@ interface Status { tabs: number }
 // MCP tab: is an agent talking to this server, how to connect it, and which tools cost the most tokens in this project.
 // Fed by the live call log (SSE `call` events in the agents store), so there is no polling; only the tab count is
 // fetched, once, because nothing pushes it and it rarely changes.
-export function McpPanel() {
+export function McpPanel({ projectId }: { projectId: string }) {
   const calls = useAgents((s) => s.calls);
   const { data: s } = useJson<Status>('/api/status');
   const now = useNow();
@@ -126,6 +127,7 @@ export function McpPanel() {
           </div>
         </Fragment>
       ))}
+      <EfficiencyPanel projectId={projectId} />
     </div>
   );
 }
