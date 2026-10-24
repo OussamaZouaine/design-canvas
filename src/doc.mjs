@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { diffStates, patchable, reversePatch } from './stepdiff.mjs';
 import { lintArtboard } from './lint.mjs';
 import { parseStyle, styleToString } from './css.mjs';
+import { sanitizeSvg, checkAttrs, isSvgNode } from './svg.mjs';
 import { normalizeTree } from './normalize.mjs';
 import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
 import { foundationsHtml } from './foundations.mjs';
@@ -244,6 +245,7 @@ export class Doc {
       x.replaceWith(...parse(expand(comp.variants[variant], name, variant, { slots })).childNodes);
     }
     for (const tag of FORBIDDEN_TAGS) root.querySelectorAll(tag).forEach((n) => n.remove());
+    sanitizeSvg(root);
     // Normalize BEFORE the id walk below: it replaces and unwraps nodes, and whatever it creates must get an id too.
     if (normalize) normalizeTree(root);
     const walk = (el) => {
@@ -321,6 +323,8 @@ export class Doc {
     const kindOf = (el) => {
       const t = el.rawTagName.toLowerCase();
       if (t === 'svg') return 'svg';
+      // Shapes inside an svg keep their real tag (path, g, circle...) so set_attrs can be aimed at the right one.
+      if (isSvgNode(el)) return t;
       if (t === 'img') return 'image';
       // Only text/inline children: Paper flattens these into one text layer, so we call it text.
       const inline = new Set(['span', 'b', 'strong', 'i', 'em', 'a', 'br', 'small', 'sub', 'sup', 'code']);
@@ -334,6 +338,12 @@ export class Doc {
       if (st.get('position') === 'absolute') bits.push('abs');
       for (const [k, short] of [['width', 'w'], ['height', 'h'], ['background', 'bg'], ['background-color', 'bg'], ['color', 'fg'], ['gap', 'gap'], ['padding', 'p']]) {
         if (st.has(k) && !bits.some((b) => b.startsWith(short + ':'))) bits.push(`${short}:${st.get(k).slice(0, 28)}`);
+      }
+      // The attributes that identify a vector shape (SVG has no CSS box to describe it by).
+      if (isSvgNode(el)) {
+        for (const a of ['viewBox', 'd', 'fill', 'stroke', 'cx', 'cy', 'r']) {
+          if (el.hasAttribute(a)) bits.push(`${a}:${el.getAttribute(a).slice(0, 28)}`);
+        }
       }
       if (el.hasAttribute('data-locked')) bits.push('locked');
       if (el.hasAttribute('hidden')) bits.push('hidden');
@@ -730,6 +740,29 @@ export class Doc {
         else map.set(kebab(k), String(v));
       }
       hit.el.setAttribute('style', styleToString(map));
+      this._save(hit.ab, hit.root);
+    }
+    this._commit();
+  }
+
+  // Sets SVG attributes (path data, fill, stroke...) on nodes inside an <svg>. Separate from updateStyles because
+  // SVG geometry is attributes, not CSS. Values are checked up front so a bad one cannot leave the batch half-applied.
+  setAttrs(ids, attrs) {
+    const entries = checkAttrs(attrs);
+    for (const id of ids) {
+      const hit = this._find(id);
+      if (!hit) throw new Error(`Node ${id} not found`);
+      this._assertUnlocked(hit.el, id);
+      if (!isSvgNode(hit.el)) throw new Error(`set_attrs: ${id} is not an SVG node (use update_styles for HTML)`);
+    }
+    this._checkpoint('set_attrs');
+    // Re-find per id for the same reason as updateStyles: each lookup parses a fresh copy of the artboard.
+    for (const id of ids) {
+      const hit = this._find(id);
+      for (const [k, v] of entries) {
+        if (v === null) hit.el.removeAttribute(k);
+        else hit.el.setAttribute(k, v);
+      }
       this._save(hit.ab, hit.root);
     }
     this._commit();
