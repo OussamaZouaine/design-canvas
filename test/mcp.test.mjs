@@ -163,7 +163,7 @@ test('get_basic_info omits empty pages and references', async () => {
   assert.equal(info.pages, undefined);
   assert.equal(info.references, undefined);
   assert.equal(info.artboards.length, 1);
-  await h.call('create_page', { project_id: pid, name: 'Mobile' });
+  await h.call('pages', { project_id: pid, action: 'create', name: 'Mobile' });
   assert.equal((await h.call('get_basic_info', { project_id: pid })).pages.length, 2);
   h.close();
 });
@@ -171,10 +171,10 @@ test('get_basic_info omits empty pages and references', async () => {
 test('tools/list carries no $schema keys and a short project_id description', async () => {
   const h = await harness();
   const { tools } = await h.client.listTools();
-  assert.ok(tools.length > 50);
+  assert.ok(tools.length > 30);
   assert.doesNotMatch(JSON.stringify(tools), /\$schema/);
   const withPid = tools.filter((t) => t.inputSchema.properties?.project_id?.description);
-  assert.ok(withPid.length > 40);
+  assert.ok(withPid.length > 30);
   for (const t of withPid) assert.equal(t.inputSchema.properties.project_id.description, 'Default: active project', t.name);
   // The schemas still validate: an optional-only tool is callable with no arguments.
   assert.ok(await h.call('list_projects'));
@@ -333,5 +333,23 @@ test('start: no project uses the active one, and errors when there is none', asy
   const { pid } = await withBoard(h);
   const r = await h.call('start', { prompt: 'x' });
   assert.equal(r.project_id, pid);
+  h.close();
+});
+
+test('pages: create, set, update, move_boards, delete through one tool, with per-action required fields', async () => {
+  const h = await harness();
+  const { pid, board } = await withBoard(h);
+  const page = await h.call('pages', { project_id: pid, action: 'create', name: 'Mobile' });
+  assert.ok(page.id ?? page.page_id, 'returns the new page');
+  const pageId = page.id ?? page.page_id;
+  assert.match(await h.call('pages', { project_id: pid, action: 'set', page_id: pageId }), /New artboards will go to/);
+  assert.equal((await h.call('pages', { project_id: pid, action: 'update', page_id: pageId, name: 'Phones' })).name, 'Phones');
+  assert.equal(await h.call('pages', { project_id: pid, action: 'move_boards', artboard_ids: [board], page_id: pageId }), 'ok');
+  const del = await h.call('pages', { project_id: pid, action: 'delete', page_id: pageId });
+  assert.equal(del.deleted, pageId);
+  // Missing fields name the action; an unknown action is rejected by the enum.
+  assert.match(await h.call('pages', { project_id: pid, action: 'update' }), /pages update needs page_id/);
+  assert.match(await h.call('pages', { project_id: pid, action: 'create' }), /pages create needs name/);
+  assert.match(await h.call('pages', { project_id: pid, action: 'rename' }), /invalid|enum/i);
   h.close();
 });

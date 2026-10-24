@@ -234,6 +234,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return { version: doc.version, changes: changes.length ? changes : 'none' };
   };
   const viaEdit = (name) => safe(async (args) => text(await edits[name](args)));
+  // Action-enum tools (pages, components, ...) keep one flat schema, so each action checks its own required fields here.
+  const need = (tool, action, args, ...keys) => {
+    const missing = keys.filter((k) => args[k] === undefined);
+    if (missing.length) throw new Error(`${tool} ${action} needs ${missing.join(', ')}`);
+  };
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
@@ -378,7 +383,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       width: z.number().min(40).max(5000).optional(),
       height: z.number().min(40).max(10000).optional().describe('Height in px (minimum height for a fit board). Default 900.'),
       height_mode: z.enum(['fit', 'fixed']).optional().describe('fit (default): grows with content. fixed: exactly this tall; extra content is clipped.'),
-      page_id: z.string().optional().describe('Page for the new board (default: the page chosen with set_page, else the first).'),
+      page_id: z.string().optional().describe('Page for the new board (default: the page chosen with pages set, else the first).'),
       x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
       y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
       html: z.string().max(200_000).optional().describe('First content for the board, written in the same call (saves a write_html turn).'),
@@ -524,55 +529,51 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { ...pid, format: z.enum(['css', 'tailwind', 'json']).optional() },
   }, safe(({ project_id, format = 'css' }) => text(exportTokens(target(project_id).doc.theme, format))));
 
-  server.registerTool('create_page', {
-    description: 'Add a page (a separate canvas inside the project, for example one per flow or per breakpoint). Returns its id. New artboards go to the page chosen with set_page.',
-    inputSchema: { ...pid, name: z.string().min(1).max(60) },
-  }, safe(({ project_id, name }) => {
+  // ---- pages -------------------------------------------------------------
+  // One tool for the five page operations (low traffic): a single schema costs less than five. The action enum is
+  // strict; fields are flat and optional in the schema, so each action checks its own required ones with `need`.
+  // log() keeps the old per-operation names (create_page, ...): the Activity panel labels and doc history use them.
+  server.registerTool('pages', {
+    description: 'Pages are separate canvases inside a project (one per flow or breakpoint); get_basic_info lists them. action: create (name) returns the page id; set (page_id) chooses the page NEW artboards go to until changed; update (page_id, name and/or background colour such as oklch(0.2 0 0), "" clears it); delete (page_id; its artboards move to move_boards_to, default the first remaining page, never deleted); move_boards (artboard_ids, page_id).',
+    inputSchema: {
+      ...pid,
+      action: z.enum(['create', 'set', 'update', 'delete', 'move_boards']),
+      page_id: z.string().optional(),
+      name: z.string().max(60).optional(),
+      background: z.string().max(60).optional(),
+      move_boards_to: z.string().optional(),
+      artboard_ids: z.array(z.string()).min(1).optional(),
+    },
+  }, safe(({ project_id, action, page_id, name, background, move_boards_to, artboard_ids }) => {
     const { meta, doc } = target(project_id);
-    const page = doc.createPage(name);
-    log(meta, doc, 'create_page', []);
-    return text(page);
-  }));
-
-  server.registerTool('set_page', {
-    description: 'Choose the page that new artboards are created on (until you change it again). get_basic_info lists the pages.',
-    inputSchema: { ...pid, page_id: z.string() },
-  }, safe(({ project_id, page_id }) => {
-    const { meta, doc } = target(project_id);
-    doc._pageId(page_id); // throws a helpful error for an unknown page
-    ui.currentPage.set(meta.id, page_id);
-    return text(`New artboards will go to ${page_id}`);
-  }));
-
-  server.registerTool('update_page', {
-    description: 'Rename a page and/or set its canvas background colour (e.g. oklch(0.2 0 0); empty string clears it).',
-    inputSchema: { ...pid, page_id: z.string(), name: z.string().max(60).optional(), background: z.string().max(60).optional() },
-  }, safe(({ project_id, page_id, name, background }) => {
-    const { meta, doc } = target(project_id);
-    const page = doc.updatePage(page_id, { name, background });
-    log(meta, doc, 'update_page', []);
-    return text(page);
-  }));
-
-  server.registerTool('delete_page', {
-    description: 'Delete a page. Its artboards are moved to move_boards_to (default: the first remaining page), never deleted.',
-    inputSchema: { ...pid, page_id: z.string(), move_boards_to: z.string().optional() },
-  }, safe(({ project_id, page_id, move_boards_to }) => {
-    const { meta, doc } = target(project_id);
+    if (action === 'create') {
+      need('pages', action, { name }, 'name');
+      if (!name) throw new Error('pages create needs a non-empty name');
+      const page = doc.createPage(name);
+      log(meta, doc, 'create_page', []);
+      return text(page);
+    }
+    if (action === 'move_boards') {
+      need('pages', action, { artboard_ids, page_id }, 'artboard_ids', 'page_id');
+      doc.moveToPage(artboard_ids, page_id);
+      log(meta, doc, 'move_to_page', artboard_ids);
+      return text('ok');
+    }
+    need('pages', action, { page_id }, 'page_id');
+    if (action === 'set') {
+      doc._pageId(page_id); // throws a helpful error for an unknown page
+      ui.currentPage.set(meta.id, page_id);
+      return text(`New artboards will go to ${page_id}`);
+    }
+    if (action === 'update') {
+      const page = doc.updatePage(page_id, { name, background });
+      log(meta, doc, 'update_page', []);
+      return text(page);
+    }
     const dest = doc.deletePage(page_id, move_boards_to);
     if (ui.currentPage.get(meta.id) === page_id) ui.currentPage.delete(meta.id);
     log(meta, doc, 'delete_page', []);
     return text({ deleted: page_id, boards_moved_to: dest });
-  }));
-
-  server.registerTool('move_to_page', {
-    description: 'Move artboards to another page.',
-    inputSchema: { ...pid, artboard_ids: z.array(z.string()).min(1), page_id: z.string() },
-  }, safe(({ project_id, artboard_ids, page_id }) => {
-    const { meta, doc } = target(project_id);
-    doc.moveToPage(artboard_ids, page_id);
-    log(meta, doc, 'move_to_page', artboard_ids);
-    return text('ok');
   }));
 
   server.registerTool('add_reference_image', {
