@@ -72,7 +72,7 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   to the artboard being written (centres on newest content for tall boards); backs off 2.5s after user input.
 - **Components:** masters live in `doc.data.components` (`src/components.mjs`). Instances are stored *expanded* in the artboard
   HTML with `data-component`/`data-variant`; `setComponent` re-expands them in place (root id and `data-slot` text kept).
-  Hand edits inside an instance are replaced by the master on the next master edit; `detach_component` opts out.
+  Hand edits inside an instance are replaced by the master on the next master edit; `components` action `detach` opts out.
 - **References:** pictures live in `data/projects/<id>/refs/R<n>.<ext>` (bytes validated by magic number in `src/images.mjs`), metadata in
   `doc.data.references`, shown on a locked board (`generated: 'reference'`, served from `/api/p/<id>/ref/<R#>`). The SVG rasterizer
   cannot load http images, so reference boards are drawn directly; `compare_to_reference` runs in the browser (`compareToReference`).
