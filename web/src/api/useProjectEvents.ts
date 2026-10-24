@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { answer, compareToReference, computedStyles, measure, screenshot, type ReplyHost } from '@/canvas/replies';
 import { useCanvas } from '@/store/canvas';
-import { useAgents, type CallEntry, type PendingCall, type AgentInfo } from '@/store/agents';
+import { useAgents, type Claim, type CallEntry, type PendingCall, type AgentInfo } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { activateProject } from './projects';
 import type { Comment, DocData, ProjectMeta } from './types';
@@ -29,6 +29,7 @@ export function useProjectEvents(projectId: string) {
     // MCP call log: finished calls and "started, still running" markers for slow ones (screenshots).
     es.addEventListener('call', (e) => useAgents.getState().addCall(parse<CallEntry>(e)));
     es.addEventListener('call-start', (e) => useAgents.getState().addPending(parse<PendingCall>(e)));
+    es.addEventListener('claims', (e) => { const d = parse<{ claims: Claim[]; paused: string[] }>(e); useAgents.getState().setClaims(d.claims, d.paused); });
     es.addEventListener('activity', () => useProject.getState().bumpActivity());
     // Claude's MCP tools ask this tab for pixels and layout; the engine owns the DOM, so it answers.
     // With no engine yet (page still loading) the request gets an error reply instead of timing out.
@@ -47,7 +48,8 @@ export function useProjectEvents(projectId: string) {
 
     // History for a tab opened after the calls happened. Dedupes against anything SSE already delivered.
     const seed = () => fetch(`/api/p/${projectId}/calls`).then((r) => (r.ok ? r.json() : [])).then((c: CallEntry[]) => useAgents.getState().seed(c)).catch(() => {});
-    es.addEventListener('open', () => void seed());
+    const seedClaims = () => fetch(`/api/p/${projectId}/claims`).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) useAgents.getState().setClaims(d.claims, d.paused); }).catch(() => {});
+    es.addEventListener('open', () => { void seed(); void seedClaims(); });
 
     // Claim "active project" when the tab loads or becomes visible, NOT on SSE reconnect, so a stale
     // background tab cannot steal it from the one the user is looking at.

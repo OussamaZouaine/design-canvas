@@ -18,6 +18,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   const agentIds = useProject((s) => s.agentIds);
   const agentInfo = useProject((s) => s.agentInfo);
   const followAgent = useAgents((s) => s.followAgent);
+  const claims = useAgents((s) => s.claims);
   const tool = useUi((s) => s.tool);
 
   // Create the engine once per project. StrictMode runs this twice in dev: destroy() must undo everything.
@@ -50,6 +51,7 @@ export function Canvas({ projectId }: { projectId: string }) {
   useEffect(() => { engine?.setFonts(fonts); }, [engine, fonts]);
   useEffect(() => { engine?.setAgentIds(agentIds, agentInfo); }, [engine, agentIds, agentInfo]);
   useEffect(() => { engine?.setFollowAgent(followAgent); }, [engine, followAgent]);
+  useEffect(() => { engine?.setClaims(claims); }, [engine, claims]);
   useEffect(() => { engine?.setTool(tool); }, [engine, tool]);
 
   // role="application": the surface handles its own pointer and keyboard gestures, so screen readers

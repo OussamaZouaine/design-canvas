@@ -81,6 +81,8 @@ export class CanvasEngine {
   private selBox = div('dc-sel dc-hide');
   private hoverBox = div('dc-hover dc-hide');
   private agentHost = div('dc-agent');
+  private claimHost = div('dc-claims'); // coloured outlines of boards an agent claimed (soft claims, see src/claims.mjs)
+  private claims: { board: string; agent: { id: string; name: string; color: string } }[] = [];
   private boards = new Map<string, Board>();
   private pidIndex = new Map<string, string>(); // node id (data-pid) -> artboard id, so lookups never scan every shadow root
 
@@ -115,7 +117,7 @@ export class CanvasEngine {
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     this.activePage = lsGet(`dc-page:${projectId}`);
-    this.overlay.append(this.agentHost, this.hoverBox, this.selBox, this.draft);
+    this.overlay.append(this.claimHost, this.agentHost, this.hoverBox, this.selBox, this.draft);
     this.selBox.append(this.sizeLabel);
     viewport.append(this.world, this.overlay);
     this.applyView();
@@ -182,6 +184,11 @@ export class CanvasEngine {
     }
     this.agentIds = ids;
     this.drawAgent();
+  }
+  // Boards an agent claimed in the last ~60 s (server pushes the list, also when a claim lapses).
+  setClaims(claims: { board: string; agent: { id: string; name: string; color: string } }[]) {
+    this.claims = claims;
+    this.drawClaims();
   }
   // Follow camera: only glide for writes by this agent (null = anyone). The doc delta that triggers a glide
   // arrives just before the `agent` event naming its author, so the check uses the previous author for the
@@ -793,6 +800,7 @@ export class CanvasEngine {
 
   private drawSelection() {
     this.drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
+    this.drawClaims();
     this.drawHover();
     const target = this.selected ? this.findElement(this.selected) : null;
     // No element (board is a snapshot): fall back to the rect index, box only, no resize handles.
@@ -838,6 +846,23 @@ export class CanvasEngine {
         if (!tag) tag = box.appendChild(document.createElement('b'));
         if (tag.textContent !== this.agent.name) tag.textContent = this.agent.name;
       } else tag?.remove();
+      this.place(box, r);
+    });
+  }
+
+  // One outline per claimed board, in the claiming agent's colour, with its name above the top-left corner. Boxes are
+  // reused like the agent boxes; names are untrusted so they go in as textContent. Boards on another page are hidden
+  // (zero-size rect), so they get no outline.
+  private drawClaims() {
+    const shown = this.claims.map((c) => ({ c, f: this.boards.get(c.board)?.frame })).filter((x): x is { c: typeof x.c; f: HTMLDivElement } => !!x.f && x.f.isConnected)
+      .map((x) => ({ c: x.c, r: this.relRect(x.f) })).filter((x) => x.r.width > 0);
+    while (this.claimHost.children.length > shown.length) this.claimHost.lastChild!.remove();
+    shown.forEach(({ c, r }, i) => {
+      const box = (this.claimHost.children[i] as HTMLElement) || this.claimHost.appendChild(document.createElement('i'));
+      box.style.setProperty('--c', c.agent.color);
+      let tag = box.firstElementChild as HTMLElement | null;
+      if (!tag) tag = box.appendChild(document.createElement('b'));
+      if (tag.textContent !== c.agent.name) tag.textContent = c.agent.name;
       this.place(box, r);
     });
   }

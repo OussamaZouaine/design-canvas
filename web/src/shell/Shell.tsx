@@ -39,6 +39,7 @@ function StatusPill() {
 function AgentChips() {
   const presence = usePresence();
   const followAgent = useAgents((s) => s.followAgent);
+  const paused = useAgents((s) => s.paused);
   const setTab = useUi((s) => s.setPanelTab);
   if (!presence.length) return null;
   return (
@@ -46,11 +47,12 @@ function AgentChips() {
       {presence.slice(0, 3).map((a) => (
         <button
           key={a.id} role="listitem" onClick={() => setTab('agents')}
-          title={`${a.name}: ${a.active ? `${a.pending ? 'waiting on ' : 'last used '}${a.tool}` : 'idle'}${followAgent === a.id ? ' (followed)' : ''}`}
+          title={`${a.name}: ${a.active ? `${a.pending ? 'waiting on ' : 'last used '}${a.tool}` : 'idle'}${followAgent === a.id ? ' (followed)' : ''}${paused.includes(a.id) ? ' (paused)' : ''}`}
           className={cn('flex h-6 max-w-40 items-center gap-1.5 rounded-full border px-2 text-[11px]', a.active ? 'text-foreground' : 'text-muted-foreground opacity-60')}
         >
           <i className={cn('size-1.5 shrink-0 rounded-full', a.pending && 'agent-pulse')} style={{ background: a.color }} />
           <span className="truncate">{a.name}</span>
+          {paused.includes(a.id) && <span className="text-[10px] uppercase text-muted-foreground">paused</span>}
           {a.active && <span className="hidden truncate text-muted-foreground xl:inline">{a.tool}</span>}
         </button>
       ))}
