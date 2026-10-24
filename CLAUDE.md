@@ -15,12 +15,13 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 ## Run
 - `pnpm build:web` once (and after any `web/` change), then `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777 (the server serves `web/dist`; without a build it answers 503). Stop it with a normal kill so it flushes `data/`.
 - UI dev: `pnpm dev:web` (Vite on http://localhost:5173 with HMR, proxies /api /events /mcp /reply to the 3777 server, which must be running).
-- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateless). Registered in Claude Code as `design-canvas`.
+- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateful sessions: `src/sessions.mjs`; a session id gets an agent identity from `clientInfo` / `?agent=<name>` / `start({agent})` and a bound project; unknown ids get 404 so clients re-initialize; requests with no session fall back to the active project). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
 - Pages: `/` projects home, `/p/<id>` canvas, `/comments` all comments.
 
 ## Layout
+- `src/sessions.mjs` `Session` (agent identity, OKLCH colour, `projectId` binding) + `SessionMap` (30 min idle TTL). `DC_DATA=<dir>` runs a second instance on its own data folder.
 - `src/server.mjs` HTTP routes, SSE (`/events`, `/events?project=<id>`), delta doc sync, comments API.
 - `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there. Low-traffic families are single action-enum tools
   (flat schema, per-action `need()` checks): `pages`, `components` (+ separate `insert_component`), `references`, `project`, `tokens`, `history`, `export_code`; the

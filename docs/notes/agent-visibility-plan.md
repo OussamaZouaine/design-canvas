@@ -48,7 +48,8 @@ Implemented as specified; ring is per project; `t` is strictly increasing so `si
 - `GET /api/p/<id>/calls?since=<t>` for incremental reads. Keep `logAction`/Activity as is (it becomes a view later).
 - Done = unit test for the summary (no HTML leaks), SSE event seen in the browser devtools.
 
-### Phase 2: Agent identity and sessions
+### Phase 2: Agent identity and sessions — DONE 2026-10-24
+Implemented in `src/sessions.mjs` + `/mcp` in `src/server.mjs`. Call-log entries now carry `agent: {id,name,color}`; journal actor and the SSE `agent` event (`{ids, agent}`) use the agent id. `project_id` left every schema except `project` (the register wrapper makes other schemas passthrough, so an explicit id still works). tools/list 33.7k -> 32.1k chars. Not verified: a real Claude Code restart re-initializing (the server answers 404 per spec; SDK clients do not auto-retry). Two clients on one project verified live over HTTP (`claude-code-<sid4>` vs `reviewer`). `test/sessions.test.mjs`.
 - Make `/mcp` stateful: `sessionIdGenerator: randomUUID`, keep `Map<sessionId, {transport, server, agent}>`, idle TTL ~30 min,
   answer 404 for unknown ids (the spec makes the client re-initialize; check Claude Code does after a server restart).
 - Identity per session = `clientInfo.name/version` from `initialize` + optional `agent` label: `start({agent:"reviewer"})` or

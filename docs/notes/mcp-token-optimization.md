@@ -113,3 +113,7 @@ Totals over the 6 briefs: turns 138 -> 71, cost $2.32 -> $2.01, output 72.9k -> 
 Tool-result tokens rose (about 20.1k -> 28.1k) because screenshots are now counted properly (A2) and batch/start return more per call. Caveat: `pricing` did not log a brief (`brief` false) and has one sample per brief.
 Conclusion: no worse on any total, so group C stays (the commits were already in `main` and `feat/agent-visibility`; there was no separate `perf/mcp-tokens` branch left to merge).
 Live-test open items fixed: `components` `name` now documents the lowercase/digits/dashes rule; tool descriptions no longer say a browser tab is required (headless worker exists).
+
+## Phase 2 session binding (2026-10-24)
+`/mcp` is stateful, each session is bound to its project by `start` / `project open` / `create_project`, so `project_id` was dropped from every tool schema except `project` (other schemas are passthrough: an explicit `project_id` still works, it just is not advertised).
+tools/list (46 tools, compact JSON): 33,749 -> 32,085 chars (about 8.4k -> 8.0k tokens, -5%). Smaller than the plan's ~1k estimate because the property was already terse. Identity and binding add nothing to tool results (test: `tool results carry no identity fields`).
