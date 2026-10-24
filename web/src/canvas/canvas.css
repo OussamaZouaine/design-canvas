@@ -21,7 +21,7 @@
 /* "W x H" pill under the selection; rides on the selection box so it moves with it. */
 .dc-size {
   position: absolute; top: 100%; left: 50%; margin-top: 8px; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
-  padding: 1px 6px; border-radius: 4px; background: var(--dc-accent); color: oklch(1 0 0); font: 500 10px/16px system-ui, sans-serif;
+  padding: 1px 6px; border-radius: 4px; background: var(--dc-accent); color: oklch(1 0 0); font: 500 10px/16px var(--font-sans, system-ui), sans-serif;
   font-variant-numeric: tabular-nums;
 }
 .dc-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
@@ -30,7 +30,8 @@
 .dc-artboard { position: absolute; }
 .dc-artboard.offpage { display: none; }
 /* Isolate each board so a change inside it never forces layout/paint of the others. */
-.dc-frame { position: absolute; inset: 0; background: oklch(1 0 0); overflow: hidden; box-shadow: 0 1px 3px oklch(0 0 0 / 0.2); contain: layout paint style; }
+/* Layered shadow (hairline contact + soft ambient) so boards sit on the canvas like paper, in both themes. */
+.dc-frame { position: absolute; inset: 0; background: oklch(1 0 0); overflow: hidden; box-shadow: 0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px oklch(0 0 0 / 0.08), 0 6px 20px -6px oklch(0 0 0 / 0.16); contain: layout paint style; }
 
 /* Level of detail: an unmounted board shows its snapshot, or a quiet placeholder with its name. */
 .dc-lod-name {
