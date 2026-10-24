@@ -4,7 +4,7 @@
 // All colours are OKLCH to match the project rules. Wording is our own; the ideas (mood from a scene,
 // restraint, a review loop) are common design practice.
 
-const WORKFLOW = `Design Canvas workflow (this one call also contains the brief, type, layout and review rules below, so you do not need to fetch them separately; only "mobile" is on demand). Every turn re-reads the whole conversation, so use few turns: send independent tool calls together in ONE turn (for example get_guide + start, or several write_html calls for different boards).
+const WORKFLOW = `Design Canvas workflow (this one call also contains the brief, type, layout and review rules below, so you do not need to fetch them separately; only "mobile" and "svg" (icons, logos, illustrations) are on demand). Every turn re-reads the whole conversation, so use few turns: send independent tool calls together in ONE turn (for example get_guide + start, or several write_html calls for different boards).
 0. START. Call get_guide, and in the same turn start({prompt, project, description?, brief?, artboard?}). project is a short (2-4 word) name from what you are building (the repo, product or feature, e.g. "Checkout redesign") or a project id; an existing one is reused, otherwise it is created. Never create a second project for the same work. start resolves the project, logs the request (prompt: the user's own words, one short sentence) and can create the first board (artboard, with html for the first group) in ONE call. Pass the returned project_id on every later call so parallel sessions don't mix up projects. list_projects is only for browsing when you do not know the name.
 0b. BRIEF. For a NEW design pass brief (mood, palette, type, direction: see get_guide topic "brief") to start and post the same brief in chat before the first write. It is stored with the project so later sessions know the intent. Later requests in the same project: log_prompt (or start again).
 1. start already returns an existing project's open comments, the user's hand changes and its artboards, so do not call get_comments, get_changes or get_basic_info first; use get_tree for an outline (query finds a node by name or text). A project start just created is empty: go straight to the first board.
@@ -71,10 +71,21 @@ const MOBILE = `Mobile screens:
 - Touch targets 44px minimum; body text 16-17px; side padding 16-20px.
 - Lists: fixed-width leading slot (40-44px) and trailing slot so rows align.`;
 
+// On demand like "mobile": only designs with icons, logos or illustrations need it.
+const SVG = `Vectors and SVG (icons, logos, illustrations, charts):
+- Write inline <svg> in write_html like any other markup. Always set viewBox, plus width/height (or a CSS size) so it scales; use preserveAspectRatio only when the default is wrong.
+- Icons: 24x24 viewBox, stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round", so the icon takes its colour from the parent's CSS color. Keep one stroke width across a set.
+- Colours in fill/stroke are oklch(...) or currentColor or var(--token); never hex. Gradients: define <linearGradient id="..."> inside the same svg and reference it as fill="url(#id)"; give ids a unique prefix per svg because several svgs share one page.
+- Not allowed (stripped on write): <style>, <script>, <foreignObject>, <use>/<image> pointing outside the file, remote url(), event handlers. Style with attributes or inline style="" instead. <image> only takes data:image/png|jpeg|gif|webp;base64.
+- Edit an existing vector with set_attrs on the child node id (d, fill, stroke, stroke-width, transform, cx/cy/r, viewBox...; null removes). update_styles is for HTML/CSS properties only. get_tree with depth 3 or more lists the svg children (path, circle, g... with their d/fill/stroke) so you can target a single shape.
+- import_svg places an SVG you already have (markup in svg, or file inside the repo linked with tokens link_repo); each shape becomes an editable node. Name the root with name.
+- Text inside an svg inherits font-family from the board; set text-anchor/dominant-baseline with set_attrs to align it.
+- Review the result with get_screenshot: thin strokes and tiny viewBoxes are the usual defects.`;
+
 // `start` is the whole method in one call: each get_guide call costs a full agent turn, and the evals showed
 // agents spending three of them reading brief / type / layout one by one. The single topics stay for lookups.
 const START = [WORKFLOW, BRIEF, TYPE, LAYOUT, REVIEW].join('\n\n');
-export const TOPICS = { start: START, brief: BRIEF, type: TYPE, layout: LAYOUT, review: REVIEW, mobile: MOBILE };
+export const TOPICS = { start: START, brief: BRIEF, type: TYPE, layout: LAYOUT, review: REVIEW, mobile: MOBILE, svg: SVG };
 
 // Unknown topics return the topic list instead of an error, so an agent can recover in one call.
 export function guideText(topic = 'start') {
