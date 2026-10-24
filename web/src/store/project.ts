@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AgentInfo } from '@/store/agents';
 import type { Artboard, Comment, DocData, ProjectMeta } from '@/api/types';
 
 export type Connection = 'connecting' | 'connected' | 'disconnected';
@@ -10,6 +11,8 @@ interface ProjectState {
   connection: Connection;
   // Ids Claude touched recently (the server's `agent` event); drives the "Claude is designing" pill.
   agentIds: string[];
+  // Who wrote them (last `agent` event; kept after the highlight clears so the pill/ring colour does not flicker).
+  agentInfo: AgentInfo | null;
   // Bumped on every server `activity` event so the Activity and Versions tabs know to refetch.
   activityTick: number;
   bumpActivity: () => void;
@@ -19,11 +22,11 @@ interface ProjectState {
   applyDocDelta: (incoming: DocData) => void;
   setComments: (c: Comment[]) => void;
   setConnection: (c: Connection) => void;
-  setAgentIds: (ids: string[]) => void;
+  setAgentIds: (ids: string[], agent?: AgentInfo) => void;
   reset: () => void;
 }
 
-const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [], activityTick: 0 };
+const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [], agentInfo: null as AgentInfo | null, activityTick: 0 };
 
 export const useProject = create<ProjectState>((set, get) => ({
   ...empty,
@@ -40,7 +43,7 @@ export const useProject = create<ProjectState>((set, get) => ({
   },
   setComments: (comments) => set({ comments }),
   setConnection: (connection) => set({ connection }),
-  setAgentIds: (agentIds) => set({ agentIds }),
+  setAgentIds: (agentIds, agent) => set((s) => ({ agentIds, agentInfo: agent ?? s.agentInfo })),
   bumpActivity: () => set((s) => ({ activityTick: s.activityTick + 1 })),
   reset: () => set(empty),
 }));

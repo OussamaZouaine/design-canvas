@@ -8,9 +8,11 @@ import { ActivityPanel, VersionsPanel } from '@/panels/HistoryPanels';
 import { InspectorPanel } from '@/panels/InspectorPanel';
 import { ThemePanel } from '@/panels/ThemePanel';
 import { McpPanel, TokensPanel } from '@/panels/TokensMcpPanels';
+import { AgentsPanel, toolLabel, usePresence } from '@/panels/AgentsPanel';
 import { LayersPanel } from '@/panels/LayersPanel';
 import { PagesPanel } from '@/panels/PagesPanel';
 import { cn } from '@/lib/utils';
+import { useAgents } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { useUi, type PanelTab, type Tool } from '@/store/ui';
@@ -19,12 +21,41 @@ import { useUi, type PanelTab, type Tool } from '@/store/ui';
 function StatusPill() {
   const connection = useProject((s) => s.connection);
   const designing = useProject((s) => s.agentIds.length > 0);
-  const text = designing ? 'Claude is designing' : connection;
+  const agent = useProject((s) => s.agentInfo);
+  const text = designing ? `${agent?.name ?? 'Claude'} is designing` : connection;
   return (
-    <span className="flex h-6 items-center gap-1.5 rounded-full bg-muted px-2 text-[11px] text-muted-foreground">
-      <span className={cn('size-1.5 rounded-full', designing ? 'bg-[var(--selection)]' : connection === 'connected' ? 'bg-emerald-500' : 'bg-destructive')} />
+    <span className="flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-muted px-2 text-[11px] text-muted-foreground">
+      <span
+        className={cn('size-1.5 rounded-full', !designing && (connection === 'connected' ? 'bg-emerald-500' : 'bg-destructive'))}
+        style={designing ? { background: agent?.color ?? 'var(--selection)' } : undefined}
+      />
       {text}
     </span>
+  );
+}
+
+// One chip per agent seen on this project: colour dot, name, and the tool it is on (dimmed once idle for 2 min).
+// Names come from the MCP client and are untrusted; React escapes them.
+function AgentChips() {
+  const presence = usePresence();
+  const followAgent = useAgents((s) => s.followAgent);
+  const setTab = useUi((s) => s.setPanelTab);
+  if (!presence.length) return null;
+  return (
+    <div className="flex min-w-0 items-center gap-1" role="list" aria-label="Agents on this project">
+      {presence.slice(0, 3).map((a) => (
+        <button
+          key={a.id} role="listitem" onClick={() => setTab('agents')}
+          title={`${a.name}: ${a.active ? `${a.pending ? 'waiting on ' : 'last used '}${a.tool}` : 'idle'}${followAgent === a.id ? ' (followed)' : ''}`}
+          className={cn('flex h-6 max-w-40 items-center gap-1.5 rounded-full border px-2 text-[11px]', a.active ? 'text-foreground' : 'text-muted-foreground opacity-60')}
+        >
+          <i className={cn('size-1.5 shrink-0 rounded-full', a.pending && 'agent-pulse')} style={{ background: a.color }} />
+          <span className="truncate">{a.name}</span>
+          {a.active && <span className="hidden truncate text-muted-foreground xl:inline">{a.tool}</span>}
+        </button>
+      ))}
+      {presence.length > 3 && <span className="text-[11px] text-muted-foreground">+{presence.length - 3}</span>}
+    </div>
   );
 }
 
@@ -52,16 +83,28 @@ function ZoomControls() {
 export function LivePill() {
   const live = useCanvas((s) => s.live);
   const engine = useCanvas((s) => s.engine);
-  if (!live) return null;
+  const agent = useProject((s) => s.agentInfo);
+  const waiting = useAgents((s) => s.pending[0]);
+  const color = agent?.color ?? 'oklch(0.68 0.2 295)';
+  // A pending slow call (screenshot...) shows even when no board is being written, so a 15 s round-trip is visible.
+  if (!live && !waiting) return null;
   return (
-    <button
-      onClick={() => engine?.focusBoard(live.id)}
-      className="live-pill absolute top-6 right-3 z-10 flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] shadow-md"
-    >
-      <span className="size-1.5 rounded-full bg-[oklch(0.68_0.2_295)]" />
-      {/* React escapes text, so an untrusted board name is safe here. */}
-      Designing <b className="max-w-40 truncate font-medium">{live.name}</b>
-    </button>
+    <div className="absolute top-6 right-3 z-10 flex flex-col items-end gap-1.5">
+      {live && (
+        <button onClick={() => engine?.focusBoard(live.id)} className="live-pill flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] shadow-md" style={{ borderColor: color }}>
+          <span className="size-1.5 rounded-full" style={{ background: color }} />
+          {/* React escapes text, so untrusted agent and board names are safe here. */}
+          <b className="max-w-24 truncate font-medium">{agent?.name ?? 'Claude'}</b>
+          designing <b className="max-w-40 truncate font-medium">{live.name}</b>
+        </button>
+      )}
+      {waiting && (
+        <div className="live-pill flex h-7 items-center gap-2 rounded-full border bg-popover px-3 text-[11px] text-muted-foreground shadow-md" style={{ borderColor: waiting.agent?.color }}>
+          <span className="agent-pulse size-1.5 rounded-full" style={{ background: waiting.agent?.color ?? 'var(--muted-foreground)' }} />
+          Waiting for {waiting.tool === 'get_screenshot' ? 'screenshot' : toolLabel(waiting.tool, waiting.args)}…
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -81,6 +124,7 @@ export function TopBar({ projectId }: { projectId: string }) {
       <span className="tnum text-muted-foreground">{count} {count === 1 ? 'artboard' : 'artboards'}</span>
       <div className="ml-auto flex items-center gap-3">
         <ZoomControls />
+        <AgentChips />
         <StatusPill />
         <Button variant="ghost" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
         <Button variant="ghost" size="icon" aria-label="Toggle panel" onClick={togglePanel}><PanelRight /></Button>
@@ -141,7 +185,7 @@ export function FloatingToolbar() {
 
 const TABS: { id: PanelTab; label: string }[] = [
   { id: 'design', label: 'Design' }, { id: 'comment', label: 'Comments' }, { id: 'activity', label: 'Activity' },
-  { id: 'versions', label: 'Versions' }, { id: 'theme', label: 'Theme' }, { id: 'tokens', label: 'Tokens' }, { id: 'mcp', label: 'MCP' },
+  { id: 'versions', label: 'Versions' }, { id: 'theme', label: 'Theme' }, { id: 'tokens', label: 'Tokens' }, { id: 'agents', label: 'Agents' }, { id: 'mcp', label: 'MCP' },
 ];
 
 export function RightPanel({ projectId }: { projectId: string }) {
@@ -167,6 +211,7 @@ export function RightPanel({ projectId }: { projectId: string }) {
         {panelTab === 'versions' && <VersionsPanel projectId={projectId} />}
         {panelTab === 'theme' && <ThemePanel projectId={projectId} />}
         {panelTab === 'tokens' && <TokensPanel projectId={projectId} />}
+        {panelTab === 'agents' && <AgentsPanel />}
         {panelTab === 'mcp' && <McpPanel />}
       </div>
     </aside>

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type Tool = 'move' | 'frame' | 'text' | 'image' | 'comment' | 'hand';
-export type PanelTab = 'design' | 'comment' | 'activity' | 'versions' | 'theme' | 'tokens' | 'mcp';
+export type PanelTab = 'design' | 'comment' | 'activity' | 'versions' | 'theme' | 'tokens' | 'agents' | 'mcp';
 export type Theme = 'dark' | 'light';
 
 // localStorage can throw (private mode, blocked site data), so every access is guarded.
