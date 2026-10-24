@@ -128,3 +128,18 @@ test('tools/list carries no $schema keys and a short project_id description', as
   assert.ok(await h.call('list_projects'));
   h.close();
 });
+
+test('reply_comment with resolve: true replies and resolves in one call', async () => {
+  const h = await harness();
+  const { pid, node, board } = await withBoard(h);
+  const c1 = h.store.addComment(pid, { targetId: node, artboardId: board, text: 'bigger' });
+  const c2 = h.store.addComment(pid, { targetId: node, artboardId: board, text: 'bluer' });
+  assert.equal(await h.call('reply_comment', { project_id: pid, comment_id: c1.id, text: 'Done', resolve: true }), 'Replied and resolved');
+  assert.equal(await h.call('reply_comment', { project_id: pid, comment_id: c2.id, text: 'Looking' }), 'Replied');
+  const all = await h.call('get_comments', { project_id: pid, include_resolved: true });
+  const by = Object.fromEntries(all.map((c) => [c.comment_id, c]));
+  assert.equal(by[c1.id].resolved, true);
+  assert.equal(by[c1.id].replies[0].text, 'Done');
+  assert.equal(by[c2.id].resolved, false);
+  h.close();
+});
