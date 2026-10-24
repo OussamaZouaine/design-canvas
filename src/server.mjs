@@ -11,7 +11,11 @@ import { randomUUID } from 'node:crypto';
 import { ProjectStore, ID_RE } from './store.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { Meter } from './meter.mjs';
-import { CallLog } from './agentlog.mjs';
+import { CallLog, RING } from './agentlog.mjs';
+import { analyze, evalSummary, fixedCosts } from './efficiency.mjs';
+import { guideText } from './guide.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
@@ -135,6 +139,23 @@ function highlight(projectId, ids, agent = null) {
 
 // Google Fonts the server downloaded (use_font). Shared by all projects, so a family is fetched once.
 const fonts = new FontCache(path.join(DATA, 'fonts'));
+
+// What every agent pays before doing anything: the tools/list payload, the server instructions and one get_guide().
+// Measured once by listing the tools through an in-memory client (the same path a real client takes) and cached,
+// because it only changes when the server code does.
+let fixedCache = null;
+async function measureFixed() {
+  if (fixedCache) return fixedCache;
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const server = createMcpServer({ store, ui, fonts, highlight, port: PORT });
+  const client = new Client({ name: 'cost-probe', version: '0' });
+  try {
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const { tools } = await client.listTools();
+    fixedCache = fixedCosts({ tools, instructions: client.getInstructions(), guide: guideText('start') });
+  } finally { await client.close().catch(() => {}); }
+  return fixedCache;
+}
 
 const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port: PORT };
 
@@ -424,6 +445,12 @@ const server = http.createServer(async (req, res) => {
         if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id, { since: Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0 }));
         // Per-call log of MCP tool calls; `since` (ms timestamp) makes polling incremental.
         if (parts[3] === 'calls') return json(res, 200, calls.list(p.meta.id, Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0));
+        // Cost + efficiency dashboard: per agent and per prompt, derived from the call log (src/efficiency.mjs).
+        if (parts[3] === 'efficiency') {
+          let fixed = null;
+          try { fixed = await measureFixed(); } catch { /* fixed costs are a nicety: the rest still answers */ }
+          return json(res, 200, analyze(calls.list(p.meta.id), { fixed, limit: RING }));
+        }
         // Eval numbers for examples/evals. Read-only: boards are measured but never grown, so the run
         // is judged on what the agent left behind, not on what this call would repair.
         if (parts[3] === 'eval') {
@@ -435,7 +462,7 @@ const server = http.createServer(async (req, res) => {
             try { reports = await requestMeasure(p.meta.id, boards.map((a) => ({ id: a.id, html: a.html, width: a.width, height: a.height, fit: a.heightMode === 'fit' }))); } catch { /* tab did not answer */ }
           }
           const issues = Object.fromEntries(boards.map((a) => [a.id, p.doc.lint(a.id)]));
-          return json(res, 200, { tabOpen, boards: boards.length, brief: Boolean(p.meta.brief), ...lintMetrics(issues), ...(reports ? layoutMetrics(reports) : { layout: 'not measured' }) });
+          return json(res, 200, { tabOpen, boards: boards.length, brief: Boolean(p.meta.brief), ...evalSummary(calls.list(p.meta.id)), ...lintMetrics(issues), ...(reports ? layoutMetrics(reports) : { layout: 'not measured' }) });
         }
         return json(res, 404, { error: 'Not found' });
       }
