@@ -8,7 +8,7 @@
 // Same effect classes as web/src/store/agents.ts (kept in sync by hand: the UI needs them for icons, the server
 // for the heuristics). Anything unlisted is a read.
 const WRITE = new Set([
-  'write_html', 'update_styles', 'set_text_content', 'create_artboard', 'delete_nodes', 'duplicate_nodes', 'move_node',
+  'write_html', 'update_styles', 'set_attrs', 'import_svg', 'set_text_content', 'create_artboard', 'delete_nodes', 'duplicate_nodes', 'move_node',
   'rename_nodes', 'set_flags', 'insert_component', 'batch', 'set_tokens', 'use_font', 'create_foundations', 'fit_artboard',
   'create_project', 'reply_comment', 'resolve_comment', 'start', 'log_prompt', 'capture_url',
 ]);
@@ -91,7 +91,7 @@ function lintWriteLoop(calls) {
 }
 
 // Several turns in a row that each make one small edit: `batch` runs them in one call (one turn instead of N).
-const SMALL_EDITS = new Set(['update_styles', 'set_text_content', 'rename_nodes', 'set_flags', 'move_node', 'delete_nodes']);
+const SMALL_EDITS = new Set(['update_styles', 'set_attrs','set_text_content', 'rename_nodes', 'set_flags', 'move_node', 'delete_nodes']);
 function unbatchedEdits(calls) {
   // Walk turns, collecting runs of single-call turns that are small edits.
   const turns = [];

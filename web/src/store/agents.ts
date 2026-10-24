@@ -19,7 +19,7 @@ const PENDING_MAX_MS = 60_000; // a call-start whose `call` never arrives (serve
 
 // Tools by effect: what the timeline icon and the "writes only" filter use. Anything unlisted counts as a read.
 const WRITE = new Set([
-  'write_html', 'update_styles', 'set_text_content', 'create_artboard', 'delete_nodes', 'duplicate_nodes', 'move_node',
+  'write_html', 'update_styles', 'set_attrs', 'import_svg', 'set_text_content', 'create_artboard', 'delete_nodes', 'duplicate_nodes', 'move_node',
   'rename_nodes', 'set_flags', 'insert_component', 'batch', 'set_tokens', 'use_font', 'create_foundations', 'fit_artboard',
   'create_project', 'reply_comment', 'resolve_comment', 'start', 'log_prompt', 'capture_url',
 ]);
