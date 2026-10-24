@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type Tool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'text' | 'image' | 'comment' | 'hand';
+export type Tool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'pen' | 'text' | 'image' | 'comment' | 'hand';
 export type PanelTab = 'design' | 'comment' | 'activity' | 'versions' | 'theme' | 'tokens' | 'agents' | 'mcp';
 export type Theme = 'dark' | 'light';
 
