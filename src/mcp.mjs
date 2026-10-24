@@ -24,6 +24,7 @@ import { anonymousSession } from './sessions.mjs';
 import { Claims, PAUSED_MESSAGE } from './claims.mjs';
 import { kindOf } from './efficiency.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { extractSvg, MAX_SVG_BYTES } from './svg.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -252,6 +253,25 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const dialect = meta.normalize ? dialectStylesNote(styles) : '';
       const lint = quiet ? {} : newLint(before, lintIds(doc, node_ids));
       return note.layout || dialect || lint.lint ? { ok: true, ...note, ...lint, ...(dialect && { dialect }) } : 'ok';
+    },
+    // SVG geometry and paint are attributes, so update_styles cannot reach them (see Doc.setAttrs).
+    async set_attrs({ project_id, node_ids, attrs }) {
+      const { meta, doc } = target(project_id);
+      doc.setAttrs(node_ids, attrs);
+      log(meta, doc, 'set_attrs', node_ids);
+      return 'ok';
+    },
+    // Drops an SVG onto the board as an ordinary editable node. The file route reuses the repo path check so
+    // an agent cannot read arbitrary files off the disk; the sanitizer in Doc._prepare does the safety work.
+    async import_svg({ project_id, target_id, svg, file, mode, name }, quiet) {
+      const { meta, doc } = target(project_id);
+      if (!svg === !file) throw new Error('import_svg: pass exactly one of svg (markup) or file (path inside the linked repo)');
+      const src = extractSvg(svg ?? readInsideRepo(meta.repo, file));
+      if (src.length > MAX_SVG_BYTES) throw new Error('import_svg: SVG is too large (1 MB max)');
+      // Same path as write_html so a fit-height board grows to hold the new vector (and lint/layout notes come back).
+      const res = await writeWithNotes(meta, doc, target_id, src, mode, 'import_svg', quiet);
+      if (name) doc.renameNodes({ [res.created[0]]: name });
+      return res;
     },
     async set_text_content({ project_id, node_id, text: t }) {
       const { meta, doc } = target(project_id);
@@ -838,6 +858,27 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       styles: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
     },
   }, viaEdit('update_styles'));
+
+  server.registerTool('set_attrs', {
+    description: 'Set SVG attributes (d, fill, stroke, stroke-width, viewBox, transform, cx/cy/r...) on nodes inside an <svg>. Use null to remove one. Only geometry and paint attributes are allowed; colours as oklch(). For HTML nodes use update_styles.',
+    inputSchema: {
+      ...pid,
+      node_ids: z.array(z.string()).min(1),
+      attrs: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
+    },
+  }, viaEdit('set_attrs'));
+
+  server.registerTool('import_svg', {
+    description: 'Place an SVG on the board as an editable node (paths, groups and shapes get ids like any other node). Pass svg (markup) or file (path inside the repo linked with tokens link_repo). Scripts, foreignObject, external images and remote url() are stripped. mode defaults to append.',
+    inputSchema: {
+      ...pid,
+      target_id: z.string().describe('Artboard or node to place it in/next to'),
+      svg: z.string().optional(),
+      file: z.string().optional(),
+      mode: z.enum(['replace', 'append', 'prepend', 'before', 'after']).optional(),
+      name: z.string().optional().describe('Layer name for the imported root'),
+    },
+  }, viaEdit('import_svg'));
 
   server.registerTool('set_text_content', {
     description: 'Replace the text inside a node (plain text; markup is escaped).',
