@@ -70,7 +70,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       // Project the call targets: explicit id, else the session's (resolved again after, since start/open can bind it).
       const projectOf = () => input?.project_id ?? currentId();
       const t0 = Date.now();
-      const callId = calls?.start(projectOf(), name, input);
+      const callId = calls?.start(projectOf(), name, input, agentOf());
       const result = await handler(...args);
       meter?.record(name, result);
       // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
