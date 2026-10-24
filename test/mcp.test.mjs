@@ -368,3 +368,15 @@ test('components: set, sheet, detach and delete through one tool; insert_compone
   assert.match(await h.call('components', { project_id: pid, action: 'detach' }), /components detach needs node_id/);
   h.close();
 });
+
+test('export_code: react and html for a board, jsx for a node, with clear errors', async () => {
+  const h = await harness();
+  const { pid, board, node } = await withBoard(h);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'react', artboard_id: board }), /export default function|function /);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'html', artboard_id: board }), /^<!doctype html>/);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'jsx', node_id: node }), /Hello/);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'jsx', node_id: board }), /is an artboard: use format react/);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'react' }), /export_code react needs artboard_id/);
+  assert.match(await h.call('export_code', { project_id: pid, format: 'jsx' }), /export_code jsx needs node_id/);
+  h.close();
+});

@@ -84,7 +84,7 @@ ${body}
 `;
 }
 
-// JSX for one node (get_jsx): the same rendering as a whole board, without the board wrapper.
+// JSX for one node (export_code format jsx): the same rendering as a whole board, without the board wrapper.
 // `name` becomes the component name (the node's data-name, else its tag).
 export function nodeToReact(el, name, theme, fontUrls = []) {
   const fontLines = fontUrls.map((u) => `//   <link rel="stylesheet" href="${u}" />`);
