@@ -336,24 +336,47 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { ...pid, comment_id: z.string(), resolved: z.boolean().optional() },
   }, safe(({ project_id, comment_id, resolved = true }) => { store.setCommentResolved(target(project_id).meta.id, comment_id, resolved); return text(resolved ? 'Resolved' : 'Reopened'); }));
 
-  server.registerTool('get_design_tokens', {
-    description:
-      'Scan the project and extract its design tokens (colours, fonts, sizes, radii, spacing, shadows) from the styles actually used. Use it to keep new pages consistent with existing ones, or to hand tokens to a codebase. format: summary (default, ranked lists + CSS variables), css, json (W3C design tokens) or tailwind.',
+  // Token readers and code-sync in one tool; set_tokens (the writer) and get_design_system stay separate.
+  // log() keeps the old import_tokens name for the Activity panel.
+  server.registerTool('tokens', {
+    description: 'Token tools besides set_tokens. action extract: scan the project and derive its design tokens (colours, fonts, sizes, radii, spacing, shadows) from the styles actually used, to keep new pages consistent or hand tokens to a codebase; format summary (default, ranked lists + CSS variables), css, json (W3C design tokens) or tailwind; limit with artboard_ids or scan one node_id (e.g. a card). export: the project tokens as text to paste into a codebase, format css (default, :root plus [data-theme] blocks for modes), tailwind (@theme block) or json. link_repo (path, absolute folder of your code, null unlinks): files are only ever read from inside it. import (file relative to the linked repo, e.g. src/styles.css; optional selector, default :root, use ".dark" with mode "dark" for dark overrides; dry_run previews): reads CSS custom properties into the tokens; names starting with a token family are kept, others are classified by name and value (--brand: oklch(...) becomes color-brand), anything unclear is reported in skipped and not imported.',
     inputSchema: {
       ...pid,
+      action: z.enum(['extract', 'export', 'import', 'link_repo']),
       format: z.enum(['summary', 'css', 'json', 'tailwind']).optional(),
-      artboard_ids: z.array(z.string()).optional().describe('Limit to these artboards (default: all).'),
-      node_id: z.string().optional().describe('Scan just this node (e.g. a card you want to turn into tokens) instead of whole artboards.'),
+      artboard_ids: z.array(z.string()).optional(),
+      node_id: z.string().optional(),
+      path: z.string().nullable().optional(),
+      file: z.string().optional(),
+      selector: z.string().optional(),
+      mode: z.string().optional(),
+      dry_run: z.boolean().optional(),
     },
-  }, safe(({ project_id, format = 'summary', artboard_ids, node_id }) => {
-    const { doc } = target(project_id);
-    const boards = node_id
-      ? [{ id: node_id, name: 'node', html: doc.nodeInfo(node_id).html }]
-      : doc.data.artboards.filter((a) => !artboard_ids || artboard_ids.includes(a.id));
-    if (!boards.length) throw new Error('No artboards to scan yet. Create some designs first.');
-    const { outputs, ...tokens } = extractTokens(boards);
-    return text(format === 'summary' ? { ...tokens, css: outputs.css } : outputs[format]);
+  }, safe(({ project_id, action, format, artboard_ids, node_id, path: repoPath, file, selector, mode, dry_run }) => {
+    const { meta, doc } = target(project_id);
+    if (action === 'extract') {
+      const boards = node_id
+        ? [{ id: node_id, name: 'node', html: doc.nodeInfo(node_id).html }]
+        : doc.data.artboards.filter((a) => !artboard_ids || artboard_ids.includes(a.id));
+      if (!boards.length) throw new Error('No artboards to scan yet. Create some designs first.');
+      const { outputs, ...found } = extractTokens(boards);
+      return text((format ?? 'summary') === 'summary' ? { ...found, css: outputs.css } : outputs[format]);
+    }
+    // summary only means something for extract; export falls back to css.
+    if (action === 'export') return text(exportTokens(doc.theme, !format || format === 'summary' ? 'css' : format));
+    if (action === 'link_repo') {
+      need('tokens', action, { path: repoPath }, 'path');
+      store.update(meta.id, { repo: repoPath });
+      return text(meta.repo ? { repo: meta.repo } : 'Unlinked');
+    }
+    need('tokens', action, { file }, 'file');
+    const props = parseCustomProperties(readInsideRepo(meta.repo, file), selector);
+    if (!Object.keys(props).length) throw new Error(`No custom properties found in ${file} for selector ${selector ?? ':root'}`);
+    const { tokens, skipped } = mapProperties(props);
+    if (!dry_run && Object.keys(tokens).length) { doc.setTokens(tokens, { mode }); log(meta, doc, 'import_tokens', []); }
+    return text({ imported: dry_run ? [] : Object.keys(tokens), would_import: dry_run ? tokens : undefined, skipped });
   }));
+
   server.registerTool('get_basic_info', {
     description: 'Project details plus all its artboards with ids, names, positions and sizes (pages and references appear only when there are any).',
     inputSchema: { ...pid },
@@ -505,32 +528,6 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     description: 'Hide / show nodes (hidden) or lock / unlock them (locked: nobody can edit a locked node or what is inside it until it is unlocked).',
     inputSchema: { ...pid, node_ids: z.array(z.string()).min(1), hidden: z.boolean().optional(), locked: z.boolean().optional() },
   }, viaEdit('set_flags'));
-
-  server.registerTool('link_repo', {
-    description: 'Link the project to the folder of your code (an absolute path) so tokens can be imported from its stylesheets. Pass null to unlink. Files are only ever read from inside this folder.',
-    inputSchema: { ...pid, path: z.string().nullable() },
-  }, safe(({ project_id, path: repoPath }) => {
-    const { meta } = target(project_id);
-    store.update(meta.id, { repo: repoPath });
-    return text(meta.repo ? { repo: meta.repo } : 'Unlinked');
-  }));
-
-  server.registerTool('import_tokens', {
-    description: 'Read CSS custom properties from a stylesheet in the linked repo (path relative to the repo, e.g. src/styles.css) into the project tokens. selector picks the rule: default :root; use ".dark" with mode "dark" to import dark-mode overrides. Names starting with a token family are kept; others are classified by name and value (--brand: oklch(...) becomes color-brand); anything unclear is reported in skipped and not imported.',
-    inputSchema: { ...pid, file: z.string(), selector: z.string().optional(), mode: z.string().optional(), dry_run: z.boolean().optional() },
-  }, safe(({ project_id, file, selector, mode, dry_run }) => {
-    const { meta, doc } = target(project_id);
-    const props = parseCustomProperties(readInsideRepo(meta.repo, file), selector);
-    if (!Object.keys(props).length) throw new Error(`No custom properties found in ${file} for selector ${selector ?? ':root'}`);
-    const { tokens, skipped } = mapProperties(props);
-    if (!dry_run && Object.keys(tokens).length) { doc.setTokens(tokens, { mode }); log(meta, doc, 'import_tokens', []); }
-    return text({ imported: dry_run ? [] : Object.keys(tokens), would_import: dry_run ? tokens : undefined, skipped });
-  }));
-
-  server.registerTool('export_tokens', {
-    description: 'The project tokens as text you can paste into a codebase: css (:root plus [data-theme] blocks for modes), tailwind (an @theme block) or json.',
-    inputSchema: { ...pid, format: z.enum(['css', 'tailwind', 'json']).optional() },
-  }, safe(({ project_id, format = 'css' }) => text(exportTokens(target(project_id).doc.theme, format))));
 
   // ---- pages -------------------------------------------------------------
   // One tool for the five page operations (low traffic): a single schema costs less than five. The action enum is

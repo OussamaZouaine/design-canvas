@@ -16,7 +16,7 @@ const LENGTH = /^-?[\d.]+(px|rem|em|%|vw|vh|ch)$/i;
 // Read a file that must live inside `repo`. Resolving both paths and comparing prefixes stops
 // `../` tricks and absolute paths from reaching outside the linked folder.
 export function readInsideRepo(repo, file) {
-  if (!repo) throw new Error('No repo linked. Call link_repo with the path of your code folder first.');
+  if (!repo) throw new Error('No repo linked. Call tokens (action link_repo) with the path of your code folder first.');
   const root = path.resolve(repo);
   const full = path.resolve(root, file);
   if (full !== root && !full.startsWith(root + path.sep)) throw new Error('That file is outside the linked repo');

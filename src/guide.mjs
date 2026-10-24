@@ -17,7 +17,7 @@ const WORKFLOW = `Design Canvas workflow (this one call also contains the brief,
 Fonts: list_fonts, then use_font for a Google Font before styling with it (see topic "type").
 Colour: write colours as oklch(L C H), e.g. oklch(0.62 0.19 262) for a blue, oklch(0.98 0.004 90) for a warm off-white. OKLCH keeps lightness perceptually even, so ramps and contrast are predictable; for gradients use linear-gradient(in oklch, ...).
 Feedback: the user can pin comments on elements. In an existing project call get_comments at the start of a task; fix what open comments ask, then reply_comment with resolve: true (one call per comment; resolve_comment alone only to resolve or reopen without a reply). A project you just created has none, so skip it.
-Consistency: call get_design_tokens before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
+Consistency: call tokens (action extract) before adding pages to an existing design, and reuse its colours, type sizes, radii and spacing.
 Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.
 On demand: topic "mobile".`;
 
