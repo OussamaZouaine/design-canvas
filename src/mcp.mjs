@@ -582,9 +582,9 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('finish_working', {
-    description: 'Call when you are done with a task: clears the highlight the canvas shows on nodes you were editing, and checks that every board you edited still fits its frame. If it reports a problem, fix it (fit_artboard, narrower widths) and call finish_working again.',
-    inputSchema: { ...pid },
-  }, safe(async ({ project_id }) => {
+    description: 'Call when you are done with a task: clears the highlight the canvas shows on nodes you were editing, and checks that every board you edited still fits its frame. If it reports a problem, fix it (fit_artboard, narrower widths) and call finish_working again. Pass screenshot_artboard_id to get the final look (default get_screenshot settings) in the same call once the layout is fine.',
+    inputSchema: { ...pid, screenshot_artboard_id: z.string().optional() },
+  }, safe(async ({ project_id, screenshot_artboard_id }) => {
     const { meta, doc } = target(project_id);
     highlight?.(meta.id, []);
     const ids = [...(ui.touched.get(meta.id) ?? [])];
@@ -592,7 +592,10 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     // Clear only when the check ran: with no browser tab the boards stay "touched" for the next attempt.
     if (r || !ids.length) ui.touched.delete(meta.id);
     if (!r) return text(ids.length ? 'ok (layout not checked: open the project in a browser tab to verify nothing is clipped)' : 'ok');
-    return text(r.text.startsWith('ok') ? 'ok' : `Not finished, content does not fit:\n${r.text}`);
+    if (!r.text.startsWith('ok')) return text(`Not finished, content does not fit:\n${r.text}`);
+    // Layout is fine: attach the final look so "last screenshot + finish" is one turn. Skipped on problems above.
+    if (screenshot_artboard_id) return { content: [{ type: 'text', text: 'ok' }, ...(await shoot(meta, doc, { artboard_id: screenshot_artboard_id }))] };
+    return text('ok');
   }));
 
   server.registerTool('check_layout', {
@@ -759,19 +762,8 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text('ok');
   }));
 
-  server.registerTool('get_screenshot', {
-    description: 'Render an artboard (or just one node, via node_id) so you can review your work. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
-    inputSchema: {
-      ...pid,
-      artboard_id: z.string(),
-      node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
-      scale: z.number().min(0.25).max(2).optional(),
-      max_width: z.number().int().min(200).max(2000).optional(),
-      max_height: z.number().int().min(400).max(8000).optional().describe('Output px; taller images are cut at the bottom. Default 1600.'),
-      format: z.enum(['jpeg', 'png']).optional(),
-    },
-  }, safe(async ({ project_id, artboard_id, node_id, scale, max_width, max_height = 1600, format = 'jpeg' }) => {
-    const { meta, doc } = target(project_id);
+  // Screenshot as MCP content parts (image, plus a note when cut). Shared by get_screenshot and finish_working.
+  const shoot = async (meta, doc, { artboard_id, node_id, scale, max_width, max_height = 1600, format = 'jpeg' }) => {
     if (!doc.getArtboard(artboard_id)) throw new Error(`Artboard ${artboard_id} not found`);
     if (node_id && doc.artboardOf(node_id)?.id !== artboard_id) throw new Error(`Node ${node_id} is not inside ${artboard_id}`);
     const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: max_width, maxHeight: max_height, format });
@@ -784,6 +776,32 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const where = node_id ? `${size.h} px into the node` : `y=${Math.round((size.h * doc.getArtboard(artboard_id).width) / size.w)} of the board`;
       content.push({ type: 'text', text: `Image cut at ${size.h} px tall (${where}). Use node_id on a lower section, or a larger max_height, to see the rest.` });
     }
+    return content;
+  };
+
+  server.registerTool('get_screenshot', {
+    description: 'Render an artboard (or just one node, via node_id) so you can review your work. review:true makes this the whole review step in one call: it first returns the lint text for the target ("clean" when none) and a layout line only if something does not fit, then the image. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
+    inputSchema: {
+      ...pid,
+      artboard_id: z.string(),
+      node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
+      scale: z.number().min(0.25).max(2).optional(),
+      max_width: z.number().int().min(200).max(2000).optional(),
+      max_height: z.number().int().min(400).max(8000).optional().describe('Output px; taller images are cut at the bottom. Default 1600.'),
+      format: z.enum(['jpeg', 'png']).optional(),
+      review: z.boolean().optional().describe('Also return lint text and any layout problem before the image.'),
+    },
+  }, safe(async ({ project_id, artboard_id, node_id, scale, max_width, max_height, format, review }) => {
+    const { meta, doc } = target(project_id);
+    const content = [];
+    if (review) {
+      // One-call review: lint of the target, then the layout line only when something does not fit
+      // (layoutNote is silent without a browser tab), then the image below.
+      const lintText = formatIssues(doc.lint(node_id ?? artboard_id));
+      const note = await layoutNote(meta, doc, artboard_id);
+      content.push({ type: 'text', text: `lint: ${lintText}${note.layout ? `\nlayout: ${note.layout}` : ''}` });
+    }
+    content.push(...(await shoot(meta, doc, { artboard_id, node_id, scale, max_width, max_height, format })));
     return { content };
   }));
 
