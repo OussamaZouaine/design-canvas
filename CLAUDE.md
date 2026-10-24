@@ -45,6 +45,7 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 - `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `export_code` format `jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
 - `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
+- Agent feed (UI): `web/src/store/agents.ts` holds the MCP call log from SSE `call`/`call-start` (presence, kinds, filters, follow-agent); `panels/AgentsPanel.tsx` is the Agents tab; chips + pills are in `shell/Shell.tsx`; the engine tints highlight boxes/ring per agent (`setAgentIds`). Presence is derived from calls, never from SSE clients (headless worker is one).
 - `web/` React 19 + Vite + Tailwind v4 + shadcn (Base UI) client: `src/canvas/` imperative engine + editor, `src/panels/`, `src/shell/`, `src/pages/`, `src/store/` (zustand), `src/api/`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
 - `data/` runtime data (gitignored): `projects/<id>/{doc,meta,activity,comments}.json`, `snapshots/`, `state.json`.

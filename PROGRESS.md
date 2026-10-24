@@ -113,7 +113,7 @@ Order is a suggestion; the user decides.
    `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
    `tokens`, `history`, `export_code` (get_tree_summary dropped); 64 -> 46 tools, tools/list 9.41k -> 8.40k tokens. **Restart Claude Code to see the new tools.**
    Open: run the evals (`examples/evals`) A/B on the branch before merging; D and E ideas in the plan.
-8. **Agent visibility (phases 0-2 done; 1 = server-side call log `src/agentlog.mjs`, `GET /api/p/<id>/calls?since=`, SSE `call`/`call-start`; 2 = stateful `/mcp` sessions, agent identity + colour, per-session project binding (`src/sessions.mjs`); next: phase 3 live agent feed UI):** see what Claude / any MCP agent does, live and in history. Plan in
+8. **Agent visibility (phases 0-3 done; 3 = live agent feed UI: Agents tab, header chips, per-agent tint, `web/src/store/agents.ts`; OPEN BUG: unknown session id after a server restart -> 404 and SDK clients never re-init, see the plan's Phase 3 note; next: phase 4; 1 = server-side call log `src/agentlog.mjs`, `GET /api/p/<id>/calls?since=`, SSE `call`/`call-start`; 2 = stateful `/mcp` sessions, agent identity + colour, per-session project binding (`src/sessions.mjs`); ):** see what Claude / any MCP agent does, live and in history. Plan in
    `docs/notes/agent-visibility-plan.md`, phases 0-6, one session each: 0 land the token branch (evals + merge), 1 server-side call log,
    2 agent identity + stateful MCP sessions + per-session project binding, 3 live agent feed UI, 4 actionable activity history,
    5 cost dashboard, 6 several agents on one project.
