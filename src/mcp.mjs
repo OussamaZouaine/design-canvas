@@ -101,10 +101,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // and lights up the touched nodes on the canvas until finish_working or a timeout.
   // While a batch runs, `batchBoards` collects the boards its ops touched so the layout is checked once at the end.
   let batchBoards = null;
-  const log = (meta, doc, tool, anyId, detail) => {
+  const log = (meta, doc, tool, anyId, detail, boardOverride) => {
     const ids = [].concat(anyId ?? []);
-    const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
-    store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
+    const ab = boardOverride ?? (ids[0] ? doc.artboardOf(ids[0]) : null);
+    // The checkpoint taken just before this write is its "before" state: keep the diff on the Activity row (see stepdiff.mjs).
+    store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail, agent: agentOf(), step: doc.captureStep() });
     doc.record(session.agent.id, tool, ids);
     // Remember which boards were edited so finish_working can check that their content still fits.
     const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
@@ -249,9 +250,10 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     },
     async delete_nodes({ project_id, ids }) {
       const { meta, doc } = target(project_id);
-      log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
-      doc.journal.at(-1).ids = ids;
+      const board = doc.artboardOf(ids[0]); // read first: afterwards the artboard may be gone
       doc.deleteNodes(ids);
+      log(meta, doc, 'delete_nodes', ids[0], undefined, board); // after the delete so the diff sees it
+      doc.journal.at(-1).ids = ids;
       return 'ok';
     },
   };
@@ -341,7 +343,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat (mood, palette with oklch roles, type scale, one-sentence direction). Stored with the project and shown in Activity.'),
     },
   }, safe(({ project_id, prompt, brief }) => {
-    store.logPrompt(target(project_id).meta.id, prompt, brief);
+    store.logPrompt(target(project_id).meta.id, prompt, brief, agentOf());
     return text('Logged');
   }));
 
@@ -759,7 +761,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const { meta, doc } = target(project_id);
     const font = await fonts.ensure(family, weights, italic);
     store.addFont(meta.id, font);
-    store.logAction(meta.id, { tool: 'use_font', detail: `${font.family} ${[...new Set(font.faces.map((f) => f.weight))].join(',')}` });
+    store.logAction(meta.id, { agent: agentOf(), tool: 'use_font', detail: `${font.family} ${[...new Set(font.faces.map((f) => f.weight))].join(',')}` });
     return text({
       family: font.family,
       css: fontStack(font.family, category),
@@ -777,7 +779,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     // logAction keeps the plain 'undo' / 'redo' names: the Activity panel and eval metrics read them.
     const done = action === 'undo' ? doc.undo(steps, session.agent.id) : doc.redo(steps, session.agent.id);
     if (!done.length) return text(`Nothing to ${action}`);
-    store.logAction(meta.id, { tool: action, detail: done.join(', ') });
+    store.logAction(meta.id, { agent: agentOf(), tool: action, detail: done.join(', ') });
     return text(action === 'undo' ? { reverted: done } : { redone: done });
   }));
 
@@ -897,7 +899,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const boards = doc.data.artboards;
       if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
     } else ui.lastRead.set(meta.id, doc.version);
-    store.logPrompt(meta.id, prompt, brief);
+    store.logPrompt(meta.id, prompt, brief, agentOf());
     if (artboard) {
       // Keep only what the agent needs from the create_artboard result: the id plus its dialect/lint/layout/reminder notes.
       const r = await edits.create_artboard({ ...artboard, project_id: meta.id });
