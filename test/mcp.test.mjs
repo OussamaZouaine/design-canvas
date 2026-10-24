@@ -115,3 +115,16 @@ test('get_basic_info omits empty pages and references', async () => {
   assert.equal((await h.call('get_basic_info', { project_id: pid })).pages.length, 2);
   h.close();
 });
+
+test('tools/list carries no $schema keys and a short project_id description', async () => {
+  const h = await harness();
+  const { tools } = await h.client.listTools();
+  assert.ok(tools.length > 50);
+  assert.doesNotMatch(JSON.stringify(tools), /\$schema/);
+  const withPid = tools.filter((t) => t.inputSchema.properties?.project_id?.description);
+  assert.ok(withPid.length > 40);
+  for (const t of withPid) assert.equal(t.inputSchema.properties.project_id.description, 'Default: active project', t.name);
+  // The schemas still validate: an optional-only tool is callable with no arguments.
+  assert.ok(await h.call('list_projects'));
+  h.close();
+});
