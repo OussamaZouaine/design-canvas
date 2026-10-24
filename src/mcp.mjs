@@ -734,26 +734,16 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     });
   }));
 
-  server.registerTool('undo', {
-    description: 'Revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard. Returns what was reverted.',
-    inputSchema: { ...pid, steps: z.number().int().min(1).max(20).optional() },
-  }, safe(({ project_id, steps = 1 }) => {
+  server.registerTool('history', {
+    description: 'action undo: revert the last design change(s) made through update_styles, write_html, set_text_content, rename, duplicate, delete or create_artboard; returns what was reverted. action redo: re-apply what undo reverted (only until the next new change). steps defaults to 1.',
+    inputSchema: { ...pid, action: z.enum(['undo', 'redo']), steps: z.number().int().min(1).max(20).optional() },
+  }, safe(({ project_id, action, steps = 1 }) => {
     const { meta, doc } = target(project_id);
-    const reverted = doc.undo(steps);
-    if (!reverted.length) return text('Nothing to undo');
-    store.logAction(meta.id, { tool: 'undo', detail: reverted.join(', ') });
-    return text({ reverted });
-  }));
-
-  server.registerTool('redo', {
-    description: 'Re-apply changes that undo reverted (only until the next new change is made).',
-    inputSchema: { ...pid, steps: z.number().int().min(1).max(20).optional() },
-  }, safe(({ project_id, steps = 1 }) => {
-    const { meta, doc } = target(project_id);
-    const redone = doc.redo(steps, 'claude');
-    if (!redone.length) return text('Nothing to redo');
-    store.logAction(meta.id, { tool: 'redo', detail: redone.join(', ') });
-    return text({ redone });
+    // logAction keeps the plain 'undo' / 'redo' names: the Activity panel and eval metrics read them.
+    const done = action === 'undo' ? doc.undo(steps) : doc.redo(steps, 'claude');
+    if (!done.length) return text(`Nothing to ${action}`);
+    store.logAction(meta.id, { tool: action, detail: done.join(', ') });
+    return text(action === 'undo' ? { reverted: done } : { redone: done });
   }));
 
   server.registerTool('get_tree_summary', {
@@ -799,7 +789,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // Ops run in order through the same handlers as the single tools; the first error stops the run (no rollback).
   const BATCH_TOOLS = Object.keys(edits);
   server.registerTool('batch', {
-    description: 'Run 3+ independent edits in ONE call instead of one turn each. Ops run in order against one project; one result line per op. Allowed tools: ' + BATCH_TOOLS.join(', ') + '. Stops at the first error (earlier ops stay applied: use undo). Layout is checked once at the end and reported only if something does not fit; per-op lint is not run (use lint or get_screenshot review).',
+    description: 'Run 3+ independent edits in ONE call instead of one turn each. Ops run in order against one project; one result line per op. Allowed tools: ' + BATCH_TOOLS.join(', ') + '. Stops at the first error (earlier ops stay applied: use history undo). Layout is checked once at the end and reported only if something does not fit; per-op lint is not run (use lint or get_screenshot review).',
     inputSchema: {
       ...pid,
       ops: z.array(z.object({ tool: z.enum(BATCH_TOOLS), args: z.record(z.string(), z.any()) })).min(1).max(30).describe('Each op: tool name plus the arguments of that tool (without project_id).'),
@@ -822,7 +812,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
         }
       }
       const failed = lines.at(-1).includes(' error: ');
-      if (failed) lines.push(lines.length === 1 ? `Stopped at op 1; nothing was applied.` : `Stopped at op ${lines.length}; ops 1-${lines.length - 1} stay applied (no rollback; undo reverts them).`);
+      if (failed) lines.push(lines.length === 1 ? `Stopped at op 1; nothing was applied.` : `Stopped at op ${lines.length}; ops 1-${lines.length - 1} stay applied (no rollback; history undo reverts them).`);
       const r = batchBoards.size ? await checkLayout(meta, doc, [...batchBoards]) : null;
       if (r && !r.text.startsWith('ok')) lines.push('layout: ' + r.text);
       return { isError: failed, content: [{ type: 'text', text: lines.join('\n') }] };

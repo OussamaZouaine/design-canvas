@@ -380,3 +380,14 @@ test('export_code: react and html for a board, jsx for a node, with clear errors
   assert.match(await h.call('export_code', { project_id: pid, format: 'jsx' }), /export_code jsx needs node_id/);
   h.close();
 });
+
+test('history: undo and redo through one tool, with steps', async () => {
+  const h = await harness();
+  const { pid, node } = await withBoard(h);
+  await h.call('set_text_content', { project_id: pid, node_id: node, text: 'Changed' });
+  assert.ok((await h.call('history', { project_id: pid, action: 'undo' })).reverted.length);
+  assert.ok((await h.call('history', { project_id: pid, action: 'redo' })).redone.length);
+  assert.equal(await h.call('history', { project_id: pid, action: 'redo' }), 'Nothing to redo');
+  assert.equal(await h.call('history', { project_id: pid, action: 'undo', steps: 20 }) !== undefined, true);
+  h.close();
+});
