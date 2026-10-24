@@ -16,7 +16,8 @@ import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
 import { captureUrl } from './capture.mjs';
-import { imageSize } from './meter.mjs';
+import { imageSize, estimateTokens } from './meter.mjs';
+import { summarizeArgs } from './agentlog.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
@@ -44,7 +45,7 @@ const safe = (fn) => async (args) => {
 // Shared optional argument on every design tool.
 const pid = { project_id: z.string().optional().describe('Default: active project') };
 
-export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
+export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
@@ -52,8 +53,21 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   const register = server.registerTool.bind(server);
   server.registerTool = (name, config, handler) =>
     register(name, config, async (...args) => {
+      const input = args[0];
+      // Project the call targets: explicit id, else the active one (resolved again after, since start/open can switch it).
+      const projectOf = () => input?.project_id ?? store.activeId;
+      const t0 = Date.now();
+      const callId = calls?.start(projectOf(), name, input);
       const result = await handler(...args);
       meter?.record(name, result);
+      // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
+      try {
+        calls?.finish({
+          id: callId, ms: Date.now() - t0, tool: name, project: projectOf() ?? null, ok: !result?.isError,
+          ...(result?.isError ? { error: String(result.content?.[0]?.text ?? '').slice(0, 200) } : {}),
+          tokens: estimateTokens(result), args: summarizeArgs(input),
+        });
+      } catch { /* the log must never break a tool call */ }
       return result;
     });
   const url = (id) => `http://localhost:${port}/p/${id}`;

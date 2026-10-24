@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { ProjectStore, ID_RE } from './store.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { Meter } from './meter.mjs';
+import { CallLog } from './agentlog.mjs';
 import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
@@ -51,6 +52,8 @@ const ui = {
   touched: new Map(), // projectId -> Set of artboard ids Claude edited since its last finish_working (the layout gate checks these)
 };
 const meter = new Meter(); // per-tool token estimates, shown by /api/status
+// Per-call MCP log; its events ride the store's listener list so they reach tabs like every other event.
+const calls = new CallLog({ dataDir: path.join(ROOT, 'data'), emit: (t, p) => store._emit(t, p) });
 
 // Send the document as a delta. Each client remembers the HTML it last received per artboard;
 // unchanged boards go out with html:null and the browser reuses its copy. A single MCP write
@@ -75,6 +78,7 @@ store.on((type, payload) => {
     else if (type === 'meta' && c.projectId === payload.id) send(c.res, 'meta', payload.meta);
     else if (type === 'comments' && c.projectId === payload.id) send(c.res, 'comments', payload.comments);
     else if (type === 'activity' && c.projectId === payload.id) send(c.res, 'activity', {});
+    else if ((type === 'call' || type === 'call-start') && c.projectId === payload.project) send(c.res, type, payload.call);
     else if (type === 'projects' && c.projectId === null) send(c.res, 'projects', {});
     else if (type === 'comments' && c.projectId === null) send(c.res, 'comments-changed', {});
   }
@@ -128,7 +132,7 @@ function highlight(projectId, ids) {
 // Google Fonts the server downloaded (use_font). Shared by all projects, so a family is fetched once.
 const fonts = new FontCache(path.join(ROOT, 'data', 'fonts'));
 
-const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port: PORT };
+const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port: PORT };
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -367,6 +371,8 @@ const server = http.createServer(async (req, res) => {
         }
         if (parts[3] === 'tokens') return json(res, 200, extractTokens(p.doc.data.artboards));
         if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id));
+        // Per-call log of MCP tool calls; `since` (ms timestamp) makes polling incremental.
+        if (parts[3] === 'calls') return json(res, 200, calls.list(p.meta.id, Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0));
         // Eval numbers for examples/evals. Read-only: boards are measured but never grown, so the run
         // is judged on what the agent left behind, not on what this call would repair.
         if (parts[3] === 'eval') {
@@ -424,7 +430,7 @@ const server = http.createServer(async (req, res) => {
 
 // Don't lose the last few edits: debounced writes are flushed when the process is stopped.
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { headless.stopAll(); store.flushAll(); process.exit(0); });
+  process.on(sig, () => { headless.stopAll(); store.flushAll(); calls.flushAll(); process.exit(0); });
 }
 
 server.listen(PORT, HOST, () => {
