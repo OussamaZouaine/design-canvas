@@ -156,7 +156,10 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
       const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, follow the brief section of get_guide, post a brief in chat and pass it to log_prompt.' };
       const written = html ? await writeWithNotes(meta, doc, ab.id, html, undefined, 'write_html', quiet) : {};
-      return { ...ab, ...written, ...reminder };
+      // ab is the live artboard object, so after the write its html holds the whole normalized board (a 27k-char
+      // write echoed ~9k tokens back). The caller already has the markup; return only the board's fields.
+      const { html: _written, ...board } = ab;
+      return { ...board, ...written, ...reminder };
     },
     async write_html({ project_id, target_id, html, mode }, quiet) {
       const { meta, doc } = target(project_id);
