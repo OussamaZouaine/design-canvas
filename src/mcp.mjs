@@ -24,8 +24,8 @@ import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } fr
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
 // The first line is a gate: the process and taste rules live in the guide, and clients that skip it skip them.
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
-You MUST call get_guide() once before any other tool: it returns the whole method (workflow, brief, type, layout, review) in one call. Before the first write of a new design post a short brief in chat, then pass it as log_prompt.brief. Only get_guide({topic:"mobile"}) is separate.
-Be economical with turns: send independent tool calls together in one turn.
+Your first turn: call get_guide() and list_projects() together. get_guide returns the whole method (workflow, brief, type, layout, review) in one call; read it before any design call. Before the first write of a new design post a short brief in chat, then pass it as log_prompt.brief. Only get_guide({topic:"mobile"}) is separate.
+Be economical with turns: send independent tool calls together in one turn. If tools are deferred, load the core set in ONE ToolSearch select: get_guide, list_projects, log_prompt, create_artboard, write_html, update_styles, get_tree, lint, get_screenshot, finish_working.
 Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard -> write_html / update_styles -> lint -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>. Call get_guide for the full guide.`;
 
