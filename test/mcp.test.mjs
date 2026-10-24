@@ -421,3 +421,24 @@ test('project: open, update, save_version and delete; open and delete need an ex
   assert.equal(await h.call('project', { project_id: pid, action: 'delete' }), 'Moved to Trash');
   h.close();
 });
+
+test('tokens: extract, export, link_repo and import through one tool', async () => {
+  const h = await harness();
+  const { pid } = await withBoard(h, '<div style="padding:8px;background:oklch(0.6 0.2 250);color:oklch(0.98 0 0)">Hi</div>');
+  assert.ok((await h.call('tokens', { project_id: pid, action: 'extract' })).css, 'summary has css');
+  assert.match(JSON.stringify(await h.call('tokens', { project_id: pid, action: 'extract', format: 'tailwind' })), /@theme|theme/);
+  await h.call('set_tokens', { project_id: pid, tokens: { 'color-primary': 'oklch(0.6 0.2 250)' } });
+  assert.match(await h.call('tokens', { project_id: pid, action: 'export' }), /--color-primary/);
+  // link_repo + import from a throwaway folder
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'dc-repo-'));
+  fs.writeFileSync(path.join(repo, 'styles.css'), ':root{--color-accent: oklch(0.7 0.1 30);}');
+  assert.deepEqual(await h.call('tokens', { project_id: pid, action: 'link_repo', path: repo }), { repo });
+  const dry = await h.call('tokens', { project_id: pid, action: 'import', file: 'styles.css', dry_run: true });
+  assert.ok(dry.would_import['color-accent']);
+  assert.deepEqual((await h.call('tokens', { project_id: pid, action: 'import', file: 'styles.css' })).imported, ['color-accent']);
+  assert.equal(await h.call('tokens', { project_id: pid, action: 'link_repo', path: null }), 'Unlinked');
+  assert.match(await h.call('tokens', { project_id: pid, action: 'import' }), /tokens import needs file/);
+  assert.match(await h.call('tokens', { project_id: pid, action: 'link_repo' }), /tokens link_repo needs path/);
+  fs.rmSync(repo, { recursive: true, force: true });
+  h.close();
+});
