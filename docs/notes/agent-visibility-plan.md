@@ -38,7 +38,8 @@ per turn), then output HTML, then screenshots. What is still left:
 - Fix the open items from the live test: `components` schema says names are kebab-case; tool descriptions still say "needs a browser tab".
 - Merge `perf/mcp-tokens` into `main` if the evals are no worse. Done = merged, numbers in the token notes.
 
-### Phase 1: Server-side call log (foundation, no UI yet)
+### Phase 1: Server-side call log (foundation, no UI yet) — DONE 2026-10-24
+Implemented as specified; ring is per project; `t` is strictly increasing so `since` is exact; `project` is `project_id` arg else the active project (calls with neither are not logged). `test/agentlog.test.mjs`; SSE + endpoint checked live.
 - In the `registerTool` wrapper (`src/mcp.mjs`), record every call: `{ id, t, ms, tool, project, ok, error?, tokens, args }`.
   `args` is a *summary*: ids, action, sizes (`html: 27k chars`), never full HTML or prompt text beyond ~120 chars.
 - New `src/agentlog.mjs`: in-memory ring (last ~500 calls) + per-project append to `data/projects/<id>/calls.jsonl` (debounced,
