@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Doc } from './doc.mjs';
+import { displayDiff, patchable } from './stepdiff.mjs';
 import { imageInfo, EXT, MAX_IMAGE_BYTES } from './images.mjs';
 
 // Ids arrive over HTTP and end up in file paths, so only accept our own format.
@@ -15,6 +16,8 @@ import { imageInfo, EXT, MAX_IMAGE_BYTES } from './images.mjs';
 export const ID_RE = /^p_[a-f0-9]{8}$/;
 
 const MAX_SNAPSHOTS = 40;
+const DIFF_KEEP = 60; // newest activity entries that keep their before/after diff
+const STEPS_PER_RUN = 200;
 const SNAPSHOT_IDLE_MS = 45_000; // auto-snapshot this long after the last edit
 const SNAPSHOT_MIN_GAP_MS = 60_000; // ...but never more often than this
 
@@ -351,28 +354,42 @@ export class ProjectStore {
   }
 
   // ---- activity: what the user asked and what Claude did ----------------------
-  // Entries: { t, kind: 'prompt'|'action', text?, tool?, artboardId?, artboard?, detail?, snapshotId? }
-  _pushActivity(id, entry) {
+  // Entries: { n, t, kind: 'prompt'|'action', text?, tool?, artboardId?, artboard?, detail?, snapshotId?,
+  //            agent?: {id,name,color}, step?, boot?, diff?, reverted?, rev? }
+  // `n` is a per-project sequence number: clients ask "what is new since n" instead of refetching every run.
+  // A revert marks an old entry (`reverted`) and gives it a new `rev`, so that change is "new" for `since` too.
+  _activityList(id) {
     const list = this._list(id, 'activity');
-    list.push({ t: Date.now(), ...entry });
+    let max = list.reduce((m, e) => Math.max(m, e.n ?? 0, e.rev ?? 0), 0);
+    for (const e of list) if (!e.n) e.n = ++max; // entries saved before sequence numbers existed
+    return list;
+  }
+  _nextN(list) { return list.reduce((m, e) => Math.max(m, e.n, e.rev ?? 0), 0) + 1; }
+
+  _pushActivity(id, entry) {
+    const list = this._activityList(id);
+    list.push({ n: this._nextN(list), t: Date.now(), ...entry });
     if (list.length > 1000) list.splice(0, list.length - 1000);
+    // Diffs hold markup, so only the newest ones are kept; older rows stay as plain history.
+    const old = list[list.length - 1 - DIFF_KEEP];
+    if (old?.diff) { delete old.diff; delete old.step; delete old.boot; }
     this._saveListSoon(id, 'activity');
     this._emit('activity', { id });
   }
 
-  logAction(id, { tool, artboardId, artboard, detail }) {
-    this._pushActivity(id, { kind: 'action', tool, artboardId, artboard, detail });
+  logAction(id, { tool, artboardId, artboard, detail, agent, step }) {
+    this._pushActivity(id, { kind: 'action', tool, artboardId, artboard, detail, agent, ...(step && { step: step.step, boot: step.boot, diff: step.diff }) });
   }
 
   // A user request. Also takes a restore point so "undo this whole request" is one click.
   // `brief` (optional) is the design brief for a new design: kept on the project meta so later sessions
   // (and the create_artboard reminder) know the intent, and on the entry so Activity can show it.
-  logPrompt(id, text, brief) {
+  logPrompt(id, text, brief, agent) {
     const clean = String(text).replace(/\s+/g, ' ').trim().slice(0, 500);
     if (!clean) throw new Error('prompt is required');
     const cleanBrief = brief ? String(brief).trim().slice(0, 1500) : '';
     const snapshotId = this.snapshot(id, `Before: ${clean.slice(0, 60)}`) ?? this.lastSnap.get(id)?.at ?? null;
-    this._pushActivity(id, { kind: 'prompt', text: clean, brief: cleanBrief || undefined, snapshotId: snapshotId ? String(snapshotId) : null });
+    this._pushActivity(id, { kind: 'prompt', text: clean, brief: cleanBrief || undefined, agent, snapshotId: snapshotId ? String(snapshotId) : null });
     if (cleanBrief) {
       const meta = this._meta(id);
       meta.brief = cleanBrief;
@@ -380,30 +397,73 @@ export class ProjectStore {
     }
   }
 
-  // Group the raw log into runs: each prompt starts a run; its actions are merged by tool.
-  // Actions with no prompt before them (direct edits) form their own "Edits" runs.
-  listActivity(id, limit = 40) {
-    const raw = this._list(id, 'activity');
+  // Group the raw log into runs. A prompt starts a run for ITS agent; an action joins the latest run of the SAME
+  // agent, so two agents working at once never merge into one row. Actions with no run for their agent (direct
+  // edits, or a gap of 10 min after an "Edits" run) start an "Edits" run. Each run keeps its individual steps
+  // (for the expanded view) and the merged-by-tool chips.
+  // `since` (an activity sequence number) returns only the runs that changed after it; `seq` is the cursor to send next time.
+  listActivity(id, { limit = 40, since = 0 } = {}) {
+    const raw = this._activityList(id);
     const runs = [];
-    let cur = null;
+    const latest = new Map(); // agent id -> its newest run
+    let seq = 0;
     for (const e of raw) {
-      const gap = cur && e.t - cur.end > 10 * 60 * 1000;
+      seq = Math.max(seq, e.n, e.rev ?? 0);
+      const key = e.agent?.id ?? '';
+      let cur = latest.get(key);
       if (e.kind === 'prompt') {
-        cur = { t: e.t, end: e.t, prompt: e.text, brief: e.brief, snapshotId: e.snapshotId, actions: [] };
+        cur = { id: e.n, t: e.t, end: e.t, until: null, prompt: e.text, brief: e.brief, snapshotId: e.snapshotId, agent: e.agent, actions: [], steps: [], rev: e.n };
+        if (latest.get(key)) latest.get(key).until = e.t;
         runs.push(cur);
-      } else {
-        if (!cur || (!cur.prompt && gap)) { cur = { t: e.t, end: e.t, prompt: null, snapshotId: null, actions: [] }; runs.push(cur); }
-        cur.end = e.t;
-        const last = cur.actions[cur.actions.length - 1];
-        if (last && last.tool === e.tool) { last.count++; if (e.artboard && !last.artboards.includes(e.artboard)) last.artboards.push(e.artboard); }
-        else cur.actions.push({ tool: e.tool, count: 1, artboards: e.artboard ? [e.artboard] : [], detail: e.detail || '' });
+        latest.set(key, cur);
+        continue;
       }
+      if (!cur || (!cur.prompt && e.t - cur.end > 10 * 60 * 1000)) {
+        if (cur) cur.until = e.t;
+        cur = { id: e.n, t: e.t, end: e.t, until: null, prompt: null, snapshotId: null, agent: e.agent, actions: [], steps: [], rev: e.n };
+        runs.push(cur);
+        latest.set(key, cur);
+      }
+      cur.end = e.t;
+      cur.rev = Math.max(cur.rev, e.n, e.rev ?? 0);
+      const last = cur.actions[cur.actions.length - 1];
+      if (last && last.tool === e.tool) { last.count++; if (e.artboard && !last.artboards.includes(e.artboard)) last.artboards.push(e.artboard); }
+      else cur.actions.push({ tool: e.tool, count: 1, artboards: e.artboard ? [e.artboard] : [], detail: e.detail || '' });
+      cur.steps.push({
+        n: e.n, t: e.t, tool: e.tool, artboard: e.artboard, detail: e.detail,
+        diff: displayDiff(e.diff), reverted: Boolean(e.reverted), canRevert: this._canRevert(id, e),
+      });
     }
     const snapDir = this._snapDir(id);
-    return runs.slice(-limit).reverse().map((r) => ({
+    const out = runs.filter((r) => r.rev > since).slice(-limit).reverse().map((r) => ({
       ...r,
+      steps: r.steps.slice(-STEPS_PER_RUN),
       restorable: Boolean(r.snapshotId && fs.existsSync(path.join(snapDir, `${r.snapshotId}.json`))),
     }));
+    return { runs: out, seq };
+  }
+
+  // Revert is offered when the step still has its diff, was not reverted yet, and either is the newest
+  // checkpoint (plain undo) or has an exact patch.
+  _canRevert(id, e) {
+    if (!e.diff || e.reverted) return false;
+    const doc = this.docs.get(id);
+    if (doc && e.boot === doc.boot && doc.undoStack.at(-1)?.seq === e.step) return true;
+    return patchable(e.diff);
+  }
+
+  // Revert ONE step of a run through the Doc (undo for the newest, reverse patch for older ones).
+  revertStep(id, n) {
+    const e = this._activityList(id).find((x) => x.n === n && x.kind === 'action');
+    if (!e) throw new Error('Step not found');
+    if (!e.diff) throw new Error('This step is too old to revert; restore a version instead');
+    if (e.reverted) throw new Error('Already reverted');
+    const how = this._doc(id).revertStep({ step: e.step, boot: e.boot, diff: e.diff }, 'user');
+    e.reverted = true;
+    e.rev = this._nextN(this._activityList(id));
+    this._saveListSoon(id, 'activity');
+    this._emit('activity', { id });
+    return how;
   }
 
   // ---- comments pinned to elements -----------------------------------------------

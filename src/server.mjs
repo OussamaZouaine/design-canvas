@@ -222,6 +222,7 @@ const projectActions = {
   duplicate: (id) => store.duplicate(id),
   snapshot: (id, b) => store.snapshot(id, String(b.label || 'Saved version').slice(0, 80), { force: true }),
   'restore-snapshot': (id, b) => store.restoreSnapshot(id, String(b.snapshotId)),
+  'revert-step': (id, b) => store.revertStep(id, Number(b.n)),
   activate: (id) => store.setActive(id),
 };
 
@@ -419,7 +420,8 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         if (parts[3] === 'tokens') return json(res, 200, extractTokens(p.doc.data.artboards));
-        if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id));
+        // Activity runs; `since` (a sequence number from the previous answer's `seq`) returns only runs that changed after it.
+        if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id, { since: Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0 }));
         // Per-call log of MCP tool calls; `since` (ms timestamp) makes polling incremental.
         if (parts[3] === 'calls') return json(res, 200, calls.list(p.meta.id, Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0));
         // Eval numbers for examples/evals. Read-only: boards are measured but never grown, so the run
