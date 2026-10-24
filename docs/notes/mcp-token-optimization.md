@@ -60,9 +60,9 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
    Done: `SKILL.md` is now a ~45 line pointer (first turn, ToolSearch set, reference/fonts/comments one-liners, gotchas).
 
 ### B. Fewer turns (medium effort, the biggest lever)
-1. **`create_artboard` accepts `html`**: create and first write in one call.
+1. **`create_artboard` accepts `html`**: create and first write in one call. **DONE** (shares `writeWithNotes` with `write_html`; guide step 2 updated).
 2. **Auto-lint in the write result**: `write_html` / `update_styles` already add a `layout` line only when something is wrong. Do the same with
-   lint (only new issues, max 5 lines). The separate `lint` turn then goes away.
+   lint (only new issues, max 5 lines). The separate `lint` turn then goes away. **DONE** (`newLint` in `src/mcp.mjs`; default grid 4, no per-project grid yet; guide 5b says `lint` is only for a full pass).
 3. **`review` tool, or `get_screenshot({lint:true})`**: lint text + layout check + screenshot in one call, as one review step.
 4. **`finish_working({screenshot:true})`**: the final look and finish in one turn.
 5. **`batch` tool**: `batch({ops:[{tool, args}, ...]})` runs several edits (update_styles, set_text_content, rename...) in one call, with one result line

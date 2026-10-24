@@ -143,3 +143,40 @@ test('reply_comment with resolve: true replies and resolves in one call', async 
   assert.equal(by[c2.id].resolved, false);
   h.close();
 });
+
+test('create_artboard with html writes the first content in the same call', async () => {
+  const h = await harness();
+  const p = await h.call('create_project', { name: 'First write' });
+  const r = await h.call('create_artboard', { project_id: p.project_id, name: 'Home', html: '<div style="padding:8px">Hi</div>' });
+  assert.ok(r.id);
+  assert.equal(r.created.length, 1);
+  // the content is really in the board, and omitting html keeps the old shape
+  assert.match(await h.call('get_tree', { project_id: p.project_id, node_id: r.id }), /Hi|N\d+/);
+  const empty = await h.call('create_artboard', { project_id: p.project_id, name: 'Empty' });
+  assert.equal(empty.created, undefined);
+  h.close();
+});
+
+test('write_html and update_styles report only NEW lint issues, silent otherwise', async () => {
+  const h = await harness();
+  const { pid, board, node } = await withBoard(h);
+  // clean write: no lint key
+  const ok = await h.call('write_html', { project_id: pid, target_id: board, html: '<div style="padding:8px">Fine</div>' });
+  assert.equal(ok.lint, undefined);
+  // an off-grid padding is new, so it is reported
+  const bad = await h.call('write_html', { project_id: pid, target_id: board, html: '<div style="padding:5px">Off</div>' });
+  assert.match(bad.lint, /not on the 4px spacing grid/);
+  // the old issue is not repeated by a later clean write to the same board
+  const again = await h.call('write_html', { project_id: pid, target_id: board, html: '<div style="padding:8px">Fine</div>' });
+  assert.equal(again.lint, undefined);
+  // update_styles: new issue shows, a clean change stays the bare 'ok'
+  const u = await h.call('update_styles', { project_id: pid, node_ids: [node], styles: { padding: '7px' } });
+  assert.match(u.lint, /spacing grid/);
+  assert.equal(await h.call('update_styles', { project_id: pid, node_ids: [node], styles: { padding: '8px' } }), 'ok');
+  // more than 5 new issues are capped with "+N more"
+  const many = Array.from({ length: 8 }, (_, i) => `<div style="padding:${5 + i * 8}px">x</div>`).join('');
+  const m = await h.call('write_html', { project_id: pid, target_id: board, html: many });
+  assert.match(m.lint, /\+\d+ more$/);
+  assert.equal(m.lint.split('\n').length, 6);
+  h.close();
+});
