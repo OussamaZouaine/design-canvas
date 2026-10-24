@@ -121,8 +121,14 @@ Order is a suggestion; the user decides.
    guide topic `svg`. Tests `test/svg.test.mjs`. **Restart Claude Code + the server to see the tools.** Session 2 DONE 2026-10-24: toolbar tools Rectangle (R), Ellipse (O), Line (L) (`engine.drawShape`, `CanvasEditor.addShape`, markup in `web/src/canvas/shapes.ts`); a shape is
    one absolutely positioned `<svg data-shape>` with paint on the svg root (the engine selects the root when an inner shape is clicked); Inspector `Vector` section (fill, stroke, width,
    cap, join, dash) sends the `attrs` canvas action (-> `Doc.setAttrs`); SVG elements are now selectable/draggable/in Layers (`isNodeEl` in `lib/htmlTree.ts`: they are not HTMLElements);
-   normalize keeps `overflow:visible` on svg. Next: session 3 = pen tool + path editing (anchor/handle
-   overlay rewriting `d`), later boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
+   normalize keeps `overflow:visible` on svg. Session 3 DONE 2026-10-24: Pen tool (P) + path edit mode.
+   Click = corner anchor, click-drag = symmetric handles, click first anchor / Enter / double-click finishes (closed / open), Esc cancels, Backspace drops the last point; live
+   rubber band in `.dc-pathsvg.pen`. Output is one `<svg data-shape="path">` with a single `<path>` (`shapes.pathHtml`). Double-click or Enter on a selected path = edit mode
+   (anchors, handles, click a segment adds a point, Delete removes the selected anchor, double-click an anchor toggles corner/smooth, Alt = independent handle, Esc/Enter/click away exits).
+   Drags patch `d` live and send ONE `vector` canvas action (`Doc.editVector`: d + viewBox + left/top/width/height, one undo step); `get_tree` shows `path:<id> d:...` on the svg line.
+   Code: `web/src/canvas/pen.ts` (`PathTools`), pure maths `web/src/canvas/path.ts` + `test/path.test.mjs`. Verified on a scratch server with synthetic pointer events (draw open/closed,
+   drag, undo/redo, insert, delete, smooth). Not covered: arcs / multi-subpath `d` (edit mode refuses with a toast), rotated svgs, snapping, shift-constrain.
+   Later: boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
 10. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
