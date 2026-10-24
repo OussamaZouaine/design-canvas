@@ -103,7 +103,7 @@ test('editVector changes d, viewBox and the box in one undo step', () => {
   doc.undo(1, 'user');
   assert.match(html(), /d="M2 2L42 42"/);
   assert.match(html(), /viewBox="0 0 44 44"/);
-  assert.match(html(), /left: 10px/);
+  assert.match(html(), /left:10px/);
 });
 
 test('editVector refuses HTML nodes and bad attributes without writing anything', () => {
