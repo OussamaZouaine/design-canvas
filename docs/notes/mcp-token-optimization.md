@@ -1,6 +1,6 @@
 # MCP token and turn optimization (analysis 2026-10-24)
 
-A1-A3 are done (marked below); the rest is not implemented yet. Numbers come from a measurement script run against a copy of `data/` (Sprig project, 46 boards)
+A1-A9 are done (marked below); B onward is not implemented yet. Numbers come from a measurement script run against a copy of `data/` (Sprig project, 46 boards)
 and from `examples/evals/results/turns-cut.json`. Token counts are bytes/4 estimates.
 
 ## Where the cost actually is
@@ -39,18 +39,25 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
    Tokens scale with pixels, so 800 instead of 1000 is about 36% less.
    Done: browser default maxWidth 800 (`web/src/canvas/replies.ts`), new `max_height` (default 1600) cuts the crop at the bottom; the reply is still a plain
    data URL, so the server detects the cut from the image height (via `imageSize`) and adds a text note. Checked live with the headless worker (1200x3000 board -> 800x1600 + note).
-4. **One ToolSearch for the core set**: add a line to `INSTRUCTIONS` that lists the ~10 core tools to load in one
+4. **Done.** **One ToolSearch for the core set**: add a line to `INSTRUCTIONS` that lists the ~10 core tools to load in one
    `select:` query (the Claude in Chrome server does exactly this). That cuts the 2-8 extra ToolSearch turns per run.
-5. **First turn in parallel**: the instructions say "get_guide before any other tool", which forces a serial turn. Say instead
+   Done: line added to `INSTRUCTIONS` (`src/mcp.mjs`), tested in `test/mcp.test.mjs`.
+5. **Done.** **First turn in parallel**: the instructions say "get_guide before any other tool", which forces a serial turn. Say instead
    "call get_guide and list_projects together in your first turn".
-6. **Trim the heavy readers**: `get_node_info` leaves out `html` unless `include_html: true` (or caps it at about 2k chars).
+   Done: `INSTRUCTIONS` and guide WORKFLOW step 0 say so.
+6. **Done.** **Trim the heavy readers**: `get_node_info` leaves out `html` unless `include_html: true` (or caps it at about 2k chars).
    `get_tree` with no node_id and more than about 8 boards returns one line per board. `list_projects` drops `url`, drops `description`, limits to 15.
    `get_basic_info` leaves out empty `pages`/`references`.
-7. **Strip `$schema`** from the tools/list output and shorten the `project_id` description to "Default: active project". That is about 1.5k off the
+   Done: `get_node_info` `include_html` (cap 2000 chars + marker; `get_selection` never sends html; `get_comments`/`get_jsx`/`get_design_tokens` read `doc.nodeInfo` directly, unchanged);
+   `get_tree` lists boards only above 8 when no node_id/query/depth; `list_projects` 15 + `more`; `get_basic_info`/`open_project` omit a single implicit page and empty references.
+7. **Done.** **Strip `$schema`** from the tools/list output and shorten the `project_id` description to "Default: active project". That is about 1.5k off the
    schema, which is paid on every ToolSearch load.
-8. **`reply_comment` takes `resolve: true`**: one call per comment instead of two.
-9. **Fix the stale skill line**: `SKILL.md` "Hard rules" still says "system font stacks only (custom fonts are not loaded yet)", which
+   Done: the `tools/list` handler is wrapped at the end of `createMcpServer` (SDK has no option; uses its internal `_requestHandlers`). tools/list 9.69k -> 8.48k tokens (bytes/4, 62 tools).
+8. **Done.** **`reply_comment` takes `resolve: true`**: one call per comment instead of two.
+   Done: guide feedback paragraph updated; `resolve_comment` stays for reopen/resolve without a reply.
+9. **Done.** **Fix the stale skill line**: `SKILL.md` "Hard rules" still says "system font stacks only (custom fonts are not loaded yet)", which
    contradicts `use_font`. Also shrink the skill to a pointer, because its workflow duplicates `get_guide` (~1.5k tokens loaded twice).
+   Done: `SKILL.md` is now a ~45 line pointer (first turn, ToolSearch set, reference/fonts/comments one-liners, gotchas).
 
 ### B. Fewer turns (medium effort, the biggest lever)
 1. **`create_artboard` accepts `html`**: create and first write in one call.
