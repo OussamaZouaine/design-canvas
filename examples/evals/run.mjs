@@ -88,6 +88,12 @@ async function run(label, only, open, repeat) {
       costUsd: agent.total_cost_usd ?? null, agentError: agent.is_error || agent.error || null,
       ...meterDelta(before, after), ...quality,
     };
+    // Cross-check: the dashboard (call log, GET /api/p/<id>/efficiency) and the meter should agree on tool-result
+    // tokens within ~10%; a larger gap means calls went unlogged (no project) or the ring (500) overflowed.
+    if (r.toolTokens > 0 && typeof r.loggedTokens === 'number') {
+      r.dashboardDiffPct = Math.round((Math.abs(r.loggedTokens - r.toolTokens) / r.toolTokens) * 1000) / 10;
+      if (r.dashboardDiffPct > 10) console.log(`  WARNING: dashboard tokens ${r.loggedTokens} vs meter ${r.toolTokens} (${r.dashboardDiffPct}% apart)`);
+    }
     results.push(r);
     console.log(`  ${seconds}s, boards ${r.boards}, overflow boards ${r.overflowBoards ?? '?'}, lint ${r.lintIssues}, screenshots ${r.screenshots}, tool tokens ${r.toolTokens}`);
   }
@@ -99,7 +105,7 @@ async function run(label, only, open, repeat) {
 // One row per brief, one column group per saved run, for the before / after comparison.
 function report(labels) {
   const runs = labels.map((l) => JSON.parse(fs.readFileSync(path.join(RESULTS, `${l}.json`), 'utf8')));
-  const cols = [['turns', 'turns'], ['costUsd', 'usd'], ['outputTokens', 'out'], ['cacheReadTokens', 'cache-read'], ['overflowBoards', 'overflow'], ['overflowNodes', 'nodes'], ['lintIssues', 'lint'], ['screenshots', 'shots'], ['fixRounds', 'fixes'], ['toolTokens', 'tokens'], ['brief', 'brief']];
+  const cols = [['turns', 'turns'], ['costUsd', 'usd'], ['outputTokens', 'out'], ['cacheReadTokens', 'cache-read'], ['overflowBoards', 'overflow'], ['overflowNodes', 'nodes'], ['lintIssues', 'lint'], ['screenshots', 'shots'], ['fixRounds', 'fixes'], ['toolTokens', 'tokens'], ['loggedTurns', 'log-turns'], ['dashboardDiffPct', 'dash%'], ['brief', 'brief']];
   const ids = [...new Set(runs.flatMap((r) => r.results.map((x) => x.id)))];
   const lines = [`| brief | run | ${cols.map((c) => c[1]).join(' | ')} |`, `|${'---|'.repeat(cols.length + 2)}`];
   for (const id of ids) {

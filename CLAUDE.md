@@ -15,12 +15,13 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 ## Run
 - `pnpm build:web` once (and after any `web/` change), then `pnpm start` (= `node src/server.mjs`) serves http://localhost:3777 (the server serves `web/dist`; without a build it answers 503). Stop it with a normal kill so it flushes `data/`.
 - UI dev: `pnpm dev:web` (Vite on http://localhost:5173 with HMR, proxies /api /events /mcp /reply to the 3777 server, which must be running).
-- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateless). Registered in Claude Code as `design-canvas`.
+- MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateful sessions: `src/sessions.mjs`; a session id gets an agent identity from `clientInfo` / `?agent=<name>` / `start({agent})` and a bound project; unknown/expired ids (server restart, idle TTL) are served statelessly under a revived Session with the same id, never 404, because SDK clients do not re-initialize; requests with no session fall back to the active project). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
 - Pages: `/` projects home, `/p/<id>` canvas, `/comments` all comments.
 
 ## Layout
+- `src/sessions.mjs` `Session` (agent identity, OKLCH colour, `projectId` binding) + `SessionMap` (30 min idle TTL). `DC_DATA=<dir>` runs a second instance on its own data folder.
 - `src/server.mjs` HTTP routes, SSE (`/events`, `/events?project=<id>`), delta doc sync, comments API.
 - `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there. Low-traffic families are single action-enum tools
   (flat schema, per-action `need()` checks): `pages`, `components` (+ separate `insert_component`), `references`, `project`, `tokens`, `history`, `export_code`; the
@@ -29,6 +30,10 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 - `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
 - `src/guide.mjs` the design guide served by `get_guide({topic})` (start, brief, type, layout, review, mobile). The process and taste rules
   live here so any MCP client gets them; the skill only points at it. `log_prompt.brief` is stored in `meta.brief`.
+- `src/agentlog.mjs` `CallLog`: one entry per MCP tool call (`{id,t,ms,tool,project,ok,error?,tokens,args}`, args summarized, never HTML), ring of 500 per project + `calls.jsonl`; recorded in the `registerTool` wrapper, emitted as store/SSE `call` (+ `call-start` for slow tools), read at `GET /api/p/<id>/calls?since=<t>`. Adds nothing to tool results.
+- `src/efficiency.mjs` pure cost/efficiency report from the call log (per agent, per prompt, waste hints; `GET /api/p/<id>/efficiency`, fixed costs via `measureFixed` in server.mjs); UI `web/src/panels/EfficiencyPanel.tsx` (MCP tab). Turns are estimated from call timing.
+- `src/claims.mjs` `Claims`: soft board claims (an agent's write claims the board for 60 s; another agent's write gets a one-line `note:` appended to its result, never an error) + the user's per-agent pause (`POST /api/agents/pause`; paused agents' writes return a polite error). Pushed as SSE `claims`; UI outline is `engine.setClaims`, controls are in `AgentsPanel`. `get_changes`/`start` add `others` (what other agents changed since this session's last read, `Session.seen`).
+- `src/stepdiff.mjs` per-step diffs for Activity (bounded spans, reverse patch); `Doc.captureStep/revertStep` + `ProjectStore.listActivity({since})/revertStep` back the Activity tab (runs by prompt+agent, steps, Revert, incremental `?since=`).
 - `src/dialect.mjs` layout-dialect check (margin, grid, inline, table): reported as a `dialect` line on `write_html` / `update_styles`
   for normalizing projects and as `lint` issues; never rewrites markup.
 - `src/normalize.mjs` opt-in HTML normalization on write (`meta.normalize`: on for new projects, off for Sprig and imports).
@@ -43,6 +48,7 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 - `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `export_code` format `jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
 - `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
+- Agent feed (UI): `web/src/store/agents.ts` holds the MCP call log from SSE `call`/`call-start` (presence, kinds, filters, follow-agent); `panels/AgentsPanel.tsx` is the Agents tab; chips + pills are in `shell/Shell.tsx`; the engine tints highlight boxes/ring per agent (`setAgentIds`). Presence is derived from calls, never from SSE clients (headless worker is one).
 - `web/` React 19 + Vite + Tailwind v4 + shadcn (Base UI) client: `src/canvas/` imperative engine + editor, `src/panels/`, `src/shell/`, `src/pages/`, `src/store/` (zustand), `src/api/`.
 - `examples/sprig/` scripts that build the "Sprig design system" project through the MCP endpoint (see below).
 - `data/` runtime data (gitignored): `projects/<id>/{doc,meta,activity,comments}.json`, `snapshots/`, `state.json`.

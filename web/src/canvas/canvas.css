@@ -84,13 +84,19 @@
 .dc-sel { position: absolute; border: 2px solid var(--dc-accent); z-index: 5; }
 .dc-hover { position: absolute; border: 1px solid var(--dc-accent); background: color-mix(in oklch, var(--dc-accent) 8%, transparent); z-index: 4; }
 .dc-agent { position: absolute; inset: 0; z-index: 4; }
-.dc-agent i { position: absolute; border: 1.5px dashed var(--dc-glow-a); border-radius: 3px; background: oklch(0.68 0.2 295 / 0.08); animation: dc-agent-in 200ms var(--ease-out); }
+.dc-agent i { --c: var(--dc-glow-a); position: absolute; border: 1.5px dashed var(--c); border-radius: 3px; background: color-mix(in oklch, var(--c) 10%, transparent); animation: dc-agent-in 200ms var(--ease-out); }
+/* Agent name tag above the first box: fixed size in screen px (the overlay is never scaled). */
+.dc-agent i b { position: absolute; left: -1.5px; bottom: 100%; margin-bottom: 1px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 4px 4px 4px 0; background: var(--c); color: oklch(0.2 0.02 285); font: 600 10px/14px var(--font-sans, system-ui); }
 @keyframes dc-agent-in { from { opacity: 0; } }
+/* Claimed board: solid outline in the agent's colour (the dashed boxes above are for nodes being written right now). */
+.dc-claims { position: absolute; inset: 0; z-index: 3; }
+.dc-claims i { --c: var(--dc-glow-a); position: absolute; box-sizing: border-box; border: 2px solid var(--c); border-radius: 3px; animation: dc-agent-in 200ms var(--ease-out); }
+.dc-claims i b { position: absolute; left: -2px; bottom: 100%; margin-bottom: 1px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 4px 4px 4px 0; background: var(--c); color: oklch(0.2 0.02 285); font: 600 10px/14px var(--font-sans, system-ui); }
 
 @media (prefers-reduced-motion: reduce) {
   .dc-artboard.enter { animation: dc-ab-fade 200ms ease backwards; }
   @keyframes dc-ab-fade { from { opacity: 0; } }
-  .dc-ring-spin, .dc-shimmer::before, .dc-label .status i, .dc-agent i { animation: none; }
+  .dc-ring-spin, .dc-shimmer::before, .dc-label .status i, .dc-agent i, .dc-claims i { animation: none; }
   .dc-ring { background: oklch(0.68 0.2 295 / 0.6); } /* static ring instead of the comet */
 }
 

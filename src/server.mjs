@@ -11,10 +11,18 @@ import { randomUUID } from 'node:crypto';
 import { ProjectStore, ID_RE } from './store.mjs';
 import { createMcpServer } from './mcp.mjs';
 import { Meter } from './meter.mjs';
+import { CallLog, RING } from './agentlog.mjs';
+import { analyze, evalSummary, fixedCosts } from './efficiency.mjs';
+import { guideText } from './guide.mjs';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
 import { HeadlessWorker } from './headless.mjs';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { Session, SessionMap } from './sessions.mjs';
+import { Claims } from './claims.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -24,7 +32,9 @@ const HOST = '127.0.0.1';
 // Build output of the React client (web/, `pnpm build:web`). It is the only UI the server serves.
 const WEB = path.join(ROOT, 'web', 'dist');
 
-const store = new ProjectStore(path.join(ROOT, 'data'));
+// DC_DATA lets a second instance (tests, a spare port) run on its own data folder instead of sharing data/.
+const DATA = process.env.DC_DATA || path.join(ROOT, 'data');
+const store = new ProjectStore(DATA);
 
 // One-time migration: the pre-projects version kept a single design.json in the repo root.
 const legacy = path.join(ROOT, 'design.json');
@@ -51,6 +61,8 @@ const ui = {
   touched: new Map(), // projectId -> Set of artboard ids Claude edited since its last finish_working (the layout gate checks these)
 };
 const meter = new Meter(); // per-tool token estimates, shown by /api/status
+// Per-call MCP log; its events ride the store's listener list so they reach tabs like every other event.
+const calls = new CallLog({ dataDir: DATA, emit: (t, p) => store._emit(t, p) });
 
 // Send the document as a delta. Each client remembers the HTML it last received per artboard;
 // unchanged boards go out with html:null and the browser reuses its copy. A single MCP write
@@ -75,6 +87,7 @@ store.on((type, payload) => {
     else if (type === 'meta' && c.projectId === payload.id) send(c.res, 'meta', payload.meta);
     else if (type === 'comments' && c.projectId === payload.id) send(c.res, 'comments', payload.comments);
     else if (type === 'activity' && c.projectId === payload.id) send(c.res, 'activity', {});
+    else if ((type === 'call' || type === 'call-start') && c.projectId === payload.project) send(c.res, type, payload.call);
     else if (type === 'projects' && c.projectId === null) send(c.res, 'projects', {});
     else if (type === 'comments' && c.projectId === null) send(c.res, 'comments-changed', {});
   }
@@ -119,16 +132,91 @@ const requestComputed = (projectId, nodeIds, props) => askBrowser(projectId, 'co
 
 // Light up the nodes Claude just touched in every tab of the project. They clear on
 // finish_working, or on their own after 10 s so a forgotten call never leaves them stuck.
-function highlight(projectId, ids) {
+function highlight(projectId, ids, agent = null) {
   clearTimeout(ui.agentTimers.get(projectId));
-  for (const c of ui.clients) if (c.projectId === projectId) send(c.res, 'agent', { ids: ids.slice(0, 40) });
+  for (const c of ui.clients) if (c.projectId === projectId) send(c.res, 'agent', { ids: ids.slice(0, 40), ...(agent && { agent }) });
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
 // Google Fonts the server downloaded (use_font). Shared by all projects, so a family is fetched once.
-const fonts = new FontCache(path.join(ROOT, 'data', 'fonts'));
+const fonts = new FontCache(path.join(DATA, 'fonts'));
 
-const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port: PORT };
+// What every agent pays before doing anything: the tools/list payload, the server instructions and one get_guide().
+// Measured once by listing the tools through an in-memory client (the same path a real client takes) and cached,
+// because it only changes when the server code does.
+let fixedCache = null;
+async function measureFixed() {
+  if (fixedCache) return fixedCache;
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const server = createMcpServer({ store, ui, fonts, highlight, port: PORT });
+  const client = new Client({ name: 'cost-probe', version: '0' });
+  try {
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const { tools } = await client.listTools();
+    fixedCache = fixedCosts({ tools, instructions: client.getInstructions(), guide: guideText('start') });
+  } finally { await client.close().catch(() => {}); }
+  return fixedCache;
+}
+
+// Soft board claims + paused agents (src/claims.mjs). Any change is pushed to the project's tabs as an SSE `claims`
+// event; a pause is global (an agent id, not a project), so it goes to every tab.
+const claimsPayload = (projectId) => ({ claims: projectId ? claims.list(projectId) : [], paused: claims.pausedList() });
+const claims = new Claims({
+  onChange: (projectId) => { for (const c of ui.clients) if (projectId === null || c.projectId === projectId) send(c.res, 'claims', claimsPayload(c.projectId)); },
+});
+
+const mcpDeps = { store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, claims, port: PORT };
+
+// Sessions of the MCP endpoint. Each client gets its own McpServer so identity and project binding live with it.
+const sessions = new SessionMap();
+setInterval(() => sessions.sweep(), 60_000).unref();
+
+// A client may hold a session id this process no longer knows (server restart, idle TTL). Answering 404 would be
+// spec-correct but the SDK client does not re-initialize on it, so every restart would break the tools. Instead such
+// requests are served statelessly under a revived Session with the same id (see SessionMap.revive).
+async function handleStaleSession(req, res, url, sid) {
+  if (req.method === 'DELETE') { sessions.remove(sid); res.writeHead(204).end(); return; }
+  if (req.method !== 'POST') { res.writeHead(405).end(); return; } // no standalone SSE stream without a real session
+  const body = await readJson(req);
+  const mcp = createMcpServer({ ...mcpDeps, session: sessions.revive(sid, url.searchParams.get('agent')) });
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close(); mcp.close(); });
+  await mcp.connect(transport);
+  await transport.handleRequest(req, res, body);
+}
+
+async function handleMcp(req, res, url) {
+  const sid = req.headers['mcp-session-id'];
+  if (sid) {
+    const entry = sessions.get(String(sid));
+    if (!entry) return handleStaleSession(req, res, url, String(sid));
+    if (req.method === 'DELETE') { await entry.transport.handleRequest(req, res); sessions.remove(entry.session.id); return; }
+    const body = req.method === 'POST' ? await readJson(req) : undefined;
+    return entry.transport.handleRequest(req, res, body);
+  }
+  if (req.method !== 'POST') { res.writeHead(405).end(); return; }
+  const body = await readJson(req);
+  // New client: `initialize` opens a session. The optional ?agent=<name> in the registered URL labels it (Claude Code
+  // subagents share one connection, so the label is the only way to tell them apart).
+  if (isInitializeRequest(body)) {
+    const session = new Session(null, url.searchParams.get('agent'));
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: randomUUID,
+      onsessioninitialized: (id) => { session.id = id; sessions.add(session, transport, mcp); },
+    });
+    const mcp = createMcpServer({ ...mcpDeps, session });
+    transport.onclose = () => { if (session.id) sessions.map.delete(session.id); };
+    await mcp.connect(transport);
+    return transport.handleRequest(req, res, body);
+  }
+  // Old stateless clients (no session header, no initialize): serve the request on a throwaway server that falls back
+  // to the active project, exactly as before sessions existed.
+  const mcp = createMcpServer(mcpDeps);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close(); mcp.close(); });
+  await mcp.connect(transport);
+  await transport.handleRequest(req, res, body);
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -163,6 +251,7 @@ const projectActions = {
   duplicate: (id) => store.duplicate(id),
   snapshot: (id, b) => store.snapshot(id, String(b.label || 'Saved version').slice(0, 80), { force: true }),
   'restore-snapshot': (id, b) => store.restoreSnapshot(id, String(b.snapshotId)),
+  'revert-step': (id, b) => store.revertStep(id, Number(b.n)),
   activate: (id) => store.setActive(id),
 };
 
@@ -255,15 +344,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    // --- MCP endpoint (stateless: fresh server + transport per request) ---
+    // --- MCP endpoint (stateful: one server + transport per client session, see src/sessions.mjs) ---
     if (url.pathname === '/mcp') {
-      if (req.method !== 'POST') { res.writeHead(405).end(); return; }
-      const body = await readJson(req);
-      const mcp = createMcpServer(mcpDeps);
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      res.on('close', () => { transport.close(); mcp.close(); });
-      await mcp.connect(transport);
-      await transport.handleRequest(req, res, body);
+      await handleMcp(req, res, url);
       return;
     }
 
@@ -303,6 +386,14 @@ const server = http.createServer(async (req, res) => {
       }
       if (parts[1] === 'projects' && parts[2] === 'import' && req.method === 'POST') {
         return json(res, 200, store.import(await readJson(req)));
+      }
+
+      // User switch: pause / resume one agent (its writes get a polite error). Agent ids are slugs, so the pattern is strict.
+      if (parts[1] === 'agents' && parts[2] === 'pause' && req.method === 'POST') {
+        const b = await readJson(req);
+        if (!/^[a-z0-9-]{1,40}$/.test(String(b.agent))) return json(res, 400, { error: 'Bad agent id' });
+        claims.setPaused(b.agent, b.paused === true);
+        return json(res, 200, { ok: true, paused: claims.pausedList() });
       }
 
       // Server health for the MCP panel: open tabs and where Claude's tokens go.
@@ -366,7 +457,18 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         if (parts[3] === 'tokens') return json(res, 200, extractTokens(p.doc.data.artboards));
-        if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id));
+        // Activity runs; `since` (a sequence number from the previous answer's `seq`) returns only runs that changed after it.
+        if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id, { since: Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0 }));
+        // Per-call log of MCP tool calls; `since` (ms timestamp) makes polling incremental.
+        // Live board claims + paused agents (the same payload the SSE `claims` event carries), to seed the UI on load.
+        if (parts[3] === 'claims') return json(res, 200, claimsPayload(p.meta.id));
+        if (parts[3] === 'calls') return json(res, 200, calls.list(p.meta.id, Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0));
+        // Cost + efficiency dashboard: per agent and per prompt, derived from the call log (src/efficiency.mjs).
+        if (parts[3] === 'efficiency') {
+          let fixed = null;
+          try { fixed = await measureFixed(); } catch { /* fixed costs are a nicety: the rest still answers */ }
+          return json(res, 200, analyze(calls.list(p.meta.id), { fixed, limit: RING }));
+        }
         // Eval numbers for examples/evals. Read-only: boards are measured but never grown, so the run
         // is judged on what the agent left behind, not on what this call would repair.
         if (parts[3] === 'eval') {
@@ -378,7 +480,7 @@ const server = http.createServer(async (req, res) => {
             try { reports = await requestMeasure(p.meta.id, boards.map((a) => ({ id: a.id, html: a.html, width: a.width, height: a.height, fit: a.heightMode === 'fit' }))); } catch { /* tab did not answer */ }
           }
           const issues = Object.fromEntries(boards.map((a) => [a.id, p.doc.lint(a.id)]));
-          return json(res, 200, { tabOpen, boards: boards.length, brief: Boolean(p.meta.brief), ...lintMetrics(issues), ...(reports ? layoutMetrics(reports) : { layout: 'not measured' }) });
+          return json(res, 200, { tabOpen, boards: boards.length, brief: Boolean(p.meta.brief), ...evalSummary(calls.list(p.meta.id)), ...lintMetrics(issues), ...(reports ? layoutMetrics(reports) : { layout: 'not measured' }) });
         }
         return json(res, 404, { error: 'Not found' });
       }
@@ -424,7 +526,7 @@ const server = http.createServer(async (req, res) => {
 
 // Don't lose the last few edits: debounced writes are flushed when the process is stopped.
 for (const sig of ['SIGINT', 'SIGTERM']) {
-  process.on(sig, () => { headless.stopAll(); store.flushAll(); process.exit(0); });
+  process.on(sig, () => { headless.stopAll(); store.flushAll(); calls.flushAll(); process.exit(0); });
 }
 
 server.listen(PORT, HOST, () => {

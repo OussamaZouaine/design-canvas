@@ -81,6 +81,8 @@ export class CanvasEngine {
   private selBox = div('dc-sel dc-hide');
   private hoverBox = div('dc-hover dc-hide');
   private agentHost = div('dc-agent');
+  private claimHost = div('dc-claims'); // coloured outlines of boards an agent claimed (soft claims, see src/claims.mjs)
+  private claims: { board: string; agent: { id: string; name: string; color: string } }[] = [];
   private boards = new Map<string, Board>();
   private pidIndex = new Map<string, string>(); // node id (data-pid) -> artboard id, so lookups never scan every shadow root
 
@@ -89,6 +91,8 @@ export class CanvasEngine {
   private selected: string | null = null;
   private hoverId: string | null = null;
   private agentIds: string[] = [];
+  private agent: { id: string; name: string; color: string } | null = null; // who wrote them (tints boxes + ring)
+  private followAgent: string | null = null; // null = follow whoever writes
   private activePage: string | null;
   private pendingPage: string | null = null;
   private themeMode = 'base'; // a view setting, not saved in the doc
@@ -113,7 +117,7 @@ export class CanvasEngine {
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     this.activePage = lsGet(`dc-page:${projectId}`);
-    this.overlay.append(this.agentHost, this.hoverBox, this.selBox, this.draft);
+    this.overlay.append(this.claimHost, this.agentHost, this.hoverBox, this.selBox, this.draft);
     this.selBox.append(this.sizeLabel);
     viewport.append(this.world, this.overlay);
     this.applyView();
@@ -170,7 +174,26 @@ export class CanvasEngine {
   // Doc changes arriving shortly after this came from the user's own edit: no "Claude is designing" effects.
   markUserEdit() { this.userEditUntil = Date.now() + 1500; }
 
-  setAgentIds(ids: string[]) { this.agentIds = ids; this.drawAgent(); }
+  // Highlight boxes for the nodes an agent touched. `agent` tints them and the comet ring in that agent's colour; it
+  // is kept after the highlight clears so the ring that is still fading does not flip back to violet.
+  setAgentIds(ids: string[], agent?: { id: string; name: string; color: string } | null) {
+    if (agent) {
+      this.agent = agent;
+      this.viewport.style.setProperty('--dc-glow-a', agent.color);
+      this.viewport.style.setProperty('--dc-glow-b', agent.color);
+    }
+    this.agentIds = ids;
+    this.drawAgent();
+  }
+  // Boards an agent claimed in the last ~60 s (server pushes the list, also when a claim lapses).
+  setClaims(claims: { board: string; agent: { id: string; name: string; color: string } }[]) {
+    this.claims = claims;
+    this.drawClaims();
+  }
+  // Follow camera: only glide for writes by this agent (null = anyone). The doc delta that triggers a glide
+  // arrives just before the `agent` event naming its author, so the check uses the previous author for the
+  // first write after a switch; it is correct from the second write on.
+  setFollowAgent(id: string | null) { this.followAgent = id; }
   setHover(id: string | null) { this.hoverId = id; this.drawHover(); }
   setThemeMode(mode: string) { this.themeMode = mode; this.applyTheme(); }
 
@@ -690,6 +713,7 @@ export class CanvasEngine {
   private followTo(b: Board, focusEl: HTMLElement | null) {
     const now = Date.now();
     if (!this.follow || now - this.lastTouch < 2500 || now - this.followAt < 500) return;
+    if (this.followAgent && this.agent && this.agent.id !== this.followAgent) return;
     const { ab } = b;
     const w = this.viewport.clientWidth, vh = this.viewport.clientHeight;
     // Zoom so the artboard's width fits, but cap at 40%: at 100% a long board fills the screen and you only
@@ -776,6 +800,7 @@ export class CanvasEngine {
 
   private drawSelection() {
     this.drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
+    this.drawClaims();
     this.drawHover();
     const target = this.selected ? this.findElement(this.selected) : null;
     // No element (board is a snapshot): fall back to the rect index, box only, no resize handles.
@@ -814,6 +839,30 @@ export class CanvasEngine {
     while (this.agentHost.children.length > rects.length) this.agentHost.lastChild!.remove();
     rects.forEach((r, i) => {
       const box = (this.agentHost.children[i] as HTMLElement) || this.agentHost.appendChild(document.createElement('i'));
+      if (this.agent) box.style.setProperty('--c', this.agent.color);
+      // Name tag on the first box only (like a multiplayer cursor label); textContent because names are untrusted.
+      let tag = box.firstElementChild as HTMLElement | null;
+      if (i === 0 && this.agent) {
+        if (!tag) tag = box.appendChild(document.createElement('b'));
+        if (tag.textContent !== this.agent.name) tag.textContent = this.agent.name;
+      } else tag?.remove();
+      this.place(box, r);
+    });
+  }
+
+  // One outline per claimed board, in the claiming agent's colour, with its name above the top-left corner. Boxes are
+  // reused like the agent boxes; names are untrusted so they go in as textContent. Boards on another page are hidden
+  // (zero-size rect), so they get no outline.
+  private drawClaims() {
+    const shown = this.claims.map((c) => ({ c, f: this.boards.get(c.board)?.frame })).filter((x): x is { c: typeof x.c; f: HTMLDivElement } => !!x.f && x.f.isConnected)
+      .map((x) => ({ c: x.c, r: this.relRect(x.f) })).filter((x) => x.r.width > 0);
+    while (this.claimHost.children.length > shown.length) this.claimHost.lastChild!.remove();
+    shown.forEach(({ c, r }, i) => {
+      const box = (this.claimHost.children[i] as HTMLElement) || this.claimHost.appendChild(document.createElement('i'));
+      box.style.setProperty('--c', c.agent.color);
+      let tag = box.firstElementChild as HTMLElement | null;
+      if (!tag) tag = box.appendChild(document.createElement('b'));
+      if (tag.textContent !== c.agent.name) tag.textContent = c.agent.name;
       this.place(box, r);
     });
   }

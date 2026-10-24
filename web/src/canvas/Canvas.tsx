@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useCanvas } from '@/store/canvas';
 import { useComments } from '@/store/comments';
+import { useAgents } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { useUi } from '@/store/ui';
 import { CanvasEngine } from './engine';
@@ -15,6 +16,9 @@ export function Canvas({ projectId }: { projectId: string }) {
   const doc = useProject((s) => s.doc);
   const fonts = useProject((s) => s.meta?.fonts);
   const agentIds = useProject((s) => s.agentIds);
+  const agentInfo = useProject((s) => s.agentInfo);
+  const followAgent = useAgents((s) => s.followAgent);
+  const claims = useAgents((s) => s.claims);
   const tool = useUi((s) => s.tool);
 
   // Create the engine once per project. StrictMode runs this twice in dev: destroy() must undo everything.
@@ -45,7 +49,9 @@ export function Canvas({ projectId }: { projectId: string }) {
   useEffect(() => { if (engine && doc) engine.setDoc(doc); }, [engine, doc]);
   // Google Fonts live in project meta (not in the doc); the engine installs them and redraws snapshots.
   useEffect(() => { engine?.setFonts(fonts); }, [engine, fonts]);
-  useEffect(() => { engine?.setAgentIds(agentIds); }, [engine, agentIds]);
+  useEffect(() => { engine?.setAgentIds(agentIds, agentInfo); }, [engine, agentIds, agentInfo]);
+  useEffect(() => { engine?.setFollowAgent(followAgent); }, [engine, followAgent]);
+  useEffect(() => { engine?.setClaims(claims); }, [engine, claims]);
   useEffect(() => { engine?.setTool(tool); }, [engine, tool]);
 
   // role="application": the surface handles its own pointer and keyboard gestures, so screen readers
