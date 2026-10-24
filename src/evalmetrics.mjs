@@ -39,7 +39,7 @@ export function meterDelta(before, after) {
     toolTokens: tools.reduce((n, t) => n + t.tokens, 0),
     screenshots: calls('get_screenshot'),
     // "Fix rounds": calls whose only purpose is repairing something the first write got wrong.
-    fixRounds: calls('fit_artboard') + calls('update_styles') + calls('undo'),
+    fixRounds: calls('fit_artboard') + calls('update_styles') + calls('history'),
     layoutChecks: calls('check_layout'),
     tools,
   };
