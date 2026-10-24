@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { pagesOf } from '@/canvas/engine';
 import { findNode, parseStyle, sendEdit } from '@/lib/htmlTree';
@@ -53,6 +53,9 @@ const SECTIONS: SectionDef[] = [
 // Properties the sections above (and the padding control) already cover; the rest show under "Other styles".
 const HANDLED = new Set([...SECTIONS.flatMap((s) => s.rows.flat().map((f) => f.prop)), 'background-color', 'padding']);
 const FAMILIES = [...new Set(SECTIONS.flatMap((s) => s.rows.flat().map((f) => f.family)).filter((f): f is string => !!f)), 'color'];
+
+// Sections that mean nothing on an SVG node (it has no CSS fill/border/text): its own Vector section replaces them.
+const NOT_FOR_SVG = new Set(['Auto layout', 'Fill', 'Stroke', 'Typography']);
 
 const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-muted/60 text-xs focus-within:ring-2 focus-within:ring-ring/40';
 const labelCls = 'min-w-6 shrink-0 select-none px-1.5 text-center text-muted-foreground';
@@ -242,6 +245,11 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
   const projectFonts = useProject((s) => s.meta?.fonts) ?? [];
   const family = effectiveFamily(el, tokens);
 
+  // Inside an <svg>, fill and stroke are attributes, so they go through the `attrs` action (same allowlist as the
+  // set_attrs MCP tool) instead of `style`.
+  const isVector = !!el.closest('svg');
+  const setAttr = (attr: string, value: string) => sendEdit(projectId, 'attrs', { ids: [id], attrs: { [attr]: value.trim() || null } });
+
   const control = (f: Field) => {
     const value = valueOf(f);
     // The key carries the value so an outside change (Claude, undo) replaces any stale draft in the field.
@@ -300,14 +308,19 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
         <small className="shrink-0 font-mono text-muted-foreground">{id}</small>
       </div>
       {locked && <p className="border-b px-3 py-2 text-muted-foreground">This layer is locked: unlock it in the Layers panel to edit.</p>}
-      {SECTIONS.map((s) => (
-        <Section key={s.title} title={s.title} off={locked}>
+      {SECTIONS.map((s, si) => (
+        <Fragment key={s.title}>
+        {si === 1 && isVector && <VectorSection id={id} el={el} locked={locked} tokens={tokens} setAttr={setAttr} />}
+        {!(isVector && NOT_FOR_SVG.has(s.title)) && (
+        <Section title={s.title} off={locked}>
           {s.rows.map((row, i) =>
             Array.isArray(row)
               ? <div key={i} className="grid grid-cols-2 gap-1.5">{row.map(control)}</div>
               : control(row))}
           {s.padding && <PaddingField key={`${id}:${style.get('padding') ?? ''}`} value={style.get('padding') ?? ''} onSet={(v) => set('padding', v)} />}
         </Section>
+        )}
+        </Fragment>
       ))}
       {/* CSS the inspector has no dedicated control for (added by Claude or by hand): editable as raw rows. */}
       {other.length > 0 && (
@@ -321,6 +334,35 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
         </Section>
       )}
     </div>
+  );
+}
+
+// Paint of an SVG node: fill, stroke and its details. Values are the element's own attributes; an empty field means
+// "inherit" (a shape drawn with the shape tools keeps its paint on the <svg> root and the inner shape inherits it).
+function VectorSection({ id, el, locked, tokens, setAttr }: { id: string; el: HTMLElement; locked: boolean; tokens: Record<string, string>; setAttr: (attr: string, value: string) => void }) {
+  const attr = (a: string) => el.getAttribute(a) ?? '';
+  const color = (a: 'fill' | 'stroke', label: string) => {
+    const value = attr(a);
+    const tok = tokenName(value);
+    return (
+      <div key={`${id}:${a}:${value}`} className="flex items-center gap-1">
+        <span className="w-11 shrink-0 px-1.5 text-xs text-muted-foreground">{label}</span>
+        <ColorField className="flex-1" label={label} value={value} preview={tok && tok in tokens ? tokens[tok] : value} list="dl-color" onChange={(v) => setAttr(a, v)} />
+      </div>
+    );
+  };
+  const width = attr('stroke-width');
+  return (
+    <Section title="Vector" off={locked}>
+      {color('fill', 'Fill')}
+      {color('stroke', 'Stroke')}
+      {(width === '' || PLAIN_NUM.test(width))
+        ? <NumberField key={`${id}:sw:${width}`} label="Width" title="stroke-width" value={width === '' ? 0 : parseFloat(width)} step={0.5} min={0} onChange={(n) => setAttr('stroke-width', String(n))} />
+        : <TextField key={`${id}:sw:${width}`} label="Width" title="stroke-width" value={width} onCommit={(v) => setAttr('stroke-width', v)} />}
+      <SelectField key={`${id}:cap:${attr('stroke-linecap')}`} label="Cap" value={attr('stroke-linecap')} options={['butt', 'round', 'square']} onCommit={(v) => setAttr('stroke-linecap', v)} />
+      <SelectField key={`${id}:join:${attr('stroke-linejoin')}`} label="Join" value={attr('stroke-linejoin')} options={['miter', 'round', 'bevel']} onCommit={(v) => setAttr('stroke-linejoin', v)} />
+      <TextField key={`${id}:dash:${attr('stroke-dasharray')}`} label="Dash" title="stroke-dasharray" value={attr('stroke-dasharray')} onCommit={(v) => setAttr('stroke-dasharray', v)} />
+    </Section>
   );
 }
 
