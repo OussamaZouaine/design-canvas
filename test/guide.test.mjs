@@ -21,8 +21,8 @@ test('guide text contains no hex colours', () => {
 });
 
 // The guide must not force get_guide into a serial turn of its own.
-test('workflow tells the agent to call get_guide and list_projects together', () => {
-  assert.match(TOPICS.start, /get_guide and list_projects together/);
+test('workflow tells the agent to call get_guide and start together', () => {
+  assert.match(TOPICS.start, /get_guide, and in the same turn start\(/);
 });
 
 test('guide points at reply_comment with resolve instead of two calls', () => {

@@ -69,7 +69,7 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
    per op. The handlers are already registered, so it can dispatch to them internally. Anthropic's guidance is to consolidate operations that are always chained.
    Done: `edits` map in `src/mcp.mjs` shared by the single tools and `batch` (10 whitelisted tools, max 30 ops, stop on first error, one layout check at the end, no per-op lint); tools/list 8.73k -> 9.02k tokens (+0.3k, 63 tools).
 6. **`start` shortcut**: `start({project_name|project_id, prompt, brief, artboard})` = list/create + log_prompt + create_artboard. Saves 2-3 turns
-   on every new design.
+   on every new design. **DONE**: `start({prompt, project(id|name), description, brief, artboard})` in `src/mcp.mjs`; existing projects also return open comments, user changes and boards; guide step 0-2, INSTRUCTIONS and SKILL.md updated; tools/list 9.02k -> 9.41k tokens (+0.4k, 64 tools).
 
 ### C. Fewer tools (medium effort; mostly cuts ToolSearch noise and the schemas loaded)
 62 tools could become about 30 by merging into action enums: pages (5 tools to 1), components (5 to 2), undo/redo (2 to 1), exports (export_react,
