@@ -79,7 +79,7 @@ const SVG = `Vectors and SVG (icons, logos, illustrations, charts):
 - Not allowed (stripped on write): <style>, <script>, <foreignObject>, <use>/<image> pointing outside the file, remote url(), event handlers. Style with attributes or inline style="" instead. <image> only takes data:image/png|jpeg|gif|webp;base64.
 - Edit an existing vector with set_attrs on the child node id (d, fill, stroke, stroke-width, transform, cx/cy/r, viewBox...; null removes). update_styles is for HTML/CSS properties only. get_tree with depth 3 or more lists the svg children (path, circle, g... with their d/fill/stroke) so you can target a single shape.
 - import_svg places an SVG you already have (markup in svg, or file inside the repo linked with tokens link_repo); each shape becomes an editable node. Name the root with name.
-- A path the user drew with the Pen tool is `<svg data-shape="path">` holding one `<path>`; get_tree shows `path:<id> d:...` on the svg line, so set_attrs the d on that path id. The svg box and viewBox are fitted to the path when the user edits it, so after you change d, keep the viewBox/box big enough (or set overflow visible, which is the default).
+- A path the user drew with the Pen tool is an svg with data-shape="path" holding one path element; get_tree shows "path:<id> d:..." on the svg line, so set_attrs the d on that path id. Its svg box and viewBox are refitted when the user edits it, so when you change d keep the shape inside the viewBox (overflow is visible, so slight overshoot still renders).
 - Text inside an svg inherits font-family from the board; set text-anchor/dominant-baseline with set_attrs to align it.
 - Review the result with get_screenshot: thin strokes and tiny viewBoxes are the usual defects.`;
 
