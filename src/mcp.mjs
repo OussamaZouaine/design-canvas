@@ -940,23 +940,23 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text(await requestComputed(meta.id, node_ids, props));
   }));
 
-  server.registerTool('export_react', {
-    description: 'Return an artboard as a React component (JSX). Each inline style becomes one Tailwind arbitrary-property class, so it renders like the canvas; replace them with your own utilities or tokens afterwards. Needs Tailwind in the target app.',
-    inputSchema: { ...pid, artboard_id: z.string() },
-  }, safe(({ project_id, artboard_id }) => {
+  // Code handed to a codebase, three renderings behind one `format` (PNG stays in `export`, which writes a file).
+  server.registerTool('export_code', {
+    description: 'Return code for a design. format react: an artboard (artboard_id) as a React component where each inline style becomes one Tailwind arbitrary-property class, so it renders like the canvas (replace them with your own utilities or tokens afterwards; needs Tailwind in the target app). html: an artboard as a standalone HTML document (tokens as :root properties, Google Fonts linked). jsx: ONE node and its subtree (node_id) in the react style, to hand over a single component.',
+    inputSchema: { ...pid, format: z.enum(['react', 'html', 'jsx']), artboard_id: z.string().optional(), node_id: z.string().optional() },
+  }, safe(({ project_id, format, artboard_id, node_id }) => {
     const { meta, doc } = target(project_id);
+    if (format === 'jsx') {
+      need('export_code', 'jsx', { node_id }, 'node_id');
+      if (doc.getArtboard(node_id)) throw new Error(`${node_id} is an artboard: use format react`);
+      const info = doc.nodeInfo(node_id);
+      const el = parse(info.html, { comment: false }).firstChild;
+      return text(nodeToReact(el, info.name || info.tag, doc.theme, usedProjectFonts(info.html, meta.fonts).map(productionUrl)));
+    }
+    need('export_code', format, { artboard_id }, 'artboard_id');
     const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
-    return text(artboardToReact(ab, doc.theme, usedProjectFonts(ab.html, meta.fonts).map(productionUrl)));
-  }));
-
-  server.registerTool('export_html', {
-    description: 'Return a standalone HTML document for an artboard, ready to save or hand to a codebase.',
-    inputSchema: { ...pid, artboard_id: z.string() },
-  }, safe(({ project_id, artboard_id }) => {
-    const { meta, doc } = target(project_id);
-    const ab = doc.getArtboard(artboard_id);
-    if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
+    if (format === 'react') return text(artboardToReact(ab, doc.theme, usedProjectFonts(ab.html, meta.fonts).map(productionUrl)));
     // Google Fonts the board uses: in production they load from Google, so link them (the canvas serves local copies).
     const fontLinks = usedProjectFonts(ab.html, meta.fonts).map((f) => `<link rel="stylesheet" href="${productionUrl(f)}">`).join('');
     const clean = ab.html.replace(/ data-pid="[^"]*"/g, '');
@@ -969,7 +969,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
 
-  // ---- find / subtree export / file export (small tools; kept in one block) ---------------
+  // ---- find (small tool) ---------------
   server.registerTool('find_nodes', {
     description: 'Search nodes by text or name (query), tag, data-component or an inline-style substring (e.g. "flex", "oklch(0.6"). Filters combine with AND. Returns ids with short labels, so you can pick edit targets without reading a whole tree. Scope with artboard_id or page; default is the whole project.',
     inputSchema: {
@@ -984,17 +984,6 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       limit: z.number().int().min(1).max(100).optional(),
     },
   }, safe(({ project_id, ...opts }) => text(findNodes(target(project_id).doc, opts))));
-
-  server.registerTool('get_jsx', {
-    description: 'React + Tailwind (JSX) for ONE node and its subtree, same output style as export_react (each inline style becomes an arbitrary-property class). Use it to hand a single component to a codebase instead of the whole board.',
-    inputSchema: { ...pid, node_id: z.string() },
-  }, safe(({ project_id, node_id }) => {
-    const { meta, doc } = target(project_id);
-    if (doc.getArtboard(node_id)) throw new Error(`${node_id} is an artboard: use export_react`);
-    const info = doc.nodeInfo(node_id);
-    const el = parse(info.html, { comment: false }).firstChild;
-    return text(nodeToReact(el, info.name || info.tag, doc.theme, usedProjectFonts(info.html, meta.fonts).map(productionUrl)));
-  }));
 
   // PNG only: the render round-trip yields a bitmap. A PDF would need the browser's print pipeline
   // (and would lose the exact canvas rendering), so it is deliberately not offered.
