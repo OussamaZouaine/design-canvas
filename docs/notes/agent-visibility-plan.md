@@ -1,5 +1,8 @@
 # Agent visibility + MCP work plan (analysis 2026-10-24)
 
+> **Agent visibility plan complete (phases 0-6, 2026-10-24).** Phases: 0 token branch landed; 1 server call log (`agentlog.mjs`, `/calls`, SSE `call`); 2 stateful `/mcp` sessions + agent identity/colour + per-session project binding (`sessions.mjs`); 3 live agent feed UI (Agents tab, header chips, tinted highlights); 4 Activity runs by agent with step diffs + revert (`stepdiff.mjs`); 5 cost/efficiency dashboard (`efficiency.mjs`, `/efficiency`); 6 several agents: soft claims, changes by others, pause (`claims.mjs`). Details of each are in its section below.
+> **Open items:** (1) Claude Code restart behaviour with stateful sessions was only checked with the SDK client, not a real Claude Code restart (stale ids are now served statelessly instead of 404). (2) No real Claude eval run (`examples/evals/run.mjs run`) since phases 2-6; the dashboard-vs-meter check was scripted. (3) Phase 6 was verified with scripted HTTP clients, not two live Claude Code windows. (4) The user-edit read marker is still per project, not per agent. (5) Pause state is in memory only. (6) Plan items not done: token groups D/E (`insert_component`/`<x-clone>` push, `response_format`).
+
 Goal: see what Claude (or any MCP agent) does on the canvas, live and afterwards, and keep its work cheap in tokens and turns.
 One phase per session, in order. Each phase ends with tests (`pnpm test`), a live check, and a line in `PROGRESS.md`.
 
@@ -85,12 +88,9 @@ Implemented: `src/efficiency.mjs` (pure; `analyze(calls)` -> sessions (per agent
 - Show the fixed costs too: tools/list size, `get_guide` size. Export the numbers so `examples/evals` can read them.
 - Done = dashboard matches an eval run's meter numbers within ~10%.
 
-### Phase 6: Several agents on one project
-- Soft claims: an agent writing to a board claims it for ~60 s; another agent's write gets a one-line note (`board X is being
-  edited by <agent>`), not an error. Shown on the canvas as a coloured board outline.
-- `get_changes` / `start` report other agents' changes since this agent's last read (journal already has the author).
-- Optional: user "pause agent" button that makes that session's writes return a polite error until resumed.
-- Done = two agents editing different boards at once without overwrites; same board gets the note.
+### Phase 6: Several agents on one project — DONE 2026-10-24
+`src/claims.mjs` (claims 60 s per board per project, latest writer takes over; pause by agent id). `log()` in `mcp.mjs` calls `claims.touch`; a conflict leaves a `note:` that the register wrapper appends to that call's result (AsyncLocalStorage, so parallel calls and `batch` work); paused agents' writes (`kindOf` = write, incl. `start`) get `PAUSED_MESSAGE`. `get_changes`/`start` return `others: [{agent, did, boards}]` only when non-empty (marker `Session.seen`, starts at "now" on first bind). SSE `claims` + `GET /api/p/<id>/claims`; canvas outline `engine.setClaims`; Agents tab Pause/Resume, chip shows "paused". Tests `test/claims.test.mjs`. Checked live: two HTTP clients (`?agent=alpha|beta`) on one project, note on the shared board, none on separate boards, pause refused writes then resume, outlines + buttons in the browser (dark and light).
+Limits: user hand-edit changes still use one shared marker per project (`ui.lastRead`), so a second agent's read can hide them from the first; paused state is in memory (lost on restart); a claim holder is one agent per board.
 
 ## 4. Gotchas to keep in mind
 - Stateful sessions die on server restart; make sure re-init works before relying on bound projects (fallback: active project).
