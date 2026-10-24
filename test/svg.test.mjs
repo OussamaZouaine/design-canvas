@@ -75,3 +75,13 @@ test('extractSvg trims prolog and rejects files without an svg', () => {
   assert.equal(extractSvg('<?xml version="1.0"?><!DOCTYPE svg><!-- c --><svg a="1"></svg>\n'), '<svg a="1"></svg>');
   assert.throws(() => extractSvg('<html></html>'), /no <svg>/);
 });
+
+test('normalizing keeps overflow:visible on an svg (it is not the default there)', () => {
+  const doc = new Doc(null);
+  doc.normalize = () => true;
+  const ab = doc.createArtboard({ name: 'N' });
+  doc.writeHtml(ab.id, '<svg viewBox="0 0 4 4" style="overflow:visible;width:4px;height:4px"></svg><div style="overflow:visible;width:4px">x</div>');
+  const h = doc.getArtboard(ab.id).html;
+  assert.match(h, /<svg[^>]*overflow: ?visible/);
+  assert.doesNotMatch(h, /<div[^>]*overflow/);
+});
