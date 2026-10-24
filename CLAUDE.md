@@ -47,6 +47,7 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 - `src/fonts.mjs` Google Fonts: `use_font` / `list_fonts` fetch the latin woff2 once into `data/fonts/` (gitignored), served at `/api/fonts/<slug>/<file>`, recorded in `meta.fonts`; browser side is `web/src/canvas/fonts.ts`.
 - `src/svg.mjs` vectors are plain inline `<svg>` in board HTML. `sanitizeSvg` (run in `Doc._prepare`) strips style/script/foreignObject/external hrefs and remote `url()`;
   `Doc.setAttrs` + tool `set_attrs` edit geometry/paint attributes (allowlist `SVG_ATTRS`); `import_svg` places a file/markup; guide topic `svg`.
+  UI: shape tools (R/O/L) write `<svg data-shape=...>` via `web/src/canvas/shapes.ts`; Inspector `Vector` section posts the `attrs` canvas action. Use `isNodeEl` (not `instanceof HTMLElement`) for anything that finds nodes: SVG elements are SVGElement.
 - `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `export_code` format `jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
 - `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.
