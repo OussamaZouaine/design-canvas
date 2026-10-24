@@ -48,11 +48,13 @@ export class SessionMap {
     this.ttl = ttl;
     this.now = now;
     this.map = new Map(); // id -> { session, transport, server }
+    this.revived = new Map(); // id -> Session for ids this process never issued (see revive)
   }
 
   add(session, transport, server) { session.lastSeen = this.now(); this.map.set(session.id, { session, transport, server }); }
 
-  // Unknown or expired -> undefined, which the HTTP layer answers with 404 so the client re-initializes.
+  // Unknown or expired -> undefined. The HTTP layer then serves the request statelessly via revive() (answering 404
+  // does not help: the SDK client surfaces it as an error and never re-initializes on its own).
   get(id) {
     const e = this.map.get(id);
     if (!e) return undefined;
@@ -61,7 +63,19 @@ export class SessionMap {
     return e;
   }
 
+  // A client still holds an id from before a server restart or an idle expiry. Rebuild a lightweight Session under the
+  // SAME id so its identity suffix and colour stay stable and a project it binds sticks for the rest of this process.
+  // The label (?agent=) is re-applied each time; clientInfo is lost with the old initialize, so the name falls back to 'agent'.
+  revive(id, label = null) {
+    let session = this.revived.get(id);
+    if (!session) { session = new Session(id, label); this.revived.set(id, session); }
+    else if (label) session.setLabel(label);
+    session.lastSeen = this.now();
+    return session;
+  }
+
   remove(id) {
+    this.revived.delete(id);
     const e = this.map.get(id);
     if (!e) return;
     this.map.delete(id);
@@ -71,6 +85,7 @@ export class SessionMap {
   // Drop idle sessions. Called on a timer so abandoned clients do not accumulate servers forever.
   sweep() {
     for (const [id, e] of [...this.map]) if (this.now() - e.session.lastSeen > this.ttl) this.remove(id);
+    for (const [id, x] of [...this.revived]) if (this.now() - x.lastSeen > this.ttl) this.revived.delete(id);
   }
 
   get size() { return this.map.size; }
