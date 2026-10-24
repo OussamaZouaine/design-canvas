@@ -8,7 +8,7 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 - Sprig design system project has 46 artboards (light + dark): foundations, components, 14 pages, 9 system sheets
   (buttons, forms, feedback, navigation, data display, states, icons, theme & tokens, data table density).
 - Plan status: every phase of the build plan that fits the Node stack is done (see `docs/ROADMAP.md`). Tools, panels (Layers,
-  Design, Theme, MCP), pages, components, references, token sync, normalization, lint, export are all in. 86 unit tests pass.
+  Design, Theme, MCP), pages, components, references, token sync, normalization, lint, export are all in. 207 unit tests pass.
 - Dev server is **stopped** (restart it to load `src/` changes); run `pnpm build:web` then `pnpm start`. No git remote configured, nothing pushed.
 - Git history is on `main`, small commits per concern (`git log --oneline`).
 
@@ -115,7 +115,13 @@ Order is a suggestion; the user decides.
    Open: run the evals (`examples/evals`) A/B on the branch before merging; D and E ideas in the plan.
 8. **Agent visibility: DONE (phases 0-6).** See an MCP agent's work live and in history, cheaply. Summary + open items in `docs/notes/agent-visibility-plan.md`.
    Phase 6 (several agents on one project): `src/claims.mjs` (soft board claims ~60 s, per project; user pause per agent id), notes appended in the `registerTool` wrapper (`mcp.mjs`, AsyncLocalStorage scratch), `others` in `get_changes`/`start` (marker `Session.seen`), SSE `claims`, `POST /api/agents/pause`, `GET /api/p/<id>/claims`; UI outline `engine.setClaims`, pause/resume in `AgentsPanel`. Tests `test/claims.test.mjs`.
-9. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+9. **Vector support (SVG), 3 sessions:** session 1 DONE 2026-10-24: `src/svg.mjs` (SVG sanitizer called from `Doc._prepare`: drops style/script/foreignObject/
+   animate-href, only in-document `url(#id)`/`#href`, `data:image` raster only), MCP tools `set_attrs` (Doc.setAttrs, allowlist of geometry/paint attributes) and
+   `import_svg` (markup or a file inside the linked repo; goes through `writeWithNotes` so fit boards grow), `get_tree` names svg shapes by tag with d/fill/stroke,
+   guide topic `svg`. Tests `test/svg.test.mjs`. **Restart Claude Code + the server to see the tools.** Next: session 2 = shape tools (rect/ellipse/line) in
+   `web/src/canvas/edit.ts` + Inspector fill/stroke fields (set_attrs-style `attr` canvas action, one undo step); session 3 = pen tool + path editing (anchor/handle
+   overlay rewriting `d`), later boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
+10. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
