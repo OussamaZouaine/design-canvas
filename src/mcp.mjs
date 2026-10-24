@@ -114,15 +114,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return { lint: fresh.slice(0, 5).join('\n') + (extra > 0 ? `\n+${extra} more` : '') };
   };
   // write_html / create_artboard html: write, then report dialect, lint (new issues only) and layout notes.
-  const writeWithNotes = async (meta, doc, targetId, html, mode, tool) => {
+  const writeWithNotes = async (meta, doc, targetId, html, mode, tool, quiet = false) => {
     // before/after write siblings, so the target's own subtree is not what changes: lint the new nodes alone.
     const sibling = mode === 'before' || mode === 'after';
-    const before = sibling ? [] : lintIds(doc, [targetId]);
+    const before = sibling || quiet ? [] : lintIds(doc, [targetId]);
     const created = doc.writeHtml(targetId, html, mode);
     log(meta, doc, tool, targetId);
-    const after = lintIds(doc, sibling ? created : [targetId]);
     // Dialect notes only for projects that normalize (new ones); Sprig and imports keep their own style.
     const dialect = meta.normalize ? dialectNote(html) : '';
+    // quiet (inside a batch): the batch reports layout once at its end, so no per-write lint or layout round-trip.
+    if (quiet) return { created, ...(dialect && { dialect }) };
+    const after = lintIds(doc, sibling ? created : [targetId]);
     return { created, ...(dialect && { dialect }), ...newLint(before, after), ...(await layoutNote(meta, doc, targetId)) };
   };
   const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
@@ -138,6 +140,87 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     if (!include) return rest;
     return { ...rest, html: html.length > HTML_CAP ? `${html.slice(0, HTML_CAP)}… [truncated, ${html.length} chars total: use get_tree or a child node_id]` : html };
   };
+
+  // The edit tools' logic, by tool name. Both registerTool (one call per tool) and `batch` (many ops in one call)
+  // dispatch here, so there is a single copy of each behaviour. A handler takes the tool's arguments and returns
+  // the plain result (string or object); `viaEdit` wraps it as MCP text. `quiet` (batch) skips the per-op layout
+  // and lint notes, because the batch reports layout once at its end.
+  const edits = {
+    async create_artboard({ project_id, ...a }, quiet) {
+      const { meta, doc } = target(project_id);
+      const { page_id, height_mode = 'fit', html, ...rest } = a;
+      const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
+      log(meta, doc, 'create_artboard', ab.id);
+      // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
+      const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, follow the brief section of get_guide, post a brief in chat and pass it to log_prompt.' };
+      const written = html ? await writeWithNotes(meta, doc, ab.id, html, undefined, 'write_html', quiet) : {};
+      return { ...ab, ...written, ...reminder };
+    },
+    async write_html({ project_id, target_id, html, mode }, quiet) {
+      const { meta, doc } = target(project_id);
+      return writeWithNotes(meta, doc, target_id, html, mode, 'write_html', quiet);
+    },
+    async insert_component({ project_id, target_id, name, variant, slots = {}, mode }) {
+      const { meta, doc } = target(project_id);
+      const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      const tag = `<x-component name="${attr(name)}"${variant ? ` variant="${attr(variant)}"` : ''}${Object.entries(slots).map(([k, v]) => ` slot-${attr(k)}="${attr(v)}"`).join('')}></x-component>`;
+      const created = doc.writeHtml(target_id, tag, mode);
+      log(meta, doc, 'insert_component', created);
+      return { created };
+    },
+    async move_node({ project_id, node_id, target_id, position }) {
+      const { meta, doc } = target(project_id);
+      const from = doc.parentOf(node_id); // read before the move: afterwards the old parent is gone from the node
+      doc.moveNode(node_id, target_id, position);
+      log(meta, doc, 'move_node', node_id);
+      // Both parents change size/layout, so name them (Paper's affectedParents) for the follow-up check.
+      const to = doc.parentOf(node_id);
+      return { ok: true, affectedParents: [...new Set([from, to].filter(Boolean))] };
+    },
+    async set_flags({ project_id, node_ids, hidden, locked }) {
+      const { meta, doc } = target(project_id);
+      doc.setFlags(node_ids, { hidden, locked });
+      log(meta, doc, 'set_flags', node_ids);
+      return 'ok';
+    },
+    async update_styles({ project_id, node_ids, styles }, quiet) {
+      const { meta, doc } = target(project_id);
+      const before = quiet ? [] : lintIds(doc, node_ids);
+      doc.updateStyles(node_ids, styles);
+      log(meta, doc, 'update_styles', node_ids);
+      const note = quiet ? {} : await layoutNote(meta, doc, node_ids[0]);
+      const dialect = meta.normalize ? dialectStylesNote(styles) : '';
+      const lint = quiet ? {} : newLint(before, lintIds(doc, node_ids));
+      return note.layout || dialect || lint.lint ? { ok: true, ...note, ...lint, ...(dialect && { dialect }) } : 'ok';
+    },
+    async set_text_content({ project_id, node_id, text: t }) {
+      const { meta, doc } = target(project_id);
+      doc.setText(node_id, t);
+      log(meta, doc, 'set_text_content', node_id);
+      return 'ok';
+    },
+    async rename_nodes({ project_id, names }) {
+      const { meta, doc } = target(project_id);
+      doc.renameNodes(names);
+      log(meta, doc, 'rename_nodes', Object.keys(names));
+      return 'ok';
+    },
+    async duplicate_nodes({ project_id, ids }) {
+      const { meta, doc } = target(project_id);
+      const { created, idMap } = doc.duplicateNodes(ids, { withMap: true });
+      log(meta, doc, 'duplicate_nodes', created);
+      // idMap: original id -> copy id for every descendant, so the copy can be edited without a get_tree.
+      return { created, descendantIdMap: idMap };
+    },
+    async delete_nodes({ project_id, ids }) {
+      const { meta, doc } = target(project_id);
+      log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
+      doc.journal.at(-1).ids = ids;
+      doc.deleteNodes(ids);
+      return 'ok';
+    },
+  };
+  const viaEdit = (name) => safe(async (args) => text(await edits[name](args)));
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
@@ -287,16 +370,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
       html: z.string().max(200_000).optional().describe('First content for the board, written in the same call (saves a write_html turn).'),
     },
-  }, safe(async ({ project_id, ...a }) => {
-    const { meta, doc } = target(project_id);
-    const { page_id, height_mode = 'fit', html, ...rest } = a;
-    const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
-    log(meta, doc, 'create_artboard', ab.id);
-    // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
-    const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, follow the brief section of get_guide, post a brief in chat and pass it to log_prompt.' };
-    const written = html ? await writeWithNotes(meta, doc, ab.id, html, undefined, 'write_html') : {};
-    return text({ ...ab, ...written, ...reminder });
-  }));
+  }, viaEdit('create_artboard'));
 
   server.registerTool('write_html', {
     description:
@@ -307,10 +381,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       html: z.string().max(200_000),
       mode: z.enum(['append', 'prepend', 'replace', 'before', 'after']).optional(),
     },
-  }, safe(async ({ project_id, target_id, html, mode }) => {
-    const { meta, doc } = target(project_id);
-    return text(await writeWithNotes(meta, doc, target_id, html, mode, 'write_html'));
-  }));
+  }, viaEdit('write_html'));
 
   server.registerTool('get_tree', {
     description: 'Compact outline, one line per node: id, kind (frame/text/image/svg), name, layout, key styles, [n] hidden children. Far cheaper than HTML: read this first, then get_node_info only for the node you will change. node_id is an artboard or node (default: every artboard, but one line per artboard when the project has more than 8); query finds nodes by name or text.',
@@ -382,14 +453,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       slots: z.record(z.string(), z.string()).optional(),
       mode: z.enum(['append', 'prepend', 'before', 'after']).optional(),
     },
-  }, safe(({ project_id, target_id, name, variant, slots = {}, mode }) => {
-    const { meta, doc } = target(project_id);
-    const attr = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    const tag = `<x-component name="${attr(name)}"${variant ? ` variant="${attr(variant)}"` : ''}${Object.entries(slots).map(([k, v]) => ` slot-${attr(k)}="${attr(v)}"`).join('')}></x-component>`;
-    const created = doc.writeHtml(target_id, tag, mode);
-    log(meta, doc, 'insert_component', created);
-    return text({ created });
-  }));
+  }, viaEdit('insert_component'));
 
   server.registerTool('detach_component', {
     description: 'Turn one component instance into ordinary nodes so it stops following its master.',
@@ -414,25 +478,12 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   server.registerTool('move_node', {
     description: 'Move a node (keeping its ids) before / after another node, or into it as first (start) or last (end) child. target_id may be an artboard with start or end. Reorders layers.',
     inputSchema: { ...pid, node_id: z.string(), target_id: z.string(), position: z.enum(['before', 'after', 'start', 'end']).optional().describe('Default end (last child of the target).') },
-  }, safe(({ project_id, node_id, target_id, position }) => {
-    const { meta, doc } = target(project_id);
-    const from = doc.parentOf(node_id); // read before the move: afterwards the old parent is gone from the node
-    doc.moveNode(node_id, target_id, position);
-    log(meta, doc, 'move_node', node_id);
-    // Both parents change size/layout, so name them (Paper's affectedParents) for the follow-up check.
-    const to = doc.parentOf(node_id);
-    return text({ ok: true, affectedParents: [...new Set([from, to].filter(Boolean))] });
-  }));
+  }, viaEdit('move_node'));
 
   server.registerTool('set_flags', {
     description: 'Hide / show nodes (hidden) or lock / unlock them (locked: nobody can edit a locked node or what is inside it until it is unlocked).',
     inputSchema: { ...pid, node_ids: z.array(z.string()).min(1), hidden: z.boolean().optional(), locked: z.boolean().optional() },
-  }, safe(({ project_id, node_ids, hidden, locked }) => {
-    const { meta, doc } = target(project_id);
-    doc.setFlags(node_ids, { hidden, locked });
-    log(meta, doc, 'set_flags', node_ids);
-    return text('ok');
-  }));
+  }, viaEdit('set_flags'));
 
   server.registerTool('link_repo', {
     description: 'Link the project to the folder of your code (an absolute path) so tokens can be imported from its stylesheets. Pass null to unlink. Files are only ever read from inside this folder.',
@@ -709,58 +760,27 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       node_ids: z.array(z.string()).min(1),
       styles: z.record(z.string(), z.union([z.string(), z.number(), z.null()])),
     },
-  }, safe(async ({ project_id, node_ids, styles }) => {
-    const { meta, doc } = target(project_id);
-    const before = lintIds(doc, node_ids);
-    doc.updateStyles(node_ids, styles);
-    log(meta, doc, 'update_styles', node_ids);
-    const note = await layoutNote(meta, doc, node_ids[0]);
-    const dialect = meta.normalize ? dialectStylesNote(styles) : '';
-    const lint = newLint(before, lintIds(doc, node_ids));
-    return text(note.layout || dialect || lint.lint ? { ok: true, ...note, ...lint, ...(dialect && { dialect }) } : 'ok');
-  }));
+  }, viaEdit('update_styles'));
 
   server.registerTool('set_text_content', {
     description: 'Replace the text inside a node (plain text; markup is escaped).',
     inputSchema: { ...pid, node_id: z.string(), text: z.string() },
-  }, safe(({ project_id, node_id, text: t }) => {
-    const { meta, doc } = target(project_id);
-    doc.setText(node_id, t);
-    log(meta, doc, 'set_text_content', node_id);
-    return text('ok');
-  }));
+  }, viaEdit('set_text_content'));
 
   server.registerTool('rename_nodes', {
     description: 'Give nodes or artboards friendly names. Map of id to new name.',
     inputSchema: { ...pid, names: z.record(z.string(), z.string()) },
-  }, safe(({ project_id, names }) => {
-    const { meta, doc } = target(project_id);
-    doc.renameNodes(names);
-    log(meta, doc, 'rename_nodes', Object.keys(names));
-    return text('ok');
-  }));
+  }, viaEdit('rename_nodes'));
 
   server.registerTool('duplicate_nodes', {
     description: 'Duplicate nodes (placed right after the original) or artboards. Returns new ids.',
     inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
-  }, safe(({ project_id, ids }) => {
-    const { meta, doc } = target(project_id);
-    const { created, idMap } = doc.duplicateNodes(ids, { withMap: true });
-    log(meta, doc, 'duplicate_nodes', created);
-    // idMap: original id -> copy id for every descendant, so the copy can be edited without a get_tree.
-    return text({ created, descendantIdMap: idMap });
-  }));
+  }, viaEdit('duplicate_nodes'));
 
   server.registerTool('delete_nodes', {
     description: 'Delete nodes or whole artboards.',
     inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
-  }, safe(({ project_id, ids }) => {
-    const { meta, doc } = target(project_id);
-    log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
-    doc.journal.at(-1).ids = ids;
-    doc.deleteNodes(ids);
-    return text('ok');
-  }));
+  }, viaEdit('delete_nodes'));
 
   // Screenshot as MCP content parts (image, plus a note when cut). Shared by get_screenshot and finish_working.
   const shoot = async (meta, doc, { artboard_id, node_id, scale, max_width, max_height = 1600, format = 'jpeg' }) => {
