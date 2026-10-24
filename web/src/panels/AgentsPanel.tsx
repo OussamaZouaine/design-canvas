@@ -1,4 +1,4 @@
-import { Eye, Pencil, ShieldCheck } from 'lucide-react';
+import { Eye, Pause, Pencil, Play, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { idsInArgs, kindOf, presenceOf, useAgents, type CallEntry, type CallKind, type PendingCall, type Presence } from '@/store/agents';
@@ -43,6 +43,11 @@ function useBoardOf() {
   };
 }
 
+// Pause / resume one agent: the server makes its writes return a polite error until resumed (reads keep working).
+// Fire and forget; the SSE `claims` event brings back the new paused list for every tab.
+const setPaused = (agent: string, paused: boolean) =>
+  void fetch('/api/agents/pause', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent, paused }) }).catch(() => {});
+
 const dur = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 function Dot({ color, pulse }: { color: string; pulse?: boolean }) {
@@ -56,6 +61,8 @@ export function AgentsPanel() {
   const pending = useAgents((s) => s.pending);
   const { filterAgent, setFilterAgent, writesOnly, setWritesOnly, followAgent, setFollowAgent } = useAgents();
   const presence = usePresence();
+  const paused = useAgents((s) => s.paused);
+  const claims = useAgents((s) => s.claims);
   const engine = useCanvas((s) => s.engine);
   const boardOf = useBoardOf();
 
@@ -71,6 +78,31 @@ export function AgentsPanel() {
 
   return (
     <div className="p-3">
+      {presence.length > 0 && (
+        <ul className="mb-3 space-y-0.5" aria-label="Agents on this project">
+          {presence.map((a) => {
+            const isPaused = paused.includes(a.id), held = claims.filter((c) => c.agent.id === a.id);
+            return (
+              <li key={a.id} className="flex items-center gap-2 rounded-md px-1.5 py-1">
+                <Dot color={a.color} pulse={a.pending} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{a.name}</span>
+                  <small className="block truncate text-muted-foreground">
+                    {isPaused ? 'Paused: writes are refused' : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? a.tool : 'Idle'}
+                  </small>
+                </span>
+                <button
+                  onClick={() => setPaused(a.id, !isPaused)} aria-pressed={isPaused}
+                  aria-label={isPaused ? `Resume ${a.name}` : `Pause ${a.name}`} title={isPaused ? 'Resume this agent' : 'Pause this agent'}
+                  className="flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted"
+                >
+                  {isPaused ? <Play className="size-3" /> : <Pause className="size-3" />}{isPaused ? 'Resume' : 'Pause'}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <select aria-label="Filter by agent" value={filterAgent ?? ''} onChange={(e) => setFilterAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md border bg-background px-1 text-[11px]">
           <option value="">All agents</option>

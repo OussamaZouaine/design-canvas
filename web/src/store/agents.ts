@@ -36,7 +36,13 @@ export function kindOf(tool: string, args: Record<string, unknown> = {}): CallKi
   return 'read';
 }
 
+// A board an agent wrote to in the last ~60 s, and the agents the user paused (ids). Pushed by the server (SSE `claims`).
+export interface Claim { board: string; name: string; agent: AgentInfo; until: number }
+
 interface AgentsState {
+  claims: Claim[];
+  paused: string[];
+  setClaims: (claims: Claim[], paused: string[]) => void;
   calls: CallEntry[]; // newest first
   pending: PendingCall[];
   filterAgent: string | null; // agent id, null = all
@@ -52,10 +58,11 @@ interface AgentsState {
   reset: () => void;
 }
 
-const empty = { calls: [] as CallEntry[], pending: [] as PendingCall[] };
+const empty = { calls: [] as CallEntry[], pending: [] as PendingCall[], claims: [] as Claim[], paused: [] as string[] };
 
 export const useAgents = create<AgentsState>((set) => ({
   ...empty,
+  setClaims: (claims, paused) => set({ claims, paused }),
   filterAgent: null,
   writesOnly: false,
   followAgent: null,
