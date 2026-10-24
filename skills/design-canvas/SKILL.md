@@ -20,7 +20,7 @@ If this file and the guide ever disagree, the guide wins.
 
 ## Not in the guide's main path
 
-- **Rebuild from a picture:** `add_reference_image` (absolute path) puts it on a locked board; build your own artboard at the same
+- **Rebuild from a picture:** `references` action `add` (absolute path) puts it on a locked board; build your own artboard at the same
   width next to it, then loop `compare_to_reference` and fix the worst areas (3 rounds, or stop under about 5% different).
   `capture_url` copies a live public page into an artboard plus a reference screenshot.
 - **Fonts:** `list_fonts`, then `use_font` before using a Google family (system stacks need no loading).

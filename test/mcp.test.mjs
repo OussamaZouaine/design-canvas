@@ -391,3 +391,18 @@ test('history: undo and redo through one tool, with steps', async () => {
   assert.equal(await h.call('history', { project_id: pid, action: 'undo', steps: 20 }) !== undefined, true);
   h.close();
 });
+
+test('references: add from a file path and delete through one tool', async () => {
+  const h = await harness();
+  const { pid } = await withBoard(h);
+  const file = path.join(os.tmpdir(), `dc-ref-${Date.now()}.png`);
+  // 1x1 transparent PNG: enough for the magic-number and size checks.
+  fs.writeFileSync(file, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+  const added = await h.call('references', { project_id: pid, action: 'add', path: file });
+  assert.ok(added.reference_id && added.artboard_id, JSON.stringify(added));
+  assert.equal(await h.call('references', { project_id: pid, action: 'delete', reference_id: added.reference_id }), 'ok');
+  assert.match(await h.call('references', { project_id: pid, action: 'add' }), /references add needs path/);
+  assert.match(await h.call('references', { project_id: pid, action: 'delete' }), /references delete needs reference_id/);
+  fs.rmSync(file, { force: true });
+  h.close();
+});
