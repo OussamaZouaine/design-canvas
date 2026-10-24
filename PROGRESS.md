@@ -46,6 +46,10 @@ takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet 
   Base UI menus ignore synthetic JS click events; test them with a real click.
 - Not checked: the list view of the home page, and "New page" on a project with many pages.
 
+## UI upgrade (2026-10-24)
+Graphite tinted tokens, translucent grouped toolbar, one-row icon tabs, grouped top bar, filled fields, inset list rows,
+theme-switch transition suppression, and fixes for press/hover motion that never animated (v4 `scale`/`translate`). Details: `docs/notes/ui-system.md`.
+
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not
