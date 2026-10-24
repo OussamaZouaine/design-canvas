@@ -22,7 +22,13 @@ const INLINE = new Set(['span', 'b', 'strong', 'i', 'em', 'a', 'br', 'small', 's
 export type Kind = 'artboard' | 'frame' | 'text' | 'image' | 'svg' | 'component';
 
 // Only nodes with an id (data-pid) are layers; wrapper-less text runs and decorative markup are skipped.
-export const kidsOf = (el: Element) => [...el.children].filter((c): c is HTMLElement => c instanceof HTMLElement && !!c.dataset.pid);
+// An element that is a layer. SVG elements are not HTMLElements (<svg>, <path>... are SVGElement), so a plain
+// `instanceof HTMLElement` check would make every vector unselectable and invisible to the Layers panel.
+// Typed as HTMLElement because the callers only use what both share (dataset, closest, style, getAttribute).
+export const isNodeEl = (n: unknown): n is HTMLElement => (n instanceof HTMLElement || n instanceof SVGElement) && !!(n as HTMLElement).dataset?.pid;
+
+// A shape from the shape tools is one layer: its inner <rect>/<ellipse>/<line> is an implementation detail.
+export const kidsOf = (el: Element) => (el.hasAttribute('data-shape') ? [] : [...el.children].filter(isNodeEl));
 
 export function kindOf(el: HTMLElement): Kind {
   if (el.dataset.component) return 'component';
