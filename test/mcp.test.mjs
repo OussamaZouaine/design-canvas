@@ -168,14 +168,14 @@ test('get_basic_info omits empty pages and references', async () => {
   h.close();
 });
 
-test('tools/list carries no $schema keys and a short project_id description', async () => {
+test('tools/list carries no $schema keys and project_id only on the tools that pick a project', async () => {
   const h = await harness();
   const { tools } = await h.client.listTools();
   assert.ok(tools.length > 30);
   assert.doesNotMatch(JSON.stringify(tools), /\$schema/);
-  const withPid = tools.filter((t) => t.inputSchema.properties?.project_id?.description);
-  assert.ok(withPid.length > 30);
-  for (const t of withPid) assert.equal(t.inputSchema.properties.project_id.description, 'Default: active project', t.name);
+  // Sessions are bound to a project, so project_id left the schemas (saves tools/list tokens) except where a project is picked.
+  const withPid = tools.filter((t) => t.inputSchema.properties?.project_id).map((t) => t.name);
+  assert.deepEqual(withPid, ['project']);
   // The schemas still validate: an optional-only tool is callable with no arguments.
   assert.ok(await h.call('list_projects'));
   h.close();
