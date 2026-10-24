@@ -264,25 +264,6 @@ export class Doc {
     };
   }
 
-  treeSummary(artboardId, depth = 6) {
-    const ab = this.getArtboard(artboardId);
-    if (!ab) throw new Error(`Artboard ${artboardId} not found`);
-    const lines = [`${ab.name} [${ab.id}] ${ab.width}x${ab.height}`];
-    const walk = (el, d) => {
-      for (const c of el.childNodes) {
-        if (c instanceof HTMLElement) {
-          const label = c.getAttribute('data-name') || c.rawTagName;
-          const text = c.childNodes.length === 1 && !(c.childNodes[0] instanceof HTMLElement)
-            ? ` "${c.text.trim().slice(0, 40)}"` : '';
-          lines.push(`${'  '.repeat(d)}${label} [${c.getAttribute('data-pid')}]${text}`);
-          if (d < depth) walk(c, d + 1);
-        }
-      }
-    };
-    walk(this._artboardRoot(ab), 1);
-    return lines.join('\n');
-  }
-
   // Compact one-line-per-node outline, much cheaper to read than HTML. Shape:
   //   N5 frame "Sidebar" col w:240 bg:oklch(...) gap:16 [6]      ([n] = children not shown)
   // `id` may be an artboard or a node; with a `query` it lists every node whose name or text matches.

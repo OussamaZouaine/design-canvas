@@ -743,11 +743,6 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text(action === 'undo' ? { reverted: done } : { redone: done });
   }));
 
-  server.registerTool('get_tree_summary', {
-    description: 'Indented outline of an artboard with node ids and short text, for choosing edit targets.',
-    inputSchema: { ...pid, artboard_id: z.string(), depth: z.number().min(1).max(12).optional() },
-  }, safe(({ project_id, artboard_id, depth }) => text(target(project_id).doc.treeSummary(artboard_id, depth))));
-
   server.registerTool('get_node_info', {
     description: 'Details of one node: tag, inline style, text and child ids. Set include_html to also get its HTML (capped at 2000 chars); get_tree is cheaper for structure.',
     inputSchema: { ...pid, node_id: z.string(), include_html: z.boolean().optional() },
