@@ -69,6 +69,8 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // Record a design action in the project's Activity (what Claude did, per artboard).
   // `anyId` is one id or a list. Besides the Activity entry this also feeds get_changes (journal)
   // and lights up the touched nodes on the canvas until finish_working or a timeout.
+  // While a batch runs, `batchBoards` collects the boards its ops touched so the layout is checked once at the end.
+  let batchBoards = null;
   const log = (meta, doc, tool, anyId, detail) => {
     const ids = [].concat(anyId ?? []);
     const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
@@ -76,7 +78,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     doc.record('claude', tool, ids);
     // Remember which boards were edited so finish_working can check that their content still fits.
     const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
-    for (const id of ids) { const a = doc.artboardOf(id); if (a) set.add(a.id); }
+    for (const id of ids) { const a = doc.artboardOf(id); if (a) { set.add(a.id); batchBoards?.add(a.id); } }
     if (tool !== 'delete_nodes') highlight?.(meta.id, ids);
   };
   // Ask the browser whether these boards' content fits their frames. `fit` boards are grown to their content
@@ -781,6 +783,42 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     description: 'Delete nodes or whole artboards.',
     inputSchema: { ...pid, ids: z.array(z.string()).min(1) },
   }, viaEdit('delete_nodes'));
+
+  // Many edits in one call: the main lever against turn count (every turn re-reads the whole conversation).
+  // Ops run in order through the same handlers as the single tools; the first error stops the run (no rollback).
+  const BATCH_TOOLS = Object.keys(edits);
+  server.registerTool('batch', {
+    description: 'Run 3+ independent edits in ONE call instead of one turn each. Ops run in order against one project; one result line per op. Allowed tools: ' + BATCH_TOOLS.join(', ') + '. Stops at the first error (earlier ops stay applied: use undo). Layout is checked once at the end and reported only if something does not fit; per-op lint is not run (use lint or get_screenshot review).',
+    inputSchema: {
+      ...pid,
+      ops: z.array(z.object({ tool: z.enum(BATCH_TOOLS), args: z.record(z.string(), z.any()) })).min(1).max(30).describe('Each op: tool name plus the arguments of that tool (without project_id).'),
+    },
+  }, safe(async ({ project_id, ops }) => {
+    const { meta, doc } = target(project_id);
+    const lines = [];
+    batchBoards = new Set();
+    try {
+      for (const [i, op] of ops.entries()) {
+        const label = `${i + 1} ${op.tool}`;
+        // A per-op project would let one batch write into another project, and the layout check below covers one.
+        if ('project_id' in op.args) { lines.push(label + ' error: project_id is not allowed in an op, set it on the batch'); break; }
+        try {
+          const r = await edits[op.tool]({ ...op.args, project_id: meta.id }, true);
+          lines.push(r === 'ok' ? label + ' ok' : label + ' ' + (typeof r === 'string' ? r : JSON.stringify(r)));
+        } catch (e) {
+          lines.push(label + ' error: ' + e.message);
+          break;
+        }
+      }
+      const failed = lines.at(-1).includes(' error: ');
+      if (failed) lines.push(lines.length === 1 ? `Stopped at op 1; nothing was applied.` : `Stopped at op ${lines.length}; ops 1-${lines.length - 1} stay applied (no rollback; undo reverts them).`);
+      const r = batchBoards.size ? await checkLayout(meta, doc, [...batchBoards]) : null;
+      if (r && !r.text.startsWith('ok')) lines.push('layout: ' + r.text);
+      return { isError: failed, content: [{ type: 'text', text: lines.join('\n') }] };
+    } finally {
+      batchBoards = null;
+    }
+  }));
 
   // Screenshot as MCP content parts (image, plus a note when cut). Shared by get_screenshot and finish_working.
   const shoot = async (meta, doc, { artboard_id, node_id, scale, max_width, max_height = 1600, format = 'jpeg' }) => {
