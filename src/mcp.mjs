@@ -26,7 +26,7 @@ import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } fr
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
 Your first turn: call get_guide() and list_projects() together. get_guide returns the whole method (workflow, brief, type, layout, review) in one call; read it before any design call. Before the first write of a new design post a short brief in chat, then pass it as log_prompt.brief. Only get_guide({topic:"mobile"}) is separate.
 Be economical with turns: send independent tool calls together in one turn. If tools are deferred, load the core set in ONE ToolSearch select: get_guide, list_projects, log_prompt, create_artboard, write_html, update_styles, get_tree, lint, get_screenshot, finish_working.
-Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard -> write_html / update_styles -> lint -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
+Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard (with html for the first group) -> write_html / update_styles (new lint issues come back in the result) -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>. Call get_guide for the full guide.`;
 
 // Compact JSON: every result is re-read on each later turn, and pretty-printing adds ~35-40% for nothing the model needs.
@@ -97,6 +97,33 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const ab = doc.artboardOf(anyId);
     const r = ab ? await checkLayout(meta, doc, [ab.id]) : null;
     return r && !r.text.startsWith('ok') ? { layout: r.text } : {};
+  };
+  // Lint of each id, never throwing: auto-lint is a courtesy and must not turn a successful write into an error.
+  const lintIds = (doc, ids) => {
+    const out = [];
+    for (const id of ids) { try { out.push(...doc.lint(id)); } catch { /* node gone or not lintable */ } }
+    return out;
+  };
+  // Only issues that were not there before the write, so the common case (nothing new) adds no tokens.
+  // At most 5 lines, then "+N more". Returns {} when silent so it can be spread into a result.
+  const newLint = (before, after) => {
+    const seen = new Set(before);
+    const fresh = after.filter((i) => !seen.has(i));
+    if (!fresh.length) return {};
+    const extra = fresh.length - 5;
+    return { lint: fresh.slice(0, 5).join('\n') + (extra > 0 ? `\n+${extra} more` : '') };
+  };
+  // write_html / create_artboard html: write, then report dialect, lint (new issues only) and layout notes.
+  const writeWithNotes = async (meta, doc, targetId, html, mode, tool) => {
+    // before/after write siblings, so the target's own subtree is not what changes: lint the new nodes alone.
+    const sibling = mode === 'before' || mode === 'after';
+    const before = sibling ? [] : lintIds(doc, [targetId]);
+    const created = doc.writeHtml(targetId, html, mode);
+    log(meta, doc, tool, targetId);
+    const after = lintIds(doc, sibling ? created : [targetId]);
+    // Dialect notes only for projects that normalize (new ones); Sprig and imports keep their own style.
+    const dialect = meta.normalize ? dialectNote(html) : '';
+    return { created, ...(dialect && { dialect }), ...newLint(before, after), ...(await layoutNote(meta, doc, targetId)) };
   };
   const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
   // basicInfo without the fields that carry no information yet: a single implicit page and an empty reference list.
@@ -248,7 +275,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('create_artboard', {
-    description: 'Create an empty artboard (a frame on the canvas). Returns its id. By default the board is height_mode "fit": height is a MINIMUM and the board grows with its content, so nothing is ever cut off. Use "fixed" only when the height must be exact (a 844px phone mockup).',
+    description: 'Create an empty artboard (a frame on the canvas). Returns its id. Pass html to write the first content in the same call (same result as write_html: created ids plus any dialect / lint / layout lines). By default the board is height_mode "fit": height is a MINIMUM and the board grows with its content, so nothing is ever cut off. Use "fixed" only when the height must be exact (a 844px phone mockup).',
     inputSchema: {
       ...pid,
       name: z.string().optional(),
@@ -258,20 +285,22 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       page_id: z.string().optional().describe('Page for the new board (default: the page chosen with set_page, else the first).'),
       x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
       y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
+      html: z.string().max(200_000).optional().describe('First content for the board, written in the same call (saves a write_html turn).'),
     },
-  }, safe(({ project_id, ...a }) => {
+  }, safe(async ({ project_id, ...a }) => {
     const { meta, doc } = target(project_id);
-    const { page_id, height_mode = 'fit', ...rest } = a;
+    const { page_id, height_mode = 'fit', html, ...rest } = a;
     const ab = doc.createArtboard({ ...rest, heightMode: height_mode, page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'create_artboard', ab.id);
     // Soft nudge only (never a refusal): a project with no recorded brief usually means the design method was skipped.
     const reminder = meta.brief ? {} : { reminder: 'No brief is recorded for this project. For a new design, follow the brief section of get_guide, post a brief in chat and pass it to log_prompt.' };
-    return text({ ...ab, ...reminder });
+    const written = html ? await writeWithNotes(meta, doc, ab.id, html, undefined, 'write_html') : {};
+    return text({ ...ab, ...written, ...reminder });
   }));
 
   server.registerTool('write_html', {
     description:
-      'Add HTML into an artboard or next to a node (target_id). mode: append (default, last child), prepend (first child), replace (swap children), before / after (siblings of a node). <x-clone node-id="N5"></x-clone> inside the html inserts a copy of that node without resending its markup. Inline styles only. Returns ids of the new top-level nodes.',
+      'Add HTML into an artboard or next to a node (target_id). mode: append (default, last child), prepend (first child), replace (swap children), before / after (siblings of a node). <x-clone node-id="N5"></x-clone> inside the html inserts a copy of that node without resending its markup. Inline styles only. Returns ids of the new top-level nodes, plus dialect / lint (new issues only) / layout lines when something needs fixing.',
     inputSchema: {
       ...pid,
       target_id: z.string().describe('Artboard id (A#) or node id (N#)'),
@@ -280,11 +309,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     },
   }, safe(async ({ project_id, target_id, html, mode }) => {
     const { meta, doc } = target(project_id);
-    const created = doc.writeHtml(target_id, html, mode);
-    log(meta, doc, 'write_html', target_id);
-    // Dialect notes only for projects that normalize (new ones); Sprig and imports keep their own style.
-    const dialect = meta.normalize ? dialectNote(html) : '';
-    return text({ created, ...(dialect && { dialect }), ...(await layoutNote(meta, doc, target_id)) });
+    return text(await writeWithNotes(meta, doc, target_id, html, mode, 'write_html'));
   }));
 
   server.registerTool('get_tree', {
@@ -675,7 +700,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id, node_id, include_html }) => text(withHtml(target(project_id).doc.nodeInfo(node_id), include_html))));
 
   server.registerTool('update_styles', {
-    description: 'Merge CSS properties (camelCase or kebab-case) into one or more nodes. Use null to remove a property.',
+    description: 'Merge CSS properties (camelCase or kebab-case) into one or more nodes. Use null to remove a property. Adds a lint line only when the change introduces new lint issues.',
     inputSchema: {
       ...pid,
       node_ids: z.array(z.string()).min(1),
@@ -683,11 +708,13 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     },
   }, safe(async ({ project_id, node_ids, styles }) => {
     const { meta, doc } = target(project_id);
+    const before = lintIds(doc, node_ids);
     doc.updateStyles(node_ids, styles);
     log(meta, doc, 'update_styles', node_ids);
     const note = await layoutNote(meta, doc, node_ids[0]);
     const dialect = meta.normalize ? dialectStylesNote(styles) : '';
-    return text(note.layout || dialect ? { ok: true, ...note, ...(dialect && { dialect }) } : 'ok');
+    const lint = newLint(before, lintIds(doc, node_ids));
+    return text(note.layout || dialect || lint.lint ? { ok: true, ...note, ...lint, ...(dialect && { dialect }) } : 'ok');
   }));
 
   server.registerTool('set_text_content', {
