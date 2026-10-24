@@ -118,8 +118,10 @@ Order is a suggestion; the user decides.
 9. **Vector support (SVG), 3 sessions:** session 1 DONE 2026-10-24: `src/svg.mjs` (SVG sanitizer called from `Doc._prepare`: drops style/script/foreignObject/
    animate-href, only in-document `url(#id)`/`#href`, `data:image` raster only), MCP tools `set_attrs` (Doc.setAttrs, allowlist of geometry/paint attributes) and
    `import_svg` (markup or a file inside the linked repo; goes through `writeWithNotes` so fit boards grow), `get_tree` names svg shapes by tag with d/fill/stroke,
-   guide topic `svg`. Tests `test/svg.test.mjs`. **Restart Claude Code + the server to see the tools.** Next: session 2 = shape tools (rect/ellipse/line) in
-   `web/src/canvas/edit.ts` + Inspector fill/stroke fields (set_attrs-style `attr` canvas action, one undo step); session 3 = pen tool + path editing (anchor/handle
+   guide topic `svg`. Tests `test/svg.test.mjs`. **Restart Claude Code + the server to see the tools.** Session 2 DONE 2026-10-24: toolbar tools Rectangle (R), Ellipse (O), Line (L) (`engine.drawShape`, `CanvasEditor.addShape`, markup in `web/src/canvas/shapes.ts`); a shape is
+   one absolutely positioned `<svg data-shape>` with paint on the svg root (the engine selects the root when an inner shape is clicked); Inspector `Vector` section (fill, stroke, width,
+   cap, join, dash) sends the `attrs` canvas action (-> `Doc.setAttrs`); SVG elements are now selectable/draggable/in Layers (`isNodeEl` in `lib/htmlTree.ts`: they are not HTMLElements);
+   normalize keeps `overflow:visible` on svg. Next: session 3 = pen tool + path editing (anchor/handle
    overlay rewriting `d`), later boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
 10. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
