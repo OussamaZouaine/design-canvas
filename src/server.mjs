@@ -16,6 +16,8 @@ import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
 import { HeadlessWorker } from './headless.mjs';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { Session, SessionMap } from './sessions.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -25,7 +27,9 @@ const HOST = '127.0.0.1';
 // Build output of the React client (web/, `pnpm build:web`). It is the only UI the server serves.
 const WEB = path.join(ROOT, 'web', 'dist');
 
-const store = new ProjectStore(path.join(ROOT, 'data'));
+// DC_DATA lets a second instance (tests, a spare port) run on its own data folder instead of sharing data/.
+const DATA = process.env.DC_DATA || path.join(ROOT, 'data');
+const store = new ProjectStore(DATA);
 
 // One-time migration: the pre-projects version kept a single design.json in the repo root.
 const legacy = path.join(ROOT, 'design.json');
@@ -53,7 +57,7 @@ const ui = {
 };
 const meter = new Meter(); // per-tool token estimates, shown by /api/status
 // Per-call MCP log; its events ride the store's listener list so they reach tabs like every other event.
-const calls = new CallLog({ dataDir: path.join(ROOT, 'data'), emit: (t, p) => store._emit(t, p) });
+const calls = new CallLog({ dataDir: DATA, emit: (t, p) => store._emit(t, p) });
 
 // Send the document as a delta. Each client remembers the HTML it last received per artboard;
 // unchanged boards go out with html:null and the browser reuses its copy. A single MCP write
@@ -123,16 +127,60 @@ const requestComputed = (projectId, nodeIds, props) => askBrowser(projectId, 'co
 
 // Light up the nodes Claude just touched in every tab of the project. They clear on
 // finish_working, or on their own after 10 s so a forgotten call never leaves them stuck.
-function highlight(projectId, ids) {
+function highlight(projectId, ids, agent = null) {
   clearTimeout(ui.agentTimers.get(projectId));
-  for (const c of ui.clients) if (c.projectId === projectId) send(c.res, 'agent', { ids: ids.slice(0, 40) });
+  for (const c of ui.clients) if (c.projectId === projectId) send(c.res, 'agent', { ids: ids.slice(0, 40), ...(agent && { agent }) });
   if (ids.length) ui.agentTimers.set(projectId, setTimeout(() => highlight(projectId, []), 10_000));
 }
 
 // Google Fonts the server downloaded (use_font). Shared by all projects, so a family is fetched once.
-const fonts = new FontCache(path.join(ROOT, 'data', 'fonts'));
+const fonts = new FontCache(path.join(DATA, 'fonts'));
 
 const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port: PORT };
+
+// Sessions of the MCP endpoint. Each client gets its own McpServer so identity and project binding live with it.
+const sessions = new SessionMap();
+setInterval(() => sessions.sweep(), 60_000).unref();
+
+// An unknown/expired session id is answered with 404: per the MCP spec the client then re-initializes (this is also
+// what happens after a server restart, when the whole map is gone).
+const rpcError = (res, code, message, status) => {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ jsonrpc: '2.0', error: { code, message }, id: null }));
+};
+
+async function handleMcp(req, res, url) {
+  const sid = req.headers['mcp-session-id'];
+  if (sid) {
+    const entry = sessions.get(String(sid));
+    if (!entry) return rpcError(res, -32001, 'Session not found', 404);
+    if (req.method === 'DELETE') { await entry.transport.handleRequest(req, res); sessions.remove(entry.session.id); return; }
+    const body = req.method === 'POST' ? await readJson(req) : undefined;
+    return entry.transport.handleRequest(req, res, body);
+  }
+  if (req.method !== 'POST') { res.writeHead(405).end(); return; }
+  const body = await readJson(req);
+  // New client: `initialize` opens a session. The optional ?agent=<name> in the registered URL labels it (Claude Code
+  // subagents share one connection, so the label is the only way to tell them apart).
+  if (isInitializeRequest(body)) {
+    const session = new Session(null, url.searchParams.get('agent'));
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: randomUUID,
+      onsessioninitialized: (id) => { session.id = id; sessions.add(session, transport, mcp); },
+    });
+    const mcp = createMcpServer({ ...mcpDeps, session });
+    transport.onclose = () => { if (session.id) sessions.map.delete(session.id); };
+    await mcp.connect(transport);
+    return transport.handleRequest(req, res, body);
+  }
+  // Old stateless clients (no session header, no initialize): serve the request on a throwaway server that falls back
+  // to the active project, exactly as before sessions existed.
+  const mcp = createMcpServer(mcpDeps);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  res.on('close', () => { transport.close(); mcp.close(); });
+  await mcp.connect(transport);
+  await transport.handleRequest(req, res, body);
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -259,15 +307,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    // --- MCP endpoint (stateless: fresh server + transport per request) ---
+    // --- MCP endpoint (stateful: one server + transport per client session, see src/sessions.mjs) ---
     if (url.pathname === '/mcp') {
-      if (req.method !== 'POST') { res.writeHead(405).end(); return; }
-      const body = await readJson(req);
-      const mcp = createMcpServer(mcpDeps);
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      res.on('close', () => { transport.close(); mcp.close(); });
-      await mcp.connect(transport);
-      await transport.handleRequest(req, res, body);
+      await handleMcp(req, res, url);
       return;
     }
 
