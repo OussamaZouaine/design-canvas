@@ -29,7 +29,10 @@ export function normalizeElement(el) {
 
   for (const p of FLEX_ONLY) if (!isFlex) st.delete(p);
   for (const p of GRID_OR_FLEX) if (!isFlex && !isGrid) st.delete(p);
-  for (const [p, v] of Object.entries(DEFAULTS)) if (st.get(p) === v) st.delete(p);
+  // overflow:visible is the CSS default except on a nested <svg> (the browser's own sheet clips it), where it is the
+  // one thing that stops a stroke from being cut in half at the edge of the box, so it must stay.
+  const isSvg = el.tagName?.toLowerCase() === 'svg';
+  for (const [p, v] of Object.entries(DEFAULTS)) if (st.get(p) === v && !(isSvg && p === 'overflow')) st.delete(p);
   if (isFlex && st.get('flex-direction') === 'row') st.delete('flex-direction'); // row is the default
   if (isFlex && st.get('flex-wrap') === 'nowrap') st.delete('flex-wrap');
 
