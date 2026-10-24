@@ -22,7 +22,9 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 
 ## Layout
 - `src/server.mjs` HTTP routes, SSE (`/events`, `/events?project=<id>`), delta doc sync, comments API.
-- `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there.
+- `src/mcp.mjs` MCP tools (get_guide, projects, design editing, comments, tokens). Read the GUIDE text there. Low-traffic families are single action-enum tools
+  (flat schema, per-action `need()` checks): `pages`, `components` (+ separate `insert_component`), `references`, `project`, `tokens`, `history`, `export_code`; the
+  edit tools also live in the `edits` map shared with `batch`. Activity/log names stay the old per-operation ones (`create_page`...). Keep new tools out unless hot.
 - `src/store.mjs` `ProjectStore`: projects, snapshots (versions), activity log, comments, active project.
 - `src/doc.mjs` `Doc`: one project's artboards; sanitizes HTML, assigns `data-pid` ids, atomic debounced saves.
 - `src/guide.mjs` the design guide served by `get_guide({topic})` (start, brief, type, layout, review, mobile). The process and taste rules

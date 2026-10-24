@@ -72,10 +72,13 @@ Average eval run (`turns-cut`, 6 briefs): ~23 turns, ~640k cache-read, ~50k cach
    on every new design. **DONE**: `start({prompt, project(id|name), description, brief, artboard})` in `src/mcp.mjs`; existing projects also return open comments, user changes and boards; guide step 0-2, INSTRUCTIONS and SKILL.md updated; tools/list 9.02k -> 9.41k tokens (+0.4k, 64 tools).
 
 ### C. Fewer tools (medium effort; mostly cuts ToolSearch noise and the schemas loaded)
-62 tools could become about 30 by merging into action enums: pages (5 tools to 1), components (5 to 2), undo/redo (2 to 1), exports (export_react,
-export_html, get_jsx, export to 1 with `format`), references (3 to 1), tokens (get_design_tokens/get_design_system/export_tokens), and
-`get_tree_summary` folded into `get_tree`. Keep the hot path (write_html, update_styles, get_tree, get_screenshot) as separate, well-described tools.
-Trade-off: an action-enum tool has one shared description, so the edge-case wording gets thinner. Measure it with the evals.
+**DONE** (7 commits on `perf/mcp-tokens`): 64 tools -> 46, tools/list 9411 -> 8402 tokens (bytes/4, -1.0k). One flat schema per tool (`action`/`format` enum, all other fields
+optional, per-action required checks via `need()` that name the action in the error), not a discriminated union, so the JSON schema stays small. Logged Activity names are unchanged.
+- `pages` (create/set/update/delete/move_boards) replaces 5 tools: 9411 -> 9154. `components` (set/detach/delete/sheet) replaces 4: -> 8986. `export_code` (format react|html|jsx) replaces export_react, export_html, get_jsx: -> 8864.
+- `history` (undo/redo) -> 8788 with `references` (add/delete); `project` (open/update/save_version/delete; open and delete need an explicit project_id) -> 8699; `tokens` (extract/export/import/link_repo) -> 8503; `get_tree_summary` removed -> 8402.
+- `get_tree_summary` gave only an indented name+short-text outline of one board; `get_tree` (node_id = board, depth up to 10) already shows ids, kind, layout and text, so it was dropped and `Doc.treeSummary` deleted.
+- Deliberately NOT merged: `insert_component` (hot, cheap), `compare_to_reference` and `capture_url` (distinct jobs, long descriptions), `set_tokens` (the writer; `get_design_system` stays the reader of the stored theme), `create_project`/`list_projects` (opened every session), `export` (PNG, writes a file), `resolve_comment`, fonts, layout tools, the hot path.
+- Not verified: the evals A/B (they cost real Claude runs). Trade-off to watch there: the shared descriptions are thinner per action. Existing Claude Code sessions must be restarted to see the new names.
 
 ### D. Less output (experiments; check against evals)
 - Push `insert_component` and `<x-clone>` harder in the guide. They are the only real cut to output tokens.
