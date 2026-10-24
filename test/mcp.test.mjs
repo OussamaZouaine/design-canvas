@@ -10,11 +10,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../src/mcp.mjs';
 import { ProjectStore } from '../src/store.mjs';
 
-async function harness() {
+async function harness(deps = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dc-mcp-'));
   const store = new ProjectStore(dir);
   const ui = { selection: new Map(), currentPage: new Map(), lastRead: new Map(), touched: new Map() };
-  const server = createMcpServer({ store, ui, port: 0 });
+  const server = createMcpServer({ store, ui, port: 0, ...deps });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: 'test', version: '0' });
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -33,6 +33,58 @@ async function harness() {
   };
   return { store, client, call, close };
 }
+
+// Stubs for the browser round-trips: a 1x1 JPEG-ish data URL and a measure that reports "fits" or an overflow.
+const fakeShot = async () => 'data:image/jpeg;base64,/9j/4AAQ';
+// extraWidth > 0 makes the content wider than the board (a problem a fit board cannot fix by growing).
+const measure = (extraWidth = 0) => async (_id, boards) => boards.map((b) => ({
+  id: b.id, width: b.width, height: b.height, fit: b.fit, contentWidth: b.width + extraWidth, contentHeight: b.height, outside: [], clipped: [],
+}));
+
+test('get_screenshot review:true returns lint, a layout line only on problems, then the image', async () => {
+  const shots = [];
+  const h = await harness({ requestScreenshot: async (...a) => { shots.push(a); return fakeShot(); }, requestMeasure: measure() });
+  const { pid, board } = await withBoard(h);
+  const run = async () => (await h.client.callTool({ name: 'get_screenshot', arguments: { project_id: pid, artboard_id: board, review: true } })).content;
+  let c = await run();
+  assert.equal(c[0].type, 'text');
+  assert.match(c[0].text, /^lint: /);
+  assert.doesNotMatch(c[0].text, /layout:/);
+  assert.equal(c.at(-1).type, 'image');
+  // Without the flag the result is just the image, as before.
+  c = (await h.client.callTool({ name: 'get_screenshot', arguments: { project_id: pid, artboard_id: board } })).content;
+  assert.deepEqual(c.map((p) => p.type), ['image']);
+  h.close();
+  // A layout problem adds the layout line; no tab (measure rejects) stays silent.
+  const bad = await harness({ requestScreenshot: fakeShot, requestMeasure: measure(500) });
+  const b = await withBoard(bad);
+  c = (await bad.client.callTool({ name: 'get_screenshot', arguments: { project_id: b.pid, artboard_id: b.board, review: true } })).content;
+  assert.match(c[0].text, /\nlayout: .*wide/);
+  bad.close();
+  const none = await harness({ requestScreenshot: fakeShot, requestMeasure: async () => { throw new Error('no tab'); } });
+  const n = await withBoard(none);
+  c = (await none.client.callTool({ name: 'get_screenshot', arguments: { project_id: n.pid, artboard_id: n.board, review: true } })).content;
+  assert.doesNotMatch(c[0].text, /layout:/);
+  none.close();
+});
+
+test('finish_working screenshot_artboard_id adds the image only when the layout is fine', async () => {
+  const ok = await harness({ requestScreenshot: fakeShot, requestMeasure: measure() });
+  const a = await withBoard(ok);
+  let r = await ok.client.callTool({ name: 'finish_working', arguments: { project_id: a.pid, screenshot_artboard_id: a.board } });
+  assert.deepEqual(r.content.map((p) => p.type), ['text', 'image']);
+  assert.equal(r.content[0].text, 'ok');
+  // Without the argument nothing changes.
+  r = await ok.client.callTool({ name: 'finish_working', arguments: { project_id: a.pid } });
+  assert.deepEqual(r.content.map((p) => p.type), ['text']);
+  ok.close();
+  const bad = await harness({ requestScreenshot: fakeShot, requestMeasure: measure(500) });
+  const b = await withBoard(bad);
+  r = await bad.client.callTool({ name: 'finish_working', arguments: { project_id: b.pid, screenshot_artboard_id: b.board } });
+  assert.deepEqual(r.content.map((p) => p.type), ['text']);
+  assert.match(r.content[0].text, /Not finished/);
+  bad.close();
+});
 
 test('instructions: first turn pairs get_guide with list_projects and names the core tools for one ToolSearch', async () => {
   const h = await harness();
