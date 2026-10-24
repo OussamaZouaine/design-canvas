@@ -61,7 +61,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // Resolve which project a call targets: explicit id, else the active one.
   const target = (project_id) => {
     const id = project_id ?? store.activeId;
-    if (!id) throw new Error('No active project. Call list_projects, then open_project or create_project.');
+    if (!id) throw new Error('No active project. Call list_projects, then project (action open) or create_project.');
     const p = store.get(id);
     if (!p || p.meta.deletedAt) throw new Error(`Project ${id} not found (or in Trash). Call list_projects.`);
     return p;
@@ -264,35 +264,32 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { name: z.string().min(1).max(80), description: z.string().max(300).optional() },
   }, safe(({ name, description }) => text(summary(store.create({ name, description, unique: 'error' })))));
 
-  server.registerTool('open_project', {
-    description: 'Make an existing project the active one and return its artboards.',
-    inputSchema: { project_id: z.string() },
-  }, safe(({ project_id }) => {
+  // Project admin (open / update / delete / checkpoint) in one low-traffic tool; create_project and list_projects stay
+  // separate because they open every session. open and delete require an explicit project_id: delete must never
+  // fall back to "the active project".
+  server.registerTool('project', {
+    description: 'Project admin. action open (project_id): make an existing project the active one and return its artboards. update (name, description and/or normalize; project_id default active): rename it, change its description, or switch HTML normalization on/off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written). save_version (optional label): save a named checkpoint to the version history, do this before big rewrites. delete (project_id): move it to Trash, the user can restore it from the home page; only when the user asks.',
+    inputSchema: {
+      ...pid,
+      action: z.enum(['open', 'update', 'save_version', 'delete']),
+      name: z.string().min(1).max(80).optional(),
+      description: z.string().max(300).optional(),
+      normalize: z.boolean().optional(),
+      label: z.string().max(80).optional(),
+    },
+  }, safe(({ project_id, action, name, description, normalize, label }) => {
+    if (action === 'open' || action === 'delete') need('project', action, { project_id }, 'project_id');
     const { meta, doc } = target(project_id);
-    store.setActive(meta.id);
-    return text({ ...summary(meta), ...leanInfo(doc) });
-  }));
-
-  server.registerTool('rename_project', {
-    description: 'Rename a project, change its description, and/or switch HTML normalization on or off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written).',
-    inputSchema: { ...pid, name: z.string().min(1).max(80).optional(), description: z.string().max(300).optional(), normalize: z.boolean().optional() },
-  }, safe(({ project_id, name, description, normalize }) => {
-    const { meta } = target(project_id);
+    if (action === 'open') {
+      store.setActive(meta.id);
+      return text({ ...summary(meta), ...leanInfo(doc) });
+    }
+    if (action === 'delete') { store.remove(meta.id); return text('Moved to Trash'); }
+    if (action === 'save_version') {
+      store.snapshot(meta.id, label || 'Saved version', { force: true });
+      return text('Version saved');
+    }
     return text({ ...summary(store.update(meta.id, { name, description, normalize })), normalize: !!meta.normalize });
-  }));
-
-  server.registerTool('delete_project', {
-    description: 'Move a project to Trash (the user can restore it from the home page). Only do this when the user asks.',
-    inputSchema: { project_id: z.string() },
-  }, safe(({ project_id }) => { store.remove(target(project_id).meta.id); return text('Moved to Trash'); }));
-
-  server.registerTool('save_version', {
-    description: 'Save a named checkpoint of the project to its version history. Do this before big rewrites.',
-    inputSchema: { ...pid, label: z.string().max(80).optional() },
-  }, safe(({ project_id, label }) => {
-    const { meta } = target(project_id);
-    store.snapshot(meta.id, label || 'Saved version', { force: true });
-    return text('Version saved');
   }));
 
   // ---- design tools ------------------------------------------------------
@@ -829,7 +826,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // existing project it also returns what the agent would otherwise fetch (open comments, user changes, boards).
   // The MCP is stateless and store.activeId is shared between sessions, so the resolved project_id is always returned.
   server.registerTool('start', {
-    description: 'Begin a request in ONE call (replaces list_projects + create_project/open_project + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (pass it on every later call); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
+    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (pass it on every later call); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
     inputSchema: {
       prompt: z.string().min(1).max(500).describe("The request in the user's own words (one short sentence)."),
       project: z.string().max(80).optional().describe('Project id or name (2-4 words, e.g. the repo or feature).'),
