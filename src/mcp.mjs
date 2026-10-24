@@ -197,9 +197,14 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('reply_comment', {
-    description: 'Reply to a comment (say what you changed). The user sees it on the pin.',
-    inputSchema: { ...pid, comment_id: z.string(), text: z.string().min(1).max(2000) },
-  }, safe(({ project_id, comment_id, text: t }) => { store.replyComment(target(project_id).meta.id, comment_id, { text: t, author: 'claude' }); return text('Replied'); }));
+    description: 'Reply to a comment (say what you changed). The user sees it on the pin. resolve: true also marks it resolved, so one call closes a handled comment.',
+    inputSchema: { ...pid, comment_id: z.string(), text: z.string().min(1).max(2000), resolve: z.boolean().optional() },
+  }, safe(({ project_id, comment_id, text: t, resolve }) => {
+    const { meta } = target(project_id);
+    store.replyComment(meta.id, comment_id, { text: t, author: 'claude' });
+    if (resolve) store.setCommentResolved(meta.id, comment_id, true);
+    return text(resolve ? 'Replied and resolved' : 'Replied');
+  }));
 
   server.registerTool('resolve_comment', {
     description: 'Mark a comment resolved once you have addressed it.',

@@ -24,3 +24,7 @@ test('guide text contains no hex colours', () => {
 test('workflow tells the agent to call get_guide and list_projects together', () => {
   assert.match(TOPICS.start, /get_guide and list_projects together/);
 });
+
+test('guide points at reply_comment with resolve instead of two calls', () => {
+  assert.match(TOPICS.start, /reply_comment with resolve: true/);
+});
