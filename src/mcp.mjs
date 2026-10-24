@@ -20,6 +20,7 @@ import { imageSize, estimateTokens } from './meter.mjs';
 import { summarizeArgs } from './agentlog.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
+import { anonymousSession } from './sessions.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -42,20 +43,32 @@ const safe = (fn) => async (args) => {
   }
 };
 
-// Shared optional argument on every design tool.
-const pid = { project_id: z.string().optional().describe('Default: active project') };
+// Optional project argument. A session is bound to its project by start / project open, so only the tools that pick
+// a project keep it in their schema (KEEP_PID); on the others the register wrapper turns the schema into a
+// passthrough object, so an explicit project_id still works but costs no tools/list tokens.
+const pid = { project_id: z.string().optional().describe('Default: the project this session opened') };
+const KEEP_PID = new Set(['project']);
 
-export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port }) {
+export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession() }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+  // clientInfo arrives once, on `initialize`: that is where the agent's name comes from.
+  server.server.oninitialized = () => session.setClient(server.server.getClientVersion());
+  // The project this session works in: bound by start / project open, else the shared active one (old clients).
+  const currentId = () => session.projectId ?? store.activeId;
+  const bind = (id) => { session.projectId = id; };
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
   // instead of touching 25 handlers. The wrapped handler behaves exactly like the original.
   const register = server.registerTool.bind(server);
-  server.registerTool = (name, config, handler) =>
-    register(name, config, async (...args) => {
+  server.registerTool = (name, config, handler) => {
+    if (config.inputSchema && !KEEP_PID.has(name)) {
+      const { project_id, ...rest } = config.inputSchema;
+      if (project_id) config = { ...config, inputSchema: z.object(rest).passthrough() };
+    }
+    return register(name, config, async (...args) => {
       const input = args[0];
-      // Project the call targets: explicit id, else the active one (resolved again after, since start/open can switch it).
-      const projectOf = () => input?.project_id ?? store.activeId;
+      // Project the call targets: explicit id, else the session's (resolved again after, since start/open can bind it).
+      const projectOf = () => input?.project_id ?? currentId();
       const t0 = Date.now();
       const callId = calls?.start(projectOf(), name, input);
       const result = await handler(...args);
@@ -63,18 +76,21 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
       try {
         calls?.finish({
-          id: callId, ms: Date.now() - t0, tool: name, project: projectOf() ?? null, ok: !result?.isError,
+          id: callId, ms: Date.now() - t0, tool: name, project: projectOf() ?? null, ok: !result?.isError, agent: agentOf(),
           ...(result?.isError ? { error: String(result.content?.[0]?.text ?? '').slice(0, 200) } : {}),
           tokens: estimateTokens(result), args: summarizeArgs(input),
         });
       } catch { /* the log must never break a tool call */ }
       return result;
     });
+  };
+  // Who is calling, as stored on call-log entries (id for joins, name + colour so the UI needs no second lookup).
+  const agentOf = () => { const { id, name, color } = session.agent; return { id, name, color }; };
   const url = (id) => `http://localhost:${port}/p/${id}`;
 
   // Resolve which project a call targets: explicit id, else the active one.
   const target = (project_id) => {
-    const id = project_id ?? store.activeId;
+    const id = project_id ?? currentId();
     if (!id) throw new Error('No active project. Call list_projects, then project (action open) or create_project.');
     const p = store.get(id);
     if (!p || p.meta.deletedAt) throw new Error(`Project ${id} not found (or in Trash). Call list_projects.`);
@@ -89,11 +105,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const ids = [].concat(anyId ?? []);
     const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
     store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
-    doc.record('claude', tool, ids);
+    doc.record(session.agent.id, tool, ids);
     // Remember which boards were edited so finish_working can check that their content still fits.
     const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
     for (const id of ids) { const a = doc.artboardOf(id); if (a) { set.add(a.id); batchBoards?.add(a.id); } }
-    if (tool !== 'delete_nodes') highlight?.(meta.id, ids);
+    if (tool !== 'delete_nodes') highlight?.(meta.id, ids, agentOf());
   };
   // Ask the browser whether these boards' content fits their frames. `fit` boards are grown to their content
   // here. Returns { text } with one line per problem, or null when no tab is open / it did not answer.
@@ -270,7 +286,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const all = store.list().sort((a, b) => b.updatedAt - a.updatedAt);
     // No url/description: the id is all a later call needs, and 18 projects of prose were ~1k tokens.
     return text({
-      active_project_id: store.activeId,
+      active_project_id: currentId(),
       projects: all.slice(0, 15).map((p) => ({ project_id: p.id, name: p.name, artboards: p.artboardCount, updated: new Date(p.updatedAt).toISOString() })),
       ...(all.length > 15 && { more: all.length - 15 }),
     });
@@ -279,13 +295,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   server.registerTool('create_project', {
     description: 'Create a project and make it active. Name it after what you are building (2-4 words, e.g. the repo or feature). Fails if a project with that name exists: open it instead.',
     inputSchema: { name: z.string().min(1).max(80), description: z.string().max(300).optional() },
-  }, safe(({ name, description }) => text(summary(store.create({ name, description, unique: 'error' })))));
+  }, safe(({ name, description }) => {
+    const meta = store.create({ name, description, unique: 'error' });
+    bind(meta.id);
+    return text(summary(meta));
+  }));
 
   // Project admin (open / update / delete / checkpoint) in one low-traffic tool; create_project and list_projects stay
   // separate because they open every session. open and delete require an explicit project_id: delete must never
   // fall back to "the active project".
   server.registerTool('project', {
-    description: 'Project admin. action open (project_id): make an existing project the active one and return its artboards. update (name, description and/or normalize; project_id default active): rename it, change its description, or switch HTML normalization on/off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written). save_version (optional label): save a named checkpoint to the version history, do this before big rewrites. delete (project_id): move it to Trash, the user can restore it from the home page; only when the user asks.',
+    description: 'Project admin. action open (project_id): make an existing project the one this session works in and return its artboards. update (name, description and/or normalize; default: the open project): rename it, change its description, or switch HTML normalization on/off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written). save_version (optional label): save a named checkpoint to the version history, do this before big rewrites. delete (project_id): move it to Trash, the user can restore it from the home page; only when the user asks.',
     inputSchema: {
       ...pid,
       action: z.enum(['open', 'update', 'save_version', 'delete']),
@@ -299,6 +319,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const { meta, doc } = target(project_id);
     if (action === 'open') {
       store.setActive(meta.id);
+      bind(meta.id);
       return text({ ...summary(meta), ...leanInfo(doc) });
     }
     if (action === 'delete') { store.remove(meta.id); return text('Moved to Trash'); }
@@ -664,7 +685,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { ...pid, screenshot_artboard_id: z.string().optional() },
   }, safe(async ({ project_id, screenshot_artboard_id }) => {
     const { meta, doc } = target(project_id);
-    highlight?.(meta.id, []);
+    highlight?.(meta.id, [], agentOf());
     const ids = [...(ui.touched.get(meta.id) ?? [])];
     const r = ids.length ? await checkLayout(meta, doc, ids) : null;
     // Clear only when the check ran: with no browser tab the boards stay "touched" for the next attempt.
@@ -754,7 +775,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id, action, steps = 1 }) => {
     const { meta, doc } = target(project_id);
     // logAction keeps the plain 'undo' / 'redo' names: the Activity panel and eval metrics read them.
-    const done = action === 'undo' ? doc.undo(steps) : doc.redo(steps, 'claude');
+    const done = action === 'undo' ? doc.undo(steps, session.agent.id) : doc.redo(steps, session.agent.id);
     if (!done.length) return text(`Nothing to ${action}`);
     store.logAction(meta.id, { tool: action, detail: done.join(', ') });
     return text(action === 'undo' ? { reverted: done } : { redone: done });
@@ -833,13 +854,14 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // start: the first call of a request. Resolve/create the project, log the prompt and optionally create the first
   // board, so the normal opening (list_projects + create/open + log_prompt + create_artboard) is one turn. For an
   // existing project it also returns what the agent would otherwise fetch (open comments, user changes, boards).
-  // The MCP is stateless and store.activeId is shared between sessions, so the resolved project_id is always returned.
+  // The resolved project is bound to this session (store.activeId is shared between sessions, so it is only a fallback).
   server.registerTool('start', {
-    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (pass it on every later call); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
+    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (later calls use this project automatically); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
     inputSchema: {
       prompt: z.string().min(1).max(500).describe("The request in the user's own words (one short sentence)."),
       project: z.string().max(80).optional().describe('Project id or name (2-4 words, e.g. the repo or feature).'),
       description: z.string().max(300).optional().describe('One line, used only when the project is created.'),
+      agent: z.string().max(40).optional().describe('Optional name for you (e.g. reviewer) so the user can tell agents apart.'),
       brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat.'),
       artboard: z.object({
         name: z.string().optional(), width: z.number().min(40).max(5000).optional(), height: z.number().min(40).max(10000).optional(),
@@ -847,7 +869,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
         html: z.string().max(200_000).optional(),
       }).optional(),
     },
-  }, safe(async ({ prompt, project, description, brief, artboard }) => {
+  }, safe(async ({ prompt, project, description, brief, artboard, agent }) => {
     let created = false, meta;
     if (project) {
       const wanted = project.trim();
@@ -856,10 +878,12 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       if (hit) meta = hit;
       else { meta = store.create({ name: wanted, description, unique: 'error' }); created = true; }
     } else {
-      if (!store.activeId) throw new Error('No active project. Pass project: a name for a new project, or an id/name of an existing one (list_projects to browse).');
+      if (!currentId()) throw new Error('No active project. Pass project: a name for a new project, or an id/name of an existing one (list_projects to browse).');
       meta = target(null).meta;
     }
     store.setActive(meta.id);
+    bind(meta.id);
+    if (agent) session.setLabel(agent);
     const { doc } = store.get(meta.id);
     const out = { project_id: meta.id, created };
     // Read before this request writes anything, so boards/changes describe the state the user left.
