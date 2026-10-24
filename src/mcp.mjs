@@ -21,6 +21,9 @@ import { summarizeArgs } from './agentlog.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
 import { anonymousSession } from './sessions.mjs';
+import { Claims, PAUSED_MESSAGE } from './claims.mjs';
+import { kindOf } from './efficiency.mjs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -49,16 +52,21 @@ const safe = (fn) => async (args) => {
 const pid = { project_id: z.string().optional().describe('Default: the project this session opened') };
 const KEEP_PID = new Set(['project']);
 
-export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession() }) {
+export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims() }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
   // clientInfo arrives once, on `initialize`: that is where the agent's name comes from.
   server.server.oninitialized = () => session.setClient(server.server.getClientVersion());
   // The project this session works in: bound by start / project open, else the shared active one (old clients).
   const currentId = () => session.projectId ?? store.activeId;
-  const bind = (id) => { session.projectId = id; };
+  const bind = (id) => {
+    session.projectId = id;
+    // First contact with this project: "changes by others since my last read" starts here, not at version 0.
+    if (!session.seen.has(id)) { const p = store.get(id); if (p) session.seen.set(id, p.doc.version); }
+  };
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
   // instead of touching 25 handlers. The wrapped handler behaves exactly like the original.
+  const callScope = new AsyncLocalStorage();
   const register = server.registerTool.bind(server);
   server.registerTool = (name, config, handler) => {
     if (config.inputSchema && !KEEP_PID.has(name)) {
@@ -71,7 +79,16 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const projectOf = () => input?.project_id ?? currentId();
       const t0 = Date.now();
       const callId = calls?.start(projectOf(), name, input, agentOf());
-      const result = await handler(...args);
+      // The user can pause an agent from the Agents panel: its writes (not its reads) get a polite error until resumed.
+      const paused = claims.isPaused(session.agent.id) && kindOf(name, input) === 'write';
+      // AsyncLocalStorage = a per-call scratch space that follows the async chain, so `log()` (deep inside a handler,
+      // possibly inside a batch) can leave claim-conflict notes for exactly this call even when calls run in parallel.
+      const scratch = { notes: new Set() };
+      const result = paused
+        ? { isError: true, content: [{ type: 'text', text: PAUSED_MESSAGE }] }
+        : await callScope.run(scratch, () => handler(...args));
+      // Only a real conflict adds text; the normal case returns the handler's result untouched (zero extra tokens).
+      if (scratch.notes.size && !result?.isError && Array.isArray(result?.content)) result.content.push({ type: 'text', text: [...scratch.notes].join('\n') });
       meter?.record(name, result);
       // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
       try {
@@ -107,6 +124,13 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     // The checkpoint taken just before this write is its "before" state: keep the diff on the Activity row (see stepdiff.mjs).
     store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail, agent: agentOf(), step: doc.captureStep() });
     doc.record(session.agent.id, tool, ids);
+    // Soft claim: writing to a board claims it for ~60 s. If another agent still holds it, this call's result gets a
+    // one-line note (not an error), so the two can coordinate instead of silently overwriting each other.
+    if (ab && !ab.generated) {
+      const other = claims.touch(meta.id, ab, agentOf());
+      // The agent id is a slug (safe to echo); the display name is untrusted client text and stays out of results.
+      if (other) callScope.getStore()?.notes.add(`note: board ${String(ab.name).slice(0, 40)} (${ab.id}) is being edited by ${other.id}; check get_changes before overwriting their work`);
+    }
     // Remember which boards were edited so finish_working can check that their content still fits.
     const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
     for (const id of ids) { const a = doc.artboardOf(id); if (a) { set.add(a.id); batchBoards?.add(a.id); } }
@@ -266,7 +290,25 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       now: c.ids.map((id) => { try { return doc.outline(id, { depth: 0 }).split('\n')[0]; } catch { return `${id} (deleted)`; } }),
     }));
     ui.lastRead.set(meta.id, doc.version);
-    return { version: doc.version, changes: changes.length ? changes : 'none' };
+    const others = othersChanges(meta, doc);
+    return { version: doc.version, changes: changes.length ? changes : 'none', ...(others && { others }) };
+  };
+  // What OTHER agents changed in this project since this agent last looked (the journal already records the author).
+  // Compact: one entry per agent with a count per tool and the boards touched; absent when nobody else wrote.
+  // The marker lives on the session, so two agents each get their own "since my last read". A session's first look
+  // starts at "now" (bind sets it), so a newcomer is not flooded with history it never saw.
+  const othersChanges = (meta, doc) => {
+    const from = session.seen.get(meta.id) ?? doc.version;
+    session.seen.set(meta.id, doc.version);
+    const by = new Map(); // actor -> { tools: Map(tool -> n), boards: Set }
+    for (const c of doc.changesSince(from)) {
+      if (c.actor === 'user' || c.actor === session.agent.id) continue;
+      const e = by.get(c.actor) ?? by.set(c.actor, { tools: new Map(), boards: new Set() }).get(c.actor);
+      e.tools.set(c.tool, (e.tools.get(c.tool) ?? 0) + 1);
+      for (const id of c.ids) { const b = doc.artboardOf(id); if (b) e.boards.add(b.id); else if (doc.getArtboard(id)) e.boards.add(id); }
+    }
+    if (!by.size) return null;
+    return [...by].map(([agent, e]) => ({ agent, did: [...e.tools].map(([t, n]) => (n > 1 ? `${t} x${n}` : t)).join(', '), boards: [...e.boards] }));
   };
   const viaEdit = (name) => safe(async (args) => text(await edits[name](args)));
   // Action-enum tools (pages, components, ...) keep one flat schema, so each action checks its own required fields here.
@@ -675,7 +717,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_changes', {
-    description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
+    description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. `others` lists what other agents changed meanwhile. Pass since_version to look further back; the returned version is what to pass next time.',
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
   }, safe(({ project_id, since_version }) => {
     const { meta, doc } = target(project_id);
@@ -858,7 +900,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // existing project it also returns what the agent would otherwise fetch (open comments, user changes, boards).
   // The resolved project is bound to this session (store.activeId is shared between sessions, so it is only a fallback).
   server.registerTool('start', {
-    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (later calls use this project automatically); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
+    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (later calls use this project automatically); for an existing project also its open comments, the changes the user (and other agents) made and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
     inputSchema: {
       prompt: z.string().min(1).max(500).describe("The request in the user's own words (one short sentence)."),
       project: z.string().max(80).optional().describe('Project id or name (2-4 words, e.g. the repo or feature).'),
@@ -896,6 +938,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       }
       const ch = userChanges(meta, doc);
       if (ch.changes !== 'none') out.changes = ch;
+      if (ch.others) out.others = ch.others;
       const boards = doc.data.artboards;
       if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
     } else ui.lastRead.set(meta.id, doc.version);
