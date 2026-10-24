@@ -256,7 +256,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'attrs', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -286,6 +286,8 @@ const canvasActions = {
   style: (p, b) => p.doc.updateStyles(b.ids, b.styles),
   // Inspector fields for vectors: SVG attributes (fill, stroke...) go through the same allowlist as the set_attrs tool.
   attrs: (p, b) => p.doc.setAttrs(b.ids, b.attrs),
+  // Path edit mode: d + viewBox + the svg's box in one undo step (see Doc.editVector).
+  vector: (p, b) => p.doc.editVector(b.edits),
   text: (p, b) => p.doc.setText(String(b.id), String(b.text)),
   undo: (p) => { if (!p.doc.undo(1, 'user').length) throw new Error('Nothing to undo'); },
   redo: (p) => { if (!p.doc.redo(1, 'user').length) throw new Error('Nothing to redo'); },

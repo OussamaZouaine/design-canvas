@@ -85,3 +85,38 @@ test('normalizing keeps overflow:visible on an svg (it is not the default there)
   assert.match(h, /<svg[^>]*overflow: ?visible/);
   assert.doesNotMatch(h, /<div[^>]*overflow/);
 });
+
+// Path editing rewrites d, viewBox and the svg box together; one undo must restore all of it.
+const PATH_SVG = '<svg data-shape="path" viewBox="0 0 44 44" preserveAspectRatio="none" fill="none" stroke="oklch(0.45 0.12 255)" stroke-width="2" style="position:absolute;left:10px;top:20px;width:44px;height:44px;overflow:visible"><path d="M2 2L42 42" vector-effect="non-scaling-stroke"/></svg>';
+
+test('editVector changes d, viewBox and the box in one undo step', () => {
+  const { doc, created, html } = setup(PATH_SVG);
+  const svgId = created[0];
+  const pathId = /<path[^>]*data-pid="([^"]+)"/.exec(html())?.[1] ?? /data-pid="([^"]+)"[^>]*d="M2/.exec(html())[1];
+  doc.editVector([
+    { id: pathId, attrs: { d: 'M2 2C10 10 20 20 60 60' } },
+    { id: svgId, attrs: { viewBox: '0 0 64 64' }, styles: { left: '8px', top: '18px', width: '64px', height: '64px' } },
+  ]);
+  assert.match(html(), /d="M2 2C10 10 20 20 60 60"/);
+  assert.match(html(), /viewBox="0 0 64 64"/);
+  assert.match(html(), /left: 8px/);
+  doc.undo(1, 'user');
+  assert.match(html(), /d="M2 2L42 42"/);
+  assert.match(html(), /viewBox="0 0 44 44"/);
+  assert.match(html(), /left: 10px/);
+});
+
+test('editVector refuses HTML nodes and bad attributes without writing anything', () => {
+  const { doc, created, html } = setup(`<div>hi</div>${PATH_SVG}`);
+  const before = html();
+  assert.throws(() => doc.editVector([{ id: created[0], attrs: { d: 'M0 0' } }]), /not an SVG node/);
+  assert.throws(() => doc.editVector([{ id: created[1], attrs: { onclick: 'x()' } }]), /not an editable/);
+  assert.equal(html(), before);
+});
+
+test('get_tree names a pen path with its inner path id and d', () => {
+  const { doc, ab } = setup(PATH_SVG);
+  const out = doc.outline(ab.id, { depth: 0 });
+  const text = Array.isArray(out) ? out.join('\n') : String(out.text ?? out);
+  assert.match(text, /path:\S+ d:M2 2L42 42/);
+});
