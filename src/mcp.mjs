@@ -484,7 +484,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: {
       ...pid,
       action: z.enum(['set', 'detach', 'delete', 'sheet']),
-      name: z.string().optional(),
+      name: z.string().optional().describe('Component and variant names: lowercase letters, digits and dashes, starting with a letter (max 31 chars)'),
       variants: z.record(z.string(), z.string().max(20_000)).optional(),
       node_id: z.string().optional(),
     },
@@ -623,7 +623,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('compare_to_reference', {
-    description: 'Compare an artboard with a reference image pixel by pixel (both scaled to the same width, at most 800 px). Returns the share of pixels that differ, the worst areas of a 4x4 grid, and a diff image (red = different, faded reference elsewhere). Use it to fix the biggest differences first; stop after 3 rounds or when different is under about 5%. Needs the project open in a browser tab.',
+    description: 'Compare an artboard with a reference image pixel by pixel (both scaled to the same width, at most 800 px). Returns the share of pixels that differ, the worst areas of a 4x4 grid, and a diff image (red = different, faded reference elsewhere). Use it to fix the biggest differences first; stop after 3 rounds or when different is under about 5%. Works with no tab open (a headless browser renders it).',
     inputSchema: { ...pid, artboard_id: z.string(), reference_id: z.string().optional().describe('Default: the most recently added reference.') },
   }, safe(async ({ project_id, artboard_id, reference_id }) => {
     const { meta, doc } = target(project_id);
@@ -663,7 +663,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('check_layout', {
-    description: 'Measure real layout in the browser and report content that does not fit its artboard: content taller or wider than the frame, nodes that extend past it, nodes that clip their own content. Boards in fit mode are grown to their content automatically. Omit artboard_id to check every board on the current page (max 20). Needs the project open in a browser tab.',
+    description: 'Measure real layout in the browser and report content that does not fit its artboard: content taller or wider than the frame, nodes that extend past it, nodes that clip their own content. Boards in fit mode are grown to their content automatically. Omit artboard_id to check every board on the current page (max 20). Works with no tab open (a headless browser renders it).',
     inputSchema: { ...pid, artboard_id: z.string().optional() },
   }, safe(async ({ project_id, artboard_id }) => {
     const { meta, doc } = target(project_id);
@@ -676,7 +676,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('fit_artboard', {
-    description: 'Make a board fit its content: switches it to fit mode and sets its height to exactly what the content needs (not below min_height). This is the one-call fix for a clipped board; never delete and rebuild a board for an overflow. Needs the project open in a browser tab to measure; without one it only switches the mode.',
+    description: 'Make a board fit its content: switches it to fit mode and sets its height to exactly what the content needs (not below min_height). This is the one-call fix for a clipped board; never delete and rebuild a board for an overflow. Measures in an open tab or, with none, in a headless browser.',
     inputSchema: { ...pid, artboard_id: z.string(), min_height: z.number().min(40).max(10000).optional() },
   }, safe(async ({ project_id, artboard_id, min_height }) => {
     const { meta, doc } = target(project_id);
@@ -887,7 +887,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   };
 
   server.registerTool('get_screenshot', {
-    description: 'Render an artboard (or just one node, via node_id) so you can review your work. review:true makes this the whole review step in one call: it first returns the lint text for the target ("clean" when none) and a layout line only if something does not fit, then the image. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
+    description: 'Render an artboard (or just one node, via node_id) so you can review your work. review:true makes this the whole review step in one call: it first returns the lint text for the target ("clean" when none) and a layout line only if something does not fit, then the image. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Works with no tab open (a headless browser renders it).',
     inputSchema: {
       ...pid,
       artboard_id: z.string(),
@@ -913,7 +913,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_computed_styles', {
-    description: 'Computed CSS (as the browser resolved it) for nodes, only the properties you ask for, e.g. ["width","height","color","font-size"]. Use it to check real sizes and colours instead of guessing from inline styles. Requires the project open in a browser tab.',
+    description: 'Computed CSS (as the browser resolved it) for nodes, only the properties you ask for, e.g. ["width","height","color","font-size"]. Use it to check real sizes and colours instead of guessing from inline styles. Works with no tab open (a headless browser renders it).',
     inputSchema: {
       ...pid,
       node_ids: z.array(z.string()).min(1).max(20),
