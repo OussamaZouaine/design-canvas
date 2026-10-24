@@ -16,9 +16,14 @@ import { describe, FAMILIES, toCssDeclarations } from './theme.mjs';
 import { slotsOf } from './components.mjs';
 import fs from 'node:fs';
 import { captureUrl } from './capture.mjs';
-import { imageSize } from './meter.mjs';
+import { imageSize, estimateTokens } from './meter.mjs';
+import { summarizeArgs } from './agentlog.mjs';
 import { guideText, TOPICS } from './guide.mjs';
 import { fontStack, SHORTLIST, SYSTEM_FAMILIES, usedProjectFonts, productionUrl } from './fonts.mjs';
+import { anonymousSession } from './sessions.mjs';
+import { Claims, PAUSED_MESSAGE } from './claims.mjs';
+import { kindOf } from './efficiency.mjs';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -41,26 +46,68 @@ const safe = (fn) => async (args) => {
   }
 };
 
-// Shared optional argument on every design tool.
-const pid = { project_id: z.string().optional().describe('Default: active project') };
+// Optional project argument. A session is bound to its project by start / project open, so only the tools that pick
+// a project keep it in their schema (KEEP_PID); on the others the register wrapper turns the schema into a
+// passthrough object, so an explicit project_id still works but costs no tools/list tokens.
+const pid = { project_id: z.string().optional().describe('Default: the project this session opened') };
+const KEEP_PID = new Set(['project']);
 
-export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
+export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims() }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+  // clientInfo arrives once, on `initialize`: that is where the agent's name comes from.
+  server.server.oninitialized = () => session.setClient(server.server.getClientVersion());
+  // The project this session works in: bound by start / project open, else the shared active one (old clients).
+  const currentId = () => session.projectId ?? store.activeId;
+  const bind = (id) => {
+    session.projectId = id;
+    // First contact with this project: "changes by others since my last read" starts here, not at version 0.
+    if (!session.seen.has(id)) { const p = store.get(id); if (p) session.seen.set(id, p.doc.version); }
+  };
 
   // Every tool goes through registerTool, so wrap it once here to meter each result's size
   // instead of touching 25 handlers. The wrapped handler behaves exactly like the original.
+  const callScope = new AsyncLocalStorage();
   const register = server.registerTool.bind(server);
-  server.registerTool = (name, config, handler) =>
-    register(name, config, async (...args) => {
-      const result = await handler(...args);
+  server.registerTool = (name, config, handler) => {
+    if (config.inputSchema && !KEEP_PID.has(name)) {
+      const { project_id, ...rest } = config.inputSchema;
+      if (project_id) config = { ...config, inputSchema: z.object(rest).passthrough() };
+    }
+    return register(name, config, async (...args) => {
+      const input = args[0];
+      // Project the call targets: explicit id, else the session's (resolved again after, since start/open can bind it).
+      const projectOf = () => input?.project_id ?? currentId();
+      const t0 = Date.now();
+      const callId = calls?.start(projectOf(), name, input, agentOf());
+      // The user can pause an agent from the Agents panel: its writes (not its reads) get a polite error until resumed.
+      const paused = claims.isPaused(session.agent.id) && kindOf(name, input) === 'write';
+      // AsyncLocalStorage = a per-call scratch space that follows the async chain, so `log()` (deep inside a handler,
+      // possibly inside a batch) can leave claim-conflict notes for exactly this call even when calls run in parallel.
+      const scratch = { notes: new Set() };
+      const result = paused
+        ? { isError: true, content: [{ type: 'text', text: PAUSED_MESSAGE }] }
+        : await callScope.run(scratch, () => handler(...args));
+      // Only a real conflict adds text; the normal case returns the handler's result untouched (zero extra tokens).
+      if (scratch.notes.size && !result?.isError && Array.isArray(result?.content)) result.content.push({ type: 'text', text: [...scratch.notes].join('\n') });
       meter?.record(name, result);
+      // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
+      try {
+        calls?.finish({
+          id: callId, ms: Date.now() - t0, tool: name, project: projectOf() ?? null, ok: !result?.isError, agent: agentOf(),
+          ...(result?.isError ? { error: String(result.content?.[0]?.text ?? '').slice(0, 200) } : {}),
+          tokens: estimateTokens(result), args: summarizeArgs(input),
+        });
+      } catch { /* the log must never break a tool call */ }
       return result;
     });
+  };
+  // Who is calling, as stored on call-log entries (id for joins, name + colour so the UI needs no second lookup).
+  const agentOf = () => { const { id, name, color } = session.agent; return { id, name, color }; };
   const url = (id) => `http://localhost:${port}/p/${id}`;
 
   // Resolve which project a call targets: explicit id, else the active one.
   const target = (project_id) => {
-    const id = project_id ?? store.activeId;
+    const id = project_id ?? currentId();
     if (!id) throw new Error('No active project. Call list_projects, then project (action open) or create_project.');
     const p = store.get(id);
     if (!p || p.meta.deletedAt) throw new Error(`Project ${id} not found (or in Trash). Call list_projects.`);
@@ -71,15 +118,23 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // and lights up the touched nodes on the canvas until finish_working or a timeout.
   // While a batch runs, `batchBoards` collects the boards its ops touched so the layout is checked once at the end.
   let batchBoards = null;
-  const log = (meta, doc, tool, anyId, detail) => {
+  const log = (meta, doc, tool, anyId, detail, boardOverride) => {
     const ids = [].concat(anyId ?? []);
-    const ab = ids[0] ? doc.artboardOf(ids[0]) : null;
-    store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail });
-    doc.record('claude', tool, ids);
+    const ab = boardOverride ?? (ids[0] ? doc.artboardOf(ids[0]) : null);
+    // The checkpoint taken just before this write is its "before" state: keep the diff on the Activity row (see stepdiff.mjs).
+    store.logAction(meta.id, { tool, artboardId: ab?.id, artboard: ab?.name, detail, agent: agentOf(), step: doc.captureStep() });
+    doc.record(session.agent.id, tool, ids);
+    // Soft claim: writing to a board claims it for ~60 s. If another agent still holds it, this call's result gets a
+    // one-line note (not an error), so the two can coordinate instead of silently overwriting each other.
+    if (ab && !ab.generated) {
+      const other = claims.touch(meta.id, ab, agentOf());
+      // The agent id is a slug (safe to echo); the display name is untrusted client text and stays out of results.
+      if (other) callScope.getStore()?.notes.add(`note: board ${String(ab.name).slice(0, 40)} (${ab.id}) is being edited by ${other.id}; check get_changes before overwriting their work`);
+    }
     // Remember which boards were edited so finish_working can check that their content still fits.
     const set = ui.touched.get(meta.id) ?? ui.touched.set(meta.id, new Set()).get(meta.id);
     for (const id of ids) { const a = doc.artboardOf(id); if (a) { set.add(a.id); batchBoards?.add(a.id); } }
-    if (tool !== 'delete_nodes') highlight?.(meta.id, ids);
+    if (tool !== 'delete_nodes') highlight?.(meta.id, ids, agentOf());
   };
   // Ask the browser whether these boards' content fits their frames. `fit` boards are grown to their content
   // here. Returns { text } with one line per problem, or null when no tab is open / it did not answer.
@@ -219,9 +274,10 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     },
     async delete_nodes({ project_id, ids }) {
       const { meta, doc } = target(project_id);
-      log(meta, doc, 'delete_nodes', ids[0]); // log first: afterwards the artboard may be gone
-      doc.journal.at(-1).ids = ids;
+      const board = doc.artboardOf(ids[0]); // read first: afterwards the artboard may be gone
       doc.deleteNodes(ids);
+      log(meta, doc, 'delete_nodes', ids[0], undefined, board); // after the delete so the diff sees it
+      doc.journal.at(-1).ids = ids;
       return 'ok';
     },
   };
@@ -234,7 +290,25 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       now: c.ids.map((id) => { try { return doc.outline(id, { depth: 0 }).split('\n')[0]; } catch { return `${id} (deleted)`; } }),
     }));
     ui.lastRead.set(meta.id, doc.version);
-    return { version: doc.version, changes: changes.length ? changes : 'none' };
+    const others = othersChanges(meta, doc);
+    return { version: doc.version, changes: changes.length ? changes : 'none', ...(others && { others }) };
+  };
+  // What OTHER agents changed in this project since this agent last looked (the journal already records the author).
+  // Compact: one entry per agent with a count per tool and the boards touched; absent when nobody else wrote.
+  // The marker lives on the session, so two agents each get their own "since my last read". A session's first look
+  // starts at "now" (bind sets it), so a newcomer is not flooded with history it never saw.
+  const othersChanges = (meta, doc) => {
+    const from = session.seen.get(meta.id) ?? doc.version;
+    session.seen.set(meta.id, doc.version);
+    const by = new Map(); // actor -> { tools: Map(tool -> n), boards: Set }
+    for (const c of doc.changesSince(from)) {
+      if (c.actor === 'user' || c.actor === session.agent.id) continue;
+      const e = by.get(c.actor) ?? by.set(c.actor, { tools: new Map(), boards: new Set() }).get(c.actor);
+      e.tools.set(c.tool, (e.tools.get(c.tool) ?? 0) + 1);
+      for (const id of c.ids) { const b = doc.artboardOf(id); if (b) e.boards.add(b.id); else if (doc.getArtboard(id)) e.boards.add(id); }
+    }
+    if (!by.size) return null;
+    return [...by].map(([agent, e]) => ({ agent, did: [...e.tools].map(([t, n]) => (n > 1 ? `${t} x${n}` : t)).join(', '), boards: [...e.boards] }));
   };
   const viaEdit = (name) => safe(async (args) => text(await edits[name](args)));
   // Action-enum tools (pages, components, ...) keep one flat schema, so each action checks its own required fields here.
@@ -256,7 +330,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const all = store.list().sort((a, b) => b.updatedAt - a.updatedAt);
     // No url/description: the id is all a later call needs, and 18 projects of prose were ~1k tokens.
     return text({
-      active_project_id: store.activeId,
+      active_project_id: currentId(),
       projects: all.slice(0, 15).map((p) => ({ project_id: p.id, name: p.name, artboards: p.artboardCount, updated: new Date(p.updatedAt).toISOString() })),
       ...(all.length > 15 && { more: all.length - 15 }),
     });
@@ -265,13 +339,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   server.registerTool('create_project', {
     description: 'Create a project and make it active. Name it after what you are building (2-4 words, e.g. the repo or feature). Fails if a project with that name exists: open it instead.',
     inputSchema: { name: z.string().min(1).max(80), description: z.string().max(300).optional() },
-  }, safe(({ name, description }) => text(summary(store.create({ name, description, unique: 'error' })))));
+  }, safe(({ name, description }) => {
+    const meta = store.create({ name, description, unique: 'error' });
+    bind(meta.id);
+    return text(summary(meta));
+  }));
 
   // Project admin (open / update / delete / checkpoint) in one low-traffic tool; create_project and list_projects stay
   // separate because they open every session. open and delete require an explicit project_id: delete must never
   // fall back to "the active project".
   server.registerTool('project', {
-    description: 'Project admin. action open (project_id): make an existing project the active one and return its artboards. update (name, description and/or normalize; project_id default active): rename it, change its description, or switch HTML normalization on/off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written). save_version (optional label): save a named checkpoint to the version history, do this before big rewrites. delete (project_id): move it to Trash, the user can restore it from the home page; only when the user asks.',
+    description: 'Project admin. action open (project_id): make an existing project the one this session works in and return its artboards. update (name, description and/or normalize; default: the open project): rename it, change its description, or switch HTML normalization on/off (new projects have it on: classes and <style> dropped, redundant styles stripped, border-box sizing; older projects keep their markup as written). save_version (optional label): save a named checkpoint to the version history, do this before big rewrites. delete (project_id): move it to Trash, the user can restore it from the home page; only when the user asks.',
     inputSchema: {
       ...pid,
       action: z.enum(['open', 'update', 'save_version', 'delete']),
@@ -285,6 +363,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const { meta, doc } = target(project_id);
     if (action === 'open') {
       store.setActive(meta.id);
+      bind(meta.id);
       return text({ ...summary(meta), ...leanInfo(doc) });
     }
     if (action === 'delete') { store.remove(meta.id); return text('Moved to Trash'); }
@@ -306,7 +385,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat (mood, palette with oklch roles, type scale, one-sentence direction). Stored with the project and shown in Activity.'),
     },
   }, safe(({ project_id, prompt, brief }) => {
-    store.logPrompt(target(project_id).meta.id, prompt, brief);
+    store.logPrompt(target(project_id).meta.id, prompt, brief, agentOf());
     return text('Logged');
   }));
 
@@ -484,7 +563,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: {
       ...pid,
       action: z.enum(['set', 'detach', 'delete', 'sheet']),
-      name: z.string().optional(),
+      name: z.string().optional().describe('Component and variant names: lowercase letters, digits and dashes, starting with a letter (max 31 chars)'),
       variants: z.record(z.string(), z.string().max(20_000)).optional(),
       node_id: z.string().optional(),
     },
@@ -623,7 +702,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('compare_to_reference', {
-    description: 'Compare an artboard with a reference image pixel by pixel (both scaled to the same width, at most 800 px). Returns the share of pixels that differ, the worst areas of a 4x4 grid, and a diff image (red = different, faded reference elsewhere). Use it to fix the biggest differences first; stop after 3 rounds or when different is under about 5%. Needs the project open in a browser tab.',
+    description: 'Compare an artboard with a reference image pixel by pixel (both scaled to the same width, at most 800 px). Returns the share of pixels that differ, the worst areas of a 4x4 grid, and a diff image (red = different, faded reference elsewhere). Use it to fix the biggest differences first; stop after 3 rounds or when different is under about 5%. Works with no tab open (a headless browser renders it).',
     inputSchema: { ...pid, artboard_id: z.string(), reference_id: z.string().optional().describe('Default: the most recently added reference.') },
   }, safe(async ({ project_id, artboard_id, reference_id }) => {
     const { meta, doc } = target(project_id);
@@ -638,7 +717,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_changes', {
-    description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
+    description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. `others` lists what other agents changed meanwhile. Pass since_version to look further back; the returned version is what to pass next time.',
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
   }, safe(({ project_id, since_version }) => {
     const { meta, doc } = target(project_id);
@@ -650,7 +729,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { ...pid, screenshot_artboard_id: z.string().optional() },
   }, safe(async ({ project_id, screenshot_artboard_id }) => {
     const { meta, doc } = target(project_id);
-    highlight?.(meta.id, []);
+    highlight?.(meta.id, [], agentOf());
     const ids = [...(ui.touched.get(meta.id) ?? [])];
     const r = ids.length ? await checkLayout(meta, doc, ids) : null;
     // Clear only when the check ran: with no browser tab the boards stay "touched" for the next attempt.
@@ -663,7 +742,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('check_layout', {
-    description: 'Measure real layout in the browser and report content that does not fit its artboard: content taller or wider than the frame, nodes that extend past it, nodes that clip their own content. Boards in fit mode are grown to their content automatically. Omit artboard_id to check every board on the current page (max 20). Needs the project open in a browser tab.',
+    description: 'Measure real layout in the browser and report content that does not fit its artboard: content taller or wider than the frame, nodes that extend past it, nodes that clip their own content. Boards in fit mode are grown to their content automatically. Omit artboard_id to check every board on the current page (max 20). Works with no tab open (a headless browser renders it).',
     inputSchema: { ...pid, artboard_id: z.string().optional() },
   }, safe(async ({ project_id, artboard_id }) => {
     const { meta, doc } = target(project_id);
@@ -676,7 +755,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('fit_artboard', {
-    description: 'Make a board fit its content: switches it to fit mode and sets its height to exactly what the content needs (not below min_height). This is the one-call fix for a clipped board; never delete and rebuild a board for an overflow. Needs the project open in a browser tab to measure; without one it only switches the mode.',
+    description: 'Make a board fit its content: switches it to fit mode and sets its height to exactly what the content needs (not below min_height). This is the one-call fix for a clipped board; never delete and rebuild a board for an overflow. Measures in an open tab or, with none, in a headless browser.',
     inputSchema: { ...pid, artboard_id: z.string(), min_height: z.number().min(40).max(10000).optional() },
   }, safe(async ({ project_id, artboard_id, min_height }) => {
     const { meta, doc } = target(project_id);
@@ -724,7 +803,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const { meta, doc } = target(project_id);
     const font = await fonts.ensure(family, weights, italic);
     store.addFont(meta.id, font);
-    store.logAction(meta.id, { tool: 'use_font', detail: `${font.family} ${[...new Set(font.faces.map((f) => f.weight))].join(',')}` });
+    store.logAction(meta.id, { agent: agentOf(), tool: 'use_font', detail: `${font.family} ${[...new Set(font.faces.map((f) => f.weight))].join(',')}` });
     return text({
       family: font.family,
       css: fontStack(font.family, category),
@@ -740,9 +819,9 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id, action, steps = 1 }) => {
     const { meta, doc } = target(project_id);
     // logAction keeps the plain 'undo' / 'redo' names: the Activity panel and eval metrics read them.
-    const done = action === 'undo' ? doc.undo(steps) : doc.redo(steps, 'claude');
+    const done = action === 'undo' ? doc.undo(steps, session.agent.id) : doc.redo(steps, session.agent.id);
     if (!done.length) return text(`Nothing to ${action}`);
-    store.logAction(meta.id, { tool: action, detail: done.join(', ') });
+    store.logAction(meta.id, { agent: agentOf(), tool: action, detail: done.join(', ') });
     return text(action === 'undo' ? { reverted: done } : { redone: done });
   }));
 
@@ -819,13 +898,14 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   // start: the first call of a request. Resolve/create the project, log the prompt and optionally create the first
   // board, so the normal opening (list_projects + create/open + log_prompt + create_artboard) is one turn. For an
   // existing project it also returns what the agent would otherwise fetch (open comments, user changes, boards).
-  // The MCP is stateless and store.activeId is shared between sessions, so the resolved project_id is always returned.
+  // The resolved project is bound to this session (store.activeId is shared between sessions, so it is only a fallback).
   server.registerTool('start', {
-    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (pass it on every later call); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
+    description: 'Begin a request in ONE call (replaces list_projects + create_project/project open + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (later calls use this project automatically); for an existing project also its open comments, the changes the user (and other agents) made and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
     inputSchema: {
       prompt: z.string().min(1).max(500).describe("The request in the user's own words (one short sentence)."),
       project: z.string().max(80).optional().describe('Project id or name (2-4 words, e.g. the repo or feature).'),
       description: z.string().max(300).optional().describe('One line, used only when the project is created.'),
+      agent: z.string().max(40).optional().describe('Optional name for you (e.g. reviewer) so the user can tell agents apart.'),
       brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat.'),
       artboard: z.object({
         name: z.string().optional(), width: z.number().min(40).max(5000).optional(), height: z.number().min(40).max(10000).optional(),
@@ -833,7 +913,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
         html: z.string().max(200_000).optional(),
       }).optional(),
     },
-  }, safe(async ({ prompt, project, description, brief, artboard }) => {
+  }, safe(async ({ prompt, project, description, brief, artboard, agent }) => {
     let created = false, meta;
     if (project) {
       const wanted = project.trim();
@@ -842,10 +922,12 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       if (hit) meta = hit;
       else { meta = store.create({ name: wanted, description, unique: 'error' }); created = true; }
     } else {
-      if (!store.activeId) throw new Error('No active project. Pass project: a name for a new project, or an id/name of an existing one (list_projects to browse).');
+      if (!currentId()) throw new Error('No active project. Pass project: a name for a new project, or an id/name of an existing one (list_projects to browse).');
       meta = target(null).meta;
     }
     store.setActive(meta.id);
+    bind(meta.id);
+    if (agent) session.setLabel(agent);
     const { doc } = store.get(meta.id);
     const out = { project_id: meta.id, created };
     // Read before this request writes anything, so boards/changes describe the state the user left.
@@ -856,10 +938,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       }
       const ch = userChanges(meta, doc);
       if (ch.changes !== 'none') out.changes = ch;
+      if (ch.others) out.others = ch.others;
       const boards = doc.data.artboards;
       if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
     } else ui.lastRead.set(meta.id, doc.version);
-    store.logPrompt(meta.id, prompt, brief);
+    store.logPrompt(meta.id, prompt, brief, agentOf());
     if (artboard) {
       // Keep only what the agent needs from the create_artboard result: the id plus its dialect/lint/layout/reminder notes.
       const r = await edits.create_artboard({ ...artboard, project_id: meta.id });
@@ -887,7 +970,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   };
 
   server.registerTool('get_screenshot', {
-    description: 'Render an artboard (or just one node, via node_id) so you can review your work. review:true makes this the whole review step in one call: it first returns the lint text for the target ("clean" when none) and a layout line only if something does not fit, then the image. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Requires the project to be open in a browser tab.',
+    description: 'Render an artboard (or just one node, via node_id) so you can review your work. review:true makes this the whole review step in one call: it first returns the lint text for the target ("clean" when none) and a layout line only if something does not fit, then the image. Defaults are token-lean: 1x, max 800 px wide, cut at 1600 px tall (a note says where; use node_id for the rest), JPEG. Use node_id to look at one component instead of the whole board; ask for scale 2 or png only when you must read tiny text. Works with no tab open (a headless browser renders it).',
     inputSchema: {
       ...pid,
       artboard_id: z.string(),
@@ -913,7 +996,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_computed_styles', {
-    description: 'Computed CSS (as the browser resolved it) for nodes, only the properties you ask for, e.g. ["width","height","color","font-size"]. Use it to check real sizes and colours instead of guessing from inline styles. Requires the project open in a browser tab.',
+    description: 'Computed CSS (as the browser resolved it) for nodes, only the properties you ask for, e.g. ["width","height","color","font-size"]. Use it to check real sizes and colours instead of guessing from inline styles. Works with no tab open (a headless browser renders it).',
     inputSchema: {
       ...pid,
       node_ids: z.array(z.string()).min(1).max(20),

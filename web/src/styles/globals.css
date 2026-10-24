@@ -12,6 +12,9 @@
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --selection: oklch(0.62 0.19 255);
+  /* Efficiency hints (warm, low-chroma so they read as advice, not errors) */
+  --hint-bg: oklch(0.97 0.04 85 / 0.6);
+  --hint-border: oklch(0.8 0.1 85);
   --canvas: oklch(0.93 0 0);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -92,6 +95,8 @@ body { background: var(--background); color: var(--foreground); }
 }
 
 .dark {
+  --hint-bg: oklch(0.3 0.05 85 / 0.5);
+  --hint-border: oklch(0.5 0.09 85);
   --canvas: oklch(0.2 0 0);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
@@ -151,6 +156,9 @@ body { font-size: 12px; overflow: hidden; }
 @keyframes sk-pulse { 50% { opacity: 0.5; } }
 .sk { background: var(--muted); border-radius: 8px; animation: sk-pulse 1.6s var(--ease-in-out) infinite; }
 
+/* A call still waiting on the browser (screenshot...): opacity pulse only, and only while it is pending. */
+.agent-pulse { animation: sk-pulse 1.1s var(--ease-in-out) infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .ctx-menu, .sk { animation: none; }
+  .ctx-menu, .sk, .agent-pulse { animation: none; }
 }

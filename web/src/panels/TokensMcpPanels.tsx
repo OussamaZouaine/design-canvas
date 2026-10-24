@@ -2,6 +2,9 @@ import { Fragment } from 'react';
 import { Button } from '@/components/ui/button';
 import { useJson } from '@/hooks/useJson';
 import { ago } from '@/lib/time';
+import { useNow } from '@/panels/AgentsPanel';
+import { EfficiencyPanel } from '@/panels/EfficiencyPanel';
+import { useAgents } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
 
@@ -86,26 +89,36 @@ export function TokensPanel({ projectId }: { projectId: string }) {
   );
 }
 
-interface Status { tabs: number; meter: { lastCallAt?: number; totalTokens: number; tools: { name: string; tokens: number; calls: number; errors?: number }[] } }
+interface Status { tabs: number }
 
-// MCP tab: is Claude talking to this server, how to connect it, and which tools cost the most tokens this session.
-// Polled every 3 s because tool calls come from Claude Code, not this page, so no event announces them.
-export function McpPanel() {
-  const { data: s, failed } = useJson<Status>('/api/status', 0, 3000);
-  if (!s) return <p className="p-3 text-muted-foreground">{failed ? 'Server not reachable.' : 'Loading…'}</p>;
+// MCP tab: is an agent talking to this server, how to connect it, and which tools cost the most tokens in this project.
+// Fed by the live call log (SSE `call` events in the agents store), so there is no polling; only the tab count is
+// fetched, once, because nothing pushes it and it rarely changes.
+export function McpPanel({ projectId }: { projectId: string }) {
+  const calls = useAgents((s) => s.calls);
+  const { data: s } = useJson<Status>('/api/status');
+  const now = useNow();
   const setup = `claude mcp add --transport http design-canvas ${location.origin}/mcp --scope user`;
-  const m = s.meter, maxTok = Math.max(...m.tools.map((t) => t.tokens), 1);
-  const recent = !!m.lastCallAt && Date.now() - m.lastCallAt < 120_000;
+  // Aggregate per tool from the stored calls (newest 300). Tokens are the server's estimate of each tool result.
+  const byTool = new Map<string, { name: string; tokens: number; calls: number; errors: number }>();
+  for (const c of calls) {
+    const t = byTool.get(c.tool) ?? { name: c.tool, tokens: 0, calls: 0, errors: 0 };
+    t.tokens += c.tokens; t.calls++; if (!c.ok) t.errors++;
+    byTool.set(c.tool, t);
+  }
+  const tools = [...byTool.values()].sort((a, b) => b.tokens - a.tokens);
+  const total = tools.reduce((n, t) => n + t.tokens, 0), maxTok = Math.max(...tools.map((t) => t.tokens), 1);
+  const last = calls[0]?.t, recent = !!last && now - last < 120_000;
   return (
     <div className="p-3">
-      <KV k="Server" v={`running · ${s.tabs} tab${s.tabs === 1 ? '' : 's'} open`} />
-      <KV k="Claude" v={m.lastCallAt ? `${recent ? 'active' : 'idle'} · last call ${ago(m.lastCallAt)}` : 'no calls yet'} />
+      <KV k="Server" v={s ? `running · ${s.tabs} tab${s.tabs === 1 ? '' : 's'} open` : 'running'} />
+      <KV k="Agents" v={last ? `${recent ? 'active' : 'idle'} · last call ${ago(last)}` : 'no calls yet'} />
       <H>Connect</H>
       <pre className="rounded-md bg-muted p-2 text-[11px] break-all whitespace-pre-wrap">{setup}</pre>
       <Button size="sm" className="mt-2" onClick={() => copy(setup, 'setup command')}>Copy command</Button>
-      <H>Tool results this session · ~{m.totalTokens.toLocaleString()} tokens</H>
-      {m.tools.length === 0 && <p className="text-muted-foreground">No tool calls yet. Estimates: text bytes ÷ 4, images by 28px patches.</p>}
-      {m.tools.map((t) => (
+      <H>Tool results in this project · ~{total.toLocaleString()} tokens</H>
+      {tools.length === 0 && <p className="text-muted-foreground">No tool calls yet. Estimates: text bytes ÷ 4, images by 28px patches.</p>}
+      {tools.map((t) => (
         <Fragment key={t.name}>
           <div className="flex items-center gap-2 py-0.5">
             <span className="w-28 shrink-0 truncate" title={t.name}>{t.name}</span>
@@ -114,6 +127,7 @@ export function McpPanel() {
           </div>
         </Fragment>
       ))}
+      <EfficiencyPanel projectId={projectId} />
     </div>
   );
 }

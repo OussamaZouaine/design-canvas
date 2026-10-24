@@ -113,7 +113,9 @@ Order is a suggestion; the user decides.
    `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
    `tokens`, `history`, `export_code` (get_tree_summary dropped); 64 -> 46 tools, tools/list 9.41k -> 8.40k tokens. **Restart Claude Code to see the new tools.**
    Open: run the evals (`examples/evals`) A/B on the branch before merging; D and E ideas in the plan.
-8. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+8. **Agent visibility: DONE (phases 0-6).** See an MCP agent's work live and in history, cheaply. Summary + open items in `docs/notes/agent-visibility-plan.md`.
+   Phase 6 (several agents on one project): `src/claims.mjs` (soft board claims ~60 s, per project; user pause per agent id), notes appended in the `registerTool` wrapper (`mcp.mjs`, AsyncLocalStorage scratch), `others` in `get_changes`/`start` (marker `Session.seen`), SSE `claims`, `POST /api/agents/pause`, `GET /api/p/<id>/claims`; UI outline `engine.setClaims`, pause/resume in `AgentsPanel`. Tests `test/claims.test.mjs`.
+9. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway

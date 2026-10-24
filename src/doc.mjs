@@ -3,6 +3,8 @@
 // this class, so the two can never drift apart.
 import { parse, HTMLElement } from 'node-html-parser';
 import fs from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { diffStates, patchable, reversePatch } from './stepdiff.mjs';
 import { lintArtboard } from './lint.mjs';
 import { parseStyle, styleToString } from './css.mjs';
 import { normalizeTree } from './normalize.mjs';
@@ -33,6 +35,11 @@ export class Doc {
     // "what changed since version N" instead of re-reading whole artboards.
     this.journal = [];
     this.version = 0;
+    // Step numbering for Activity: `seq` grows per checkpoint, `boot` tells a step of this process from one
+    // saved by an earlier run (the undo stack is memory only, so old seq numbers would otherwise collide).
+    this.stepSeq = 0;
+    this._capturedSeq = 0;
+    this.boot = randomBytes(4).toString('hex');
     if (file && fs.existsSync(file)) {
       try {
         this.data = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -97,7 +104,8 @@ export class Doc {
   }
 
   _checkpoint(label) {
-    this.undoStack.push(this._snapshotState(label));
+    // `seq` names this step so an Activity row can find its own checkpoint again (see captureStep / revertStep).
+    this.undoStack.push({ ...this._snapshotState(label), seq: ++this.stepSeq });
     if (this.undoStack.length > 50) this.undoStack.shift();
     this.redoStack = []; // a fresh change forks history: what was undone can no longer be redone
   }
@@ -141,6 +149,44 @@ export class Doc {
       this._commit();
     }
     return redone;
+  }
+
+  // Called right after a logged write: the newest checkpoint is that write's "before" state. Returns
+  // { step, boot, diff } once per checkpoint (null when the write took none or changed nothing), so the
+  // Activity entry can show what changed and be reverted later. Costs nothing when nobody reads it.
+  captureStep() {
+    const prev = this.undoStack.at(-1);
+    if (!prev?.seq || prev.seq <= this._capturedSeq) return null;
+    this._capturedSeq = prev.seq;
+    const diff = diffStates(prev, this.data);
+    return diff && { step: prev.seq, boot: this.boot, diff };
+  }
+
+  // Undo one specific step of a run without losing the steps around it.
+  //  - the newest step: a plain undo (also covers theme/component changes and deleted boards);
+  //  - an older step: reverse just its patch in the current markup. All boards are checked first, so a
+  //    conflict (a later step edited the same span) leaves the document untouched.
+  revertStep({ step, boot, diff }, actor = 'user') {
+    if (boot === this.boot && this.undoStack.at(-1)?.seq === step) { this.undo(1, actor); return 'undo'; }
+    if (!patchable(diff)) throw new Error('This step can only be reverted while it is the latest change');
+    const plans = [];
+    for (const b of diff.boards) {
+      const ab = this.getArtboard(b.id);
+      if (b.kind === 'added') { if (ab) plans.push({ ab, remove: true }); continue; }
+      if (!ab) throw new Error(`Board ${b.name || b.id} no longer exists`);
+      const html = reversePatch(ab.html, b);
+      if (html === null) throw new Error(`Later edits changed the same part of ${b.name || b.id}. Revert those first.`);
+      plans.push({ ab, html });
+    }
+    if (!plans.length) throw new Error('Nothing left to revert');
+    this._checkpoint('revert_step');
+    for (const { ab, html, remove } of plans) {
+      if (remove) this.data.artboards = this.data.artboards.filter((a) => a.id !== ab.id);
+      else ab.html = html;
+    }
+    this.record(actor, 'revert_step', plans.map((x) => x.ab.id));
+    this._commit();
+    return 'patch';
   }
 
   // Note a change for get_changes. `actor` is 'user' (browser) or 'claude' (MCP).
