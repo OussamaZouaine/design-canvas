@@ -33,8 +33,9 @@ interface Props {
 const GRID_W = 248;
 const GRID_H = 164;
 
-// Hover lift only on real pointers (touch devices would stick the hover state).
-const HOVER_LIFT = '[@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-lg';
+// Hover lift only on real pointers (touch devices would stick the hover state); the lift uses the shared layered
+// float shadow so a hovered card matches the toolbar and popovers instead of a one-off grey blur.
+const HOVER_LIFT = 'pointer-hover:-translate-y-0.5 pointer-hover:shadow-float';
 
 // One project, as a Paper-style card (title + "Edited" line above the preview) or, in list view, as a row.
 export function ProjectCard({ project: p, inTrash, view, index, animateIn, actions }: Props) {
@@ -127,8 +128,9 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
   return (
     <div
       className={cn(
-        'relative overflow-hidden rounded-xl border bg-card',
-        'transition-[box-shadow,transform] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
+        // Concentric radii: 8px thumbnail + 4px padding = 12px card corner.
+        'relative overflow-hidden rounded-[12px] border bg-card',
+        'transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
         list ? 'flex w-full items-center gap-3 p-2 pr-2' : 'w-[256px] p-1',
         !inTrash && !list && HOVER_LIFT,
         inTrash && 'opacity-80',

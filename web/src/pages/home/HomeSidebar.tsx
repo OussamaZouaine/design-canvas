@@ -19,7 +19,7 @@ interface Props {
 }
 
 // Shared look for every nav row. Hover colour is gated to real pointers so touch screens do not keep it stuck.
-const ROW = 'flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] text-muted-foreground transition-colors duration-150 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted/60 [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground';
+const ROW = 'flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] text-muted-foreground transition-colors duration-150 pointer-hover:bg-muted/60 pointer-hover:text-foreground';
 
 function NavRow({ icon, active, count, children, ...rest }: { icon: ReactNode; active?: boolean; count?: ReactNode; children: ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
@@ -43,7 +43,7 @@ export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, tra
       </div>
 
       <div className="px-3">
-        <label className="flex h-8 items-center gap-2 rounded-md border bg-muted/40 px-2.5 text-muted-foreground focus-within:border-ring">
+        <label className="flex h-8 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection">
           <Search className="size-3.5 shrink-0" aria-hidden />
           <input
             type="search"
@@ -74,7 +74,7 @@ export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, tra
           type="button"
           aria-label="Toggle theme"
           onClick={toggleTheme}
-          className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground transition-transform duration-150 active:scale-[0.96] [@media(hover:hover)_and_(pointer:fine)]:hover:text-foreground"
+          className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground transition-transform duration-150 active:scale-96 pointer-hover:text-foreground"
         >
           {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </button>
