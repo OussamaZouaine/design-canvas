@@ -165,3 +165,13 @@ test('since returns only runs that changed after the cursor, and a revert counts
   assert.equal(after.runs[0].steps.find((s) => s.n === step.n).reverted, true);
   h.close();
 });
+
+test('spanDiff widens to whole tokens so a changed value reads in full, and the patch still reverses exactly', async () => {
+  const { spanDiff, reversePatch } = await import('../src/stepdiff.mjs');
+  const a = '<p style="color: oklch(0.3 0.02 250); margin: 0">x</p>';
+  const b = '<p style="color: oklch(0.5 0.2 150); margin: 0">x</p>';
+  const d = spanDiff(a, b);
+  assert.equal(d.before, 'oklch(0.3 0.02 250)');
+  assert.equal(d.after, 'oklch(0.5 0.2 150)');
+  assert.equal(reversePatch(b, { ...d }), a);
+});
