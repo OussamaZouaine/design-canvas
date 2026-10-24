@@ -99,6 +99,18 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return r && !r.text.startsWith('ok') ? { layout: r.text } : {};
   };
   const summary = (m) => ({ project_id: m.id, name: m.name, description: m.description, url: url(m.id) });
+  // basicInfo without the fields that carry no information yet: a single implicit page and an empty reference list.
+  const leanInfo = (doc) => {
+    const { pages, references, ...rest } = doc.basicInfo();
+    return { ...(pages.length > 1 && { pages }), ...(references.length && { references }), ...rest };
+  };
+  // nodeInfo's HTML is the bulk of its size (the whole subtree), so it is opt-in and capped.
+  const HTML_CAP = 2000;
+  const withHtml = (info, include) => {
+    const { html, ...rest } = info;
+    if (!include) return rest;
+    return { ...rest, html: html.length > HTML_CAP ? `${html.slice(0, HTML_CAP)}… [truncated, ${html.length} chars total: use get_tree or a child node_id]` : html };
+  };
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
@@ -107,15 +119,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ topic }) => text(guideText(topic))));
 
   server.registerTool('list_projects', {
-    description: 'List all projects (most recently edited first) with ids, names and artboard counts. Call this before creating a project so you reuse an existing one.',
+    description: 'List projects (15 most recently edited first, `more` counts the rest) with ids, names and artboard counts. Call this before creating a project so you reuse an existing one.',
     inputSchema: {},
-  }, safe(() => text({
-    active_project_id: store.activeId,
-    home: `http://localhost:${port}`,
-    projects: store.list().sort((a, b) => b.updatedAt - a.updatedAt).map((p) => ({
-      ...summary(p), artboards: p.artboardCount, updated: new Date(p.updatedAt).toISOString(),
-    })),
-  })));
+  }, safe(() => {
+    const all = store.list().sort((a, b) => b.updatedAt - a.updatedAt);
+    // No url/description: the id is all a later call needs, and 18 projects of prose were ~1k tokens.
+    return text({
+      active_project_id: store.activeId,
+      projects: all.slice(0, 15).map((p) => ({ project_id: p.id, name: p.name, artboards: p.artboardCount, updated: new Date(p.updatedAt).toISOString() })),
+      ...(all.length > 15 && { more: all.length - 15 }),
+    });
+  }));
 
   server.registerTool('create_project', {
     description: 'Create a project and make it active. Name it after what you are building (2-4 words, e.g. the repo or feature). Fails if a project with that name exists: open it instead.',
@@ -128,7 +142,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id }) => {
     const { meta, doc } = target(project_id);
     store.setActive(meta.id);
-    return text({ ...summary(meta), ...doc.basicInfo() });
+    return text({ ...summary(meta), ...leanInfo(doc) });
   }));
 
   server.registerTool('rename_project', {
@@ -211,11 +225,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text(format === 'summary' ? { ...tokens, css: outputs.css } : outputs[format]);
   }));
   server.registerTool('get_basic_info', {
-    description: 'Project details plus all its artboards with ids, names, positions and sizes.',
+    description: 'Project details plus all its artboards with ids, names, positions and sizes (pages and references appear only when there are any).',
     inputSchema: { ...pid },
   }, safe(({ project_id }) => {
     const { meta, doc } = target(project_id);
-    return text({ ...summary(meta), ...doc.basicInfo() });
+    return text({ ...summary(meta), ...leanInfo(doc) });
   }));
 
   server.registerTool('get_selection', {
@@ -224,7 +238,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id }) => {
     const { meta, doc } = target(project_id);
     return text((ui.selection.get(meta.id) || []).map((id) => {
-      try { return doc.nodeInfo(id); } catch { return doc.getArtboard(id) ?? { id }; }
+      try { return withHtml(doc.nodeInfo(id), false); } catch { return doc.getArtboard(id) ?? { id }; }
     }));
   }));
 
@@ -269,9 +283,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }));
 
   server.registerTool('get_tree', {
-    description: 'Compact outline, one line per node: id, kind (frame/text/image/svg), name, layout, key styles, [n] hidden children. Far cheaper than HTML: read this first, then get_node_info only for the node you will change. node_id is an artboard or node (default: every artboard); query finds nodes by name or text.',
+    description: 'Compact outline, one line per node: id, kind (frame/text/image/svg), name, layout, key styles, [n] hidden children. Far cheaper than HTML: read this first, then get_node_info only for the node you will change. node_id is an artboard or node (default: every artboard, but one line per artboard when the project has more than 8); query finds nodes by name or text.',
     inputSchema: { ...pid, node_id: z.string().optional(), depth: z.number().int().min(1).max(10).optional(), query: z.string().min(1).max(100).optional() },
-  }, safe(({ project_id, node_id, depth, query }) => text(target(project_id).doc.outline(node_id, { depth, query }) || '(empty)')));
+  }, safe(({ project_id, node_id, depth, query }) => {
+    const { doc } = target(project_id);
+    // A big project outlined whole is thousands of tokens (46 boards = 3.6k): list the boards, let the agent pick one.
+    if (!node_id && !query && depth === undefined && doc.data.artboards.length > 8) {
+      const lines = doc.data.artboards.map((a) => `${a.id} artboard "${a.name}" ${a.width}×${a.height}`);
+      return text(`${lines.join('\n')}\n(${lines.length} artboards: pass node_id to outline one, or query to search by name or text)`);
+    }
+    return text(doc.outline(node_id, { depth, query }) || '(empty)');
+  }));
 
   server.registerTool('get_design_system', {
     description: 'The design tokens as "name: value" lines (modes listed as "name [dark]: value"), then the components with their variants and slots. Reference tokens as var(--name) and components with insert_component. section limits to one token family (color, space, radius, size, font, ...) or "components".',
@@ -643,9 +665,9 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
   }, safe(({ project_id, artboard_id, depth }) => text(target(project_id).doc.treeSummary(artboard_id, depth))));
 
   server.registerTool('get_node_info', {
-    description: 'Details of one node: tag, inline style, text, child ids and its HTML.',
-    inputSchema: { ...pid, node_id: z.string() },
-  }, safe(({ project_id, node_id }) => text(target(project_id).doc.nodeInfo(node_id))));
+    description: 'Details of one node: tag, inline style, text and child ids. Set include_html to also get its HTML (capped at 2000 chars); get_tree is cheaper for structure.',
+    inputSchema: { ...pid, node_id: z.string(), include_html: z.boolean().optional() },
+  }, safe(({ project_id, node_id, include_html }) => text(withHtml(target(project_id).doc.nodeInfo(node_id), include_html))));
 
   server.registerTool('update_styles', {
     description: 'Merge CSS properties (camelCase or kebab-case) into one or more nodes. Use null to remove a property.',
