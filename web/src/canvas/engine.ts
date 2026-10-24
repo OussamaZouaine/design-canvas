@@ -6,6 +6,7 @@
 //   .dc-world      one element carrying the pan/zoom transform; artboards are absolutely placed inside it
 //   .dc-overlay    selection / hover / "Claude is working here" boxes, in screen pixels (never scaled)
 import { canvasAction } from '@/api/projects';
+import { isNodeEl } from '@/lib/htmlTree';
 import { toast } from '@/store/toast';
 import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
@@ -38,7 +39,7 @@ export interface EngineEvents {
   onContextMenu: (x: number, y: number, targetId: string | null) => void;
 }
 
-export type CanvasTool = 'move' | 'frame' | 'text' | 'image' | 'comment' | 'hand';
+export type CanvasTool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'text' | 'image' | 'comment' | 'hand';
 
 // Everything the engine tracks per artboard. Kept in one object instead of expando properties on the DOM.
 interface Board {
@@ -885,7 +886,9 @@ export class CanvasEngine {
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     const path = e.composedPath(); // pierces the shadow root to find the real clicked element
-    const node = path.find((n): n is HTMLElement => n instanceof HTMLElement && !!n.dataset.pid);
+    const hit = path.find(isNodeEl);
+    // A shape made with the shape tools is one object: a click on its inner <rect> picks the whole <svg>.
+    const node = hit?.closest<HTMLElement>('svg[data-shape]') ?? hit;
     const abEl = target.closest<HTMLElement>('.dc-artboard');
     const onLabel = !!target.closest('.dc-label');
     if (node?.isContentEditable) return; // clicking inside text being edited just moves the caret
@@ -900,6 +903,12 @@ export class CanvasEngine {
     // Hand tool / held Space: always pan, even over elements.
     if (this.tool === 'hand' || this.spaceDown) { this.panFrom(e); return; }
     if (this.tool === 'frame') { this.drawFrame(e); return; }
+    if (this.tool === 'rect' || this.tool === 'ellipse' || this.tool === 'line') {
+      const boardId = abEl && !onLabel ? abEl.dataset.ab : undefined;
+      if (boardId) { e.preventDefault(); this.drawShape(e, boardId, this.tool); }
+      else toast('Draw inside an artboard');
+      return;
+    }
     if (this.tool === 'text') {
       const id = node ? node.dataset.pid! : abEl && !onLabel ? abEl.dataset.ab! : null;
       if (id) { e.preventDefault(); void this.editor.addText(id).finally(() => this.events.onToolDone()); }
@@ -964,6 +973,44 @@ export class CanvasEngine {
     this.viewport.addEventListener('pointercancel', cancel);
   }
 
+  // Shape tools (rectangle, ellipse, line): drag a box inside a board, release to write it as an <svg>. The
+  // rubber band is the same draft rectangle the frame tool uses. A click without a drag (under 4 screen px)
+  // makes a 100 px shape at the click, so the tool is useful on a trackpad without precise dragging.
+  private drawShape(e: PointerEvent, boardId: string, kind: 'rect' | 'ellipse' | 'line') {
+    const b = this.boards.get(boardId);
+    if (!b) return;
+    const v = this.viewport.getBoundingClientRect();
+    // The frame's top-left is the origin of the board's coordinates; k converts screen px to design px.
+    const f = this.relRect(b.frame);
+    const sx = e.clientX - v.left, sy = e.clientY - v.top;
+    let cx = sx, cy = sy;
+    this.viewport.setPointerCapture(e.pointerId);
+    this.draft.classList.remove('dc-hide');
+    const box = () => ({ left: Math.min(sx, cx), top: Math.min(sy, cy), width: Math.abs(cx - sx), height: Math.abs(cy - sy) });
+    const move = (ev: PointerEvent) => { cx = ev.clientX - v.left; cy = ev.clientY - v.top; this.place(this.draft, box()); };
+    const finish = (create: boolean) => {
+      this.viewport.removeEventListener('pointermove', move);
+      this.viewport.removeEventListener('pointerup', up);
+      this.viewport.removeEventListener('pointercancel', cancel);
+      this.draft.classList.add('dc-hide');
+      if (!create) { this.events.onToolDone(); return; }
+      const r = box();
+      const dragged = r.width > 4 || r.height > 4;
+      const k = this.view.k;
+      const shape = dragged
+        ? { x: (r.left - f.left) / k, y: (r.top - f.top) / k, w: r.width / k, h: r.height / k, flipX: cx < sx, flipY: cy < sy }
+        : { x: (sx - f.left) / k, y: (sy - f.top) / k, w: 100, h: kind === 'line' ? 1 : 100 };
+      void this.editor.addShape(boardId, kind, shape)
+        .then((id) => { if (id) this.selectWhenReady(id); })
+        .finally(() => this.events.onToolDone());
+    };
+    const up = () => finish(true);
+    const cancel = () => finish(false);
+    this.viewport.addEventListener('pointermove', move);
+    this.viewport.addEventListener('pointerup', up);
+    this.viewport.addEventListener('pointercancel', cancel);
+  }
+
   // A new board only exists after the doc event redraws; select it as soon as it does.
   private selectWhenReady(id: string, tries = 40) {
     if (this.findElement(id)) { this.select(id); return; }
@@ -972,7 +1019,7 @@ export class CanvasEngine {
 
   private onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
-    const node = e.composedPath().find((n): n is HTMLElement => n instanceof HTMLElement && !!n.dataset.pid);
+    const node = e.composedPath().find(isNodeEl);
     const abEl = (e.target as HTMLElement).closest<HTMLElement>('.dc-artboard');
     const id = node ? node.dataset.pid! : abEl ? abEl.dataset.ab! : null;
     if (id) this.select(id); // right-click selects, like every design tool

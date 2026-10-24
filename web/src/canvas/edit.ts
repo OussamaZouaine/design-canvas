@@ -5,7 +5,9 @@
 // Previews while dragging write straight to the element, and the server's version replaces them on release.
 import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
+import { isNodeEl } from '@/lib/htmlTree';
 import { toast } from '@/store/toast';
+import { shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
 
 export interface EditHost {
   viewport: HTMLElement;
@@ -27,6 +29,13 @@ export interface EditHost {
 const HANDLE_DIRS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const;
 type Dir = (typeof HANDLE_DIRS)[number];
 
+// Position and size in design px. An <svg> has no offsetLeft/offsetWidth (those are HTMLElement only), so it is
+// read from its inline left/top and its rendered rect divided by the zoom.
+const boxOf = (el: HTMLElement, zoom: number) => {
+  if (el instanceof HTMLElement) return { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+  const r = (el as Element).getBoundingClientRect(), st = (el as SVGElement).style;
+  return { x: parseFloat(st.left) || 0, y: parseFloat(st.top) || 0, w: r.width / zoom, h: r.height / zoom };
+};
 const isAbs = (el: Element) => ['absolute', 'fixed'].includes(getComputedStyle(el).position);
 const typing = (t: EventTarget | null) => t instanceof Element && !!t.closest('input, textarea, [contenteditable]');
 const fail = (err: unknown, fallback: string) => toast((err as Error)?.message || fallback);
@@ -86,7 +95,7 @@ export class CanvasEditor {
     const abs = !board && !!el && isAbs(el);
     const start = board
       ? { x: board.x, y: board.y, w: board.width, h: board.height }
-      : { x: el!.offsetLeft, y: el!.offsetTop, w: el!.offsetWidth, h: el!.offsetHeight };
+      : boxOf(el!, host.zoom());
     const min = board ? 40 : 4;
     const next = { ...start };
     const sx = e.clientX, sy = e.clientY;
@@ -175,7 +184,7 @@ export class CanvasEditor {
     const { host } = this;
     if (!isAbs(el) || el.closest('[data-locked]')) return false;
     const id = el.dataset.pid!;
-    const l0 = el.offsetLeft, t0 = el.offsetTop;
+    const { x: l0, y: t0 } = boxOf(el, host.zoom());
     let moved = false, mx = 0, my = 0;
     this.startDrag(e, (dx, dy) => {
       mx = dx; my = dy;
@@ -198,7 +207,7 @@ export class CanvasEditor {
   // qualify: setting text on a node with children would replace them. contenteditable turns any element into a
   // text field right inside its shadow root; plaintext-only keeps pasted formatting out.
   private onDblClick = (e: MouseEvent) => {
-    const fromPath = e.composedPath().find((n): n is HTMLElement => n instanceof HTMLElement && !!n.dataset.pid);
+    const fromPath = e.composedPath().find(isNodeEl);
     const el = fromPath ?? (Date.now() - this.lastDown.t < 600 ? this.lastDown.node : null);
     if (!el || el.children.length || !el.textContent?.trim() || el.isContentEditable) return;
     this.startTextEdit(el);
@@ -338,6 +347,16 @@ export class CanvasEditor {
   createArtboard(opts: { x?: number; y?: number; width?: number; height?: number } = {}) {
     this.host.markUserEdit();
     return canvasAction(this.host.projectId, 'create', { name: 'Artboard', width: 1440, height: 900, page: this.host.activePage(), ...opts });
+  }
+
+  // Shape tools: write one absolutely positioned <svg> into the board. Returns the new node id once the server
+  // answers (the element only exists after the doc event redraws, so the caller waits for it before selecting).
+  async addShape(boardId: string, kind: ShapeKind, box: ShapeBox): Promise<string | undefined> {
+    this.host.markUserEdit();
+    try {
+      const r = await canvasAction(this.host.projectId, 'paste', { html: shapeHtml(kind, box), target: boardId, position: 'append' });
+      return (r.result as { ids?: string[] } | undefined)?.ids?.[0];
+    } catch (err) { fail(err, 'Could not draw the shape'); }
   }
 
   // Text tool: drop a paragraph into the clicked element (or after it when it is a text leaf, since text

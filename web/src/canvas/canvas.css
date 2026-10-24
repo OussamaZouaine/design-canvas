@@ -12,7 +12,7 @@
 .dc-viewport.panning { cursor: grabbing; }
 .dc-viewport.commenting { cursor: crosshair; }
 /* Tool cursors: the cursor itself is the only feedback, so no motion here. */
-.dc-viewport[data-tool="frame"] { cursor: crosshair; }
+.dc-viewport[data-tool="frame"], .dc-viewport[data-tool="rect"], .dc-viewport[data-tool="ellipse"], .dc-viewport[data-tool="line"] { cursor: crosshair; }
 .dc-viewport[data-tool="text"] { cursor: text; }
 .dc-viewport[data-tool="hand"], .dc-viewport.space-pan { cursor: grab; }
 .dc-viewport[data-tool="hand"] *, .dc-viewport.space-pan * { cursor: inherit; }
