@@ -6,6 +6,7 @@
 // Text that differs per instance lives in slots: an element inside the master carrying
 // data-slot="label" holds the default text, and an instance overrides it by name.
 import { parse, HTMLElement } from 'node-html-parser';
+import { chromeColours } from './foundations.mjs';
 
 const NAME_RE = /^[a-z][a-z0-9-]{0,30}$/;
 
@@ -62,11 +63,13 @@ export const defaultVariant = (comp) => ('default' in comp.variants ? 'default' 
 // ---- The generated "Components" sheet -----------------------------------------------------
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const mono = 'font: 12px/16px ui-monospace, Consolas, monospace; color: var(--color-muted, #666)';
+const mono = (c) => `font: 12px/16px ui-monospace, Consolas, monospace; color: ${c.muted}`;
 
 // One section per component, one cell per variant, each cell an expanded instance with a caption.
 // Returns { html, height } like foundationsHtml; the caller gives the nodes ids.
-export function componentsSheetHtml(components) {
+export function componentsSheetHtml(components, theme) {
+  // Same matched-set rule as the Foundations board (see chromeColours).
+  const c = chromeColours(theme?.tokens);
   const names = Object.keys(components);
   let height = 48 * 2 + 36;
   const sections = names.map((name) => {
@@ -75,9 +78,9 @@ export function componentsSheetHtml(components) {
     const rows = Math.ceil(variants.length / 3);
     height += 100 + rows * 120;
     const cells = variants.map(([vname, html]) =>
-      `<div data-name="${esc(name)} ${esc(vname)}" style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid var(--color-border, #ddd); border-radius: 12px; background: var(--color-surface, #fff)">${expand(html, name, vname)}<span style="${mono}">${esc(vname)}</span></div>`).join('');
-    return `<h3 data-name="${esc(name)} heading" style="margin: 40px 0 4px; font: 600 16px/22px var(--font-sans, system-ui, sans-serif); color: var(--color-fg, #111)">${esc(name)}</h3><div style="${mono}; margin-bottom: 16px">${slots.length ? `slots: ${esc(slots.join(', '))}` : 'no slots'}</div><div style="display: flex; flex-wrap: wrap; gap: 16px">${cells}</div>`;
+      `<div data-name="${esc(name)} ${esc(vname)}" style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid ${c.border}; border-radius: 12px; background: ${c.surface}">${expand(html, name, vname)}<span style="${mono(c)}">${esc(vname)}</span></div>`).join('');
+    return `<h3 data-name="${esc(name)} heading" style="margin: 40px 0 4px; font: 600 16px/22px var(--font-sans, system-ui, sans-serif); color: ${c.fg}">${esc(name)}</h3><div style="${mono(c)}; margin-bottom: 16px">${slots.length ? `slots: ${esc(slots.join(', '))}` : 'no slots'}</div><div style="display: flex; flex-wrap: wrap; gap: 16px">${cells}</div>`;
   });
-  const html = `<div data-name="Components" data-locked style="box-sizing: border-box; width: 1200px; padding: 48px; background: var(--color-bg, #fff); font-family: var(--font-sans, system-ui, sans-serif)"><h1 data-name="Title" style="margin: 0; font: 600 32px/1.2 var(--font-sans, system-ui, sans-serif); color: var(--color-fg, #111)">Components</h1>${sections.join('')}</div>`;
+  const html = `<div data-name="Components" data-locked style="box-sizing: border-box; width: 1200px; padding: 48px; background: ${c.bg}; font-family: var(--font-sans, system-ui, sans-serif)"><h1 data-name="Title" style="margin: 0; font: 600 32px/1.2 var(--font-sans, system-ui, sans-serif); color: ${c.fg}">Components</h1>${sections.join('')}</div>`;
   return { html, height: Math.min(10000, Math.max(400, Math.round(height))) };
 }

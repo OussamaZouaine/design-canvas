@@ -50,3 +50,17 @@ test('undo removes a freshly created foundations board', () => {
   doc.undo();
   assert.equal(doc.data.artboards.length, 0);
 });
+
+test('a theme without the fg role gets one fixed light chrome, never a themed surface under fallback text', () => {
+  // Regression: color-surface (dark) was used for the label strip while the label text fell back to dark #111.
+  const doc = new Doc(null);
+  doc.setTokens({ 'color-surface': 'oklch(0.21 0.006 60)', 'color-ink': 'oklch(0.95 0.006 80)' });
+  const ab = doc.createFoundations();
+  // the chrome form carries a fallback ("var(--color-surface, ..."); the swatch itself is a bare var()
+  assert.doesNotMatch(ab.html, /background: var\(--color-surface, /);
+  assert.match(ab.html, /var\(--color-ink\)/); // the swatch itself still shows the token
+  // with the full starter roles the chrome follows the theme
+  const themed = new Doc(null);
+  themed.setTokens({}, { preset: 'starter' });
+  assert.match(themed.createFoundations().html, /background: var\(--color-surface, /);
+});
