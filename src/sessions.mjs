@@ -24,6 +24,7 @@ export class Session {
     this.label = label ? slug(label) || null : null; // from /mcp?agent=<name> or start({agent})
     this.client = null; // { name, version } once `initialize` arrived
     this.projectId = null; // bound by start / project open
+    this.seen = new Map(); // projectId -> journal version this agent last read (other agents' changes, get_changes/start)
     this.lastSeen = Date.now();
   }
 

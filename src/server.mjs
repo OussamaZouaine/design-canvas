@@ -22,6 +22,7 @@ import { FontCache } from './fonts.mjs';
 import { HeadlessWorker } from './headless.mjs';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { Session, SessionMap } from './sessions.mjs';
+import { Claims } from './claims.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -157,7 +158,14 @@ async function measureFixed() {
   return fixedCache;
 }
 
-const mcpDeps = { store, ui, fonts,requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port: PORT };
+// Soft board claims + paused agents (src/claims.mjs). Any change is pushed to the project's tabs as an SSE `claims`
+// event; a pause is global (an agent id, not a project), so it goes to every tab.
+const claimsPayload = (projectId) => ({ claims: projectId ? claims.list(projectId) : [], paused: claims.pausedList() });
+const claims = new Claims({
+  onChange: (projectId) => { for (const c of ui.clients) if (projectId === null || c.projectId === projectId) send(c.res, 'claims', claimsPayload(c.projectId)); },
+});
+
+const mcpDeps = { store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, claims, port: PORT };
 
 // Sessions of the MCP endpoint. Each client gets its own McpServer so identity and project binding live with it.
 const sessions = new SessionMap();
@@ -380,6 +388,14 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, store.import(await readJson(req)));
       }
 
+      // User switch: pause / resume one agent (its writes get a polite error). Agent ids are slugs, so the pattern is strict.
+      if (parts[1] === 'agents' && parts[2] === 'pause' && req.method === 'POST') {
+        const b = await readJson(req);
+        if (!/^[a-z0-9-]{1,40}$/.test(String(b.agent))) return json(res, 400, { error: 'Bad agent id' });
+        claims.setPaused(b.agent, b.paused === true);
+        return json(res, 200, { ok: true, paused: claims.pausedList() });
+      }
+
       // Server health for the MCP panel: open tabs and where Claude's tokens go.
       if (parts[1] === 'status' && req.method === 'GET') {
         return json(res, 200, { ok: true, tabs: [...ui.clients].filter((c) => c.projectId && !c.headless).length, headless: { available: headless.available, running: headless.procs.size }, meter: meter.snapshot() });
@@ -444,6 +460,8 @@ const server = http.createServer(async (req, res) => {
         // Activity runs; `since` (a sequence number from the previous answer's `seq`) returns only runs that changed after it.
         if (parts[3] === 'activity') return json(res, 200, store.listActivity(p.meta.id, { since: Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0 }));
         // Per-call log of MCP tool calls; `since` (ms timestamp) makes polling incremental.
+        // Live board claims + paused agents (the same payload the SSE `claims` event carries), to seed the UI on load.
+        if (parts[3] === 'claims') return json(res, 200, claimsPayload(p.meta.id));
         if (parts[3] === 'calls') return json(res, 200, calls.list(p.meta.id, Number(new URL(req.url, 'http://x').searchParams.get('since')) || 0));
         // Cost + efficiency dashboard: per agent and per prompt, derived from the call log (src/efficiency.mjs).
         if (parts[3] === 'efficiency') {
