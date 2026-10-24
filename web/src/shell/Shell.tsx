@@ -212,7 +212,7 @@ export function RightPanel({ projectId }: { projectId: string }) {
         {panelTab === 'theme' && <ThemePanel projectId={projectId} />}
         {panelTab === 'tokens' && <TokensPanel projectId={projectId} />}
         {panelTab === 'agents' && <AgentsPanel />}
-        {panelTab === 'mcp' && <McpPanel />}
+        {panelTab === 'mcp' && <McpPanel projectId={projectId} />}
       </div>
     </aside>
   );
