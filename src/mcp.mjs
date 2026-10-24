@@ -582,14 +582,22 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     return text({ deleted: page_id, boards_moved_to: dest });
   }));
 
-  server.registerTool('add_reference_image', {
-    description: 'Add a picture to rebuild a design from (a screenshot of a page or an app). Give an absolute file path on this machine (PNG, JPEG, GIF or WebP, up to 10 MB). It appears on the canvas as a locked "Reference" board; build your own artboard next to it, then call compare_to_reference to see how close you are.',
-    inputSchema: { ...pid, path: z.string(), name: z.string().max(80).optional(), page_id: z.string().optional() },
-  }, safe(({ project_id, path: file, name, page_id }) => {
+  // add / delete of reference pictures in one tool; compare_to_reference and capture_url stay separate (different jobs).
+  server.registerTool('references', {
+    description: 'Reference pictures to rebuild a design from. action add (path, optional name, page_id): give an absolute file path on this machine (PNG, JPEG, GIF or WebP, up to 10 MB); it appears on the canvas as a locked "Reference" board, build your own artboard next to it, then call compare_to_reference. action delete (reference_id): remove a reference and its board.',
+    inputSchema: { ...pid, action: z.enum(['add', 'delete']), path: z.string().optional(), name: z.string().max(80).optional(), page_id: z.string().optional(), reference_id: z.string().optional() },
+  }, safe(({ project_id, action, path: file, name, page_id, reference_id }) => {
     const { meta, doc } = target(project_id);
+    if (action === 'delete') {
+      need('references', action, { reference_id }, 'reference_id');
+      doc.deleteReference(reference_id);
+      log(meta, doc, 'delete_reference', []);
+      return text('ok');
+    }
+    need('references', action, { path: file }, 'path');
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error(`File not found: ${file}`);
     if (fs.statSync(file).size > 10_000_000) throw new Error('Image too large (10 MB max)');
-    const { ref, board } = store.addReference(meta.id, { name: name || file.split(/[\\/]/).pop().replace(/\.[^.]+$/, ''), buffer: fs.readFileSync(file), page: page_id ?? ui.currentPage.get(meta.id) });
+    const { ref, board } = store.addReference(meta.id, { name: name || file.split(/[\/]/).pop().replace(/\.[^.]+$/, ''), buffer: fs.readFileSync(file), page: page_id ?? ui.currentPage.get(meta.id) });
     log(meta, doc, 'add_reference_image', board.id);
     return text({ reference_id: ref.id, artboard_id: board.id, width: ref.width, height: ref.height });
   }));
@@ -626,16 +634,11 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
     if (ab.generated === 'reference') throw new Error('Pick your own artboard, not a reference board');
     const ref = reference_id ? doc.references.find((r) => r.id === reference_id) : doc.references.at(-1);
-    if (!ref) throw new Error(doc.references.length ? `Reference ${reference_id} not found` : 'No reference images yet. Call add_reference_image first.');
+    if (!ref) throw new Error(doc.references.length ? `Reference ${reference_id} not found` : 'No reference images yet. Call references (action add) first.');
     const r = await requestCompare(meta.id, artboard_id, ref.id);
     const { dataUrl, ...summary } = r;
     return { content: [{ type: 'text', text: JSON.stringify({ reference_id: ref.id, ...summary }) }, { type: 'image', data: dataUrl.split(',')[1], mimeType: 'image/jpeg' }] };
   }));
-
-  server.registerTool('delete_reference', {
-    description: 'Remove a reference image and its board.',
-    inputSchema: { ...pid, reference_id: z.string() },
-  }, safe(({ project_id, reference_id }) => { const { meta, doc } = target(project_id); doc.deleteReference(reference_id); log(meta, doc, 'delete_reference', []); return text('ok'); }));
 
   server.registerTool('get_changes', {
     description: 'What the USER changed by hand (moved, resized, renamed, deleted, duplicated or created artboards) since you last called this, so you never re-read a whole board to find out. Pass since_version to look further back; the returned version is what to pass next time.',
