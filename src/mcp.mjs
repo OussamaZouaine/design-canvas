@@ -42,7 +42,7 @@ const safe = (fn) => async (args) => {
 };
 
 // Shared optional argument on every design tool.
-const pid = { project_id: z.string().optional().describe('Project id (p_xxxxxxxx). Defaults to the active project.') };
+const pid = { project_id: z.string().optional().describe('Default: active project') };
 
 export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, port }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
@@ -852,6 +852,18 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     fs.writeFileSync(file, buf);
     return text({ path: file, bytes: buf.length });
   }));
+
+  // The SDK stamps `$schema` on every inputSchema (~14 tokens x 62 tools) and the model gets nothing from it.
+  // There is no option for that, so wrap the tools/list handler it installed (the registrations above set it up).
+  // `_requestHandlers` is an internal Map of the SDK's Protocol class; if it ever disappears we just keep the key.
+  const listTools = server.server._requestHandlers?.get('tools/list');
+  if (listTools) {
+    server.server._requestHandlers.set('tools/list', async (...args) => {
+      const res = await listTools(...args);
+      for (const t of res.tools) { delete t.inputSchema?.$schema; delete t.outputSchema?.$schema; }
+      return res;
+    });
+  }
 
   return server;
 }
