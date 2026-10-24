@@ -13,7 +13,18 @@ const write = (key: string, value: string) => {
 };
 
 // The theme is the shadcn `.dark` class on <html>. Dark by default (canvas tools read better on dark).
-export const applyTheme = (theme: Theme) => document.documentElement.classList.toggle('dark', theme === 'dark');
+// Every colour transition would fire at once on a flip and smear the switch, so transitions are switched off
+// (`.theme-switching`), styles are recomputed so the new colours land without them, then they come back.
+// A timeout, not requestAnimationFrame: rAF never fires in a background tab, which would leave transitions off.
+// The first apply at load skips all this (nothing has rendered yet, so nothing can transition).
+export const applyTheme = (theme: Theme, instant = true) => {
+  const root = document.documentElement;
+  if (instant) root.classList.add('theme-switching');
+  root.classList.toggle('dark', theme === 'dark');
+  if (!instant) return;
+  void getComputedStyle(root).color; // force the style recalc while transitions are off
+  setTimeout(() => root.classList.remove('theme-switching'), 1);
+};
 
 interface UiState {
   tool: Tool;
@@ -31,7 +42,7 @@ interface UiState {
 }
 
 const initialTheme: Theme = read('dc-theme') === 'light' ? 'light' : 'dark';
-applyTheme(initialTheme);
+applyTheme(initialTheme, false);
 
 export const useUi = create<UiState>((set, get) => ({
   tool: 'move',
