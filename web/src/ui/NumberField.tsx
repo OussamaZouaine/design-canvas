@@ -34,7 +34,7 @@ export function NumberField({ label, value, onChange, step = 1, min = -Infinity,
   };
 
   return (
-    <label title={title} className={cn('flex h-7 items-center rounded-md bg-muted/60 text-xs focus-within:ring-2 focus-within:ring-ring/40', className)}>
+    <label title={title} className={cn('flex h-7 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection', className)}>
       <span
         className="min-w-6 shrink-0 cursor-ew-resize px-1.5 select-none text-center text-muted-foreground touch-none"
         onPointerDown={(e) => {

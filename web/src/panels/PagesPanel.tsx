@@ -42,37 +42,38 @@ export function PagesPanel({ projectId }: { projectId: string }) {
   };
 
   return (
-    <section aria-label="Pages" className="border-b">
-      <div className="flex h-8 items-center gap-1 px-2">
+    <section aria-label="Pages" className="border-b pb-1">
+      <div className="flex h-9 items-center gap-1 px-2">
         <button
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className="flex flex-1 items-center gap-1 rounded-sm text-left text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 items-center gap-1 rounded-sm px-1 text-left text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {open ? <ChevronDown className="size-3 text-muted-foreground" /> : <ChevronRight className="size-3 text-muted-foreground" />}
           Pages
         </button>
         <button
           aria-label="Add a page" title="Add a page" onClick={add}
-          className="grid size-5 place-items-center rounded text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
+          className="grid size-6 place-items-center rounded-md text-muted-foreground outline-none transition-[color,background-color,scale] duration-150 active:scale-96 pointer-hover:bg-muted pointer-hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
         >
           <Plus />
         </button>
       </div>
       {open && (
-        <ul className="max-h-40 overflow-auto pb-1">
+        <ul className="max-h-40 overflow-auto">
           {list.map((p) => (
             <li key={p.id}>
               {renaming === p.id ? (
-                <div className="flex h-7 items-center px-3"><RenameInput label="Page name" initial={p.name} onDone={(n) => rename(p.id, n)} /></div>
+                <div className="mx-1.5 flex h-7 items-center px-1.5"><RenameInput label="Page name" initial={p.name} onDone={(n) => rename(p.id, n)} /></div>
               ) : (
                 <button
                   aria-current={p.id === current ? 'page' : undefined}
                   onClick={() => engine?.setPage(p.id)}
                   onDoubleClick={() => setRenaming(p.id)}
                   className={cn(
-                    'flex h-7 w-full items-center gap-2 px-3 text-left text-[11px] outline-none focus-visible:bg-muted',
-                    p.id === current ? 'font-medium' : 'text-muted-foreground',
+                    // Same inset pill rows as the Layers list below, so the sidebar reads as one list style.
+                    'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] items-center gap-2 rounded-md px-1.5 text-left text-[11px] outline-none transition-colors duration-150 focus-visible:bg-muted',
+                    p.id === current ? 'bg-field font-medium' : 'text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground',
                   )}
                 >
                   {/* React escapes the name, so an untrusted page name is safe here. */}

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { Fragment, useState, type ReactNode } from 'react';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { pagesOf } from '@/canvas/engine';
@@ -57,7 +57,8 @@ const FAMILIES = [...new Set(SECTIONS.flatMap((s) => s.rows.flat().map((f) => f.
 // Sections that mean nothing on an SVG node (it has no CSS fill/border/text): its own Vector section replaces them.
 const NOT_FOR_SVG = new Set(['Auto layout', 'Fill', 'Stroke', 'Typography']);
 
-const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-muted/60 text-xs focus-within:ring-2 focus-within:ring-ring/40';
+// Filled field, Figma-style: no border at rest, a slightly darker fill on hover, a signal-blue ring when focused.
+const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection';
 const labelCls = 'min-w-6 shrink-0 select-none px-1.5 text-center text-muted-foreground';
 const tokenName = (v: string) => /^var\(--([a-z0-9-]+)\s*(?:,.*)?\)$/i.exec(v)?.[1] ?? null;
 const PLAIN_PX = /^-?\d+(\.\d+)?(px)?$/;
@@ -111,12 +112,17 @@ function SelectField({ label, value, options, names, onCommit }: { label: string
 function Section({ title, off, children }: { title: string; off?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
-    <section className={cn('border-b px-3 py-2', off && 'pointer-events-none opacity-50')}>
-      <button aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-1 text-[11px] font-medium [&_svg]:size-3">
-        {open ? <ChevronDown /> : <ChevronRight />}
+    // Hairline between sections (structure, so a border), title in semibold foreground with a muted chevron on the
+    // trailing edge, so the eye scans titles down the left edge.
+    <section className={cn('border-b px-3 pt-1 pb-3', off && 'pointer-events-none opacity-50')}>
+      <button
+        aria-expanded={open} onClick={() => setOpen(!open)}
+        className="group/sec -mx-1 flex h-8 w-[calc(100%+0.5rem)] items-center justify-between rounded-md px-1 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
         {title}
+        <ChevronDown className={cn('size-3 text-muted-foreground transition-[rotate,opacity] duration-150 group-hover/sec:text-foreground', !open && '-rotate-90')} />
       </button>
-      {open && <div className="mt-2 flex flex-col gap-1.5">{children}</div>}
+      {open && <div className="flex flex-col gap-1.5">{children}</div>}
     </section>
   );
 }
@@ -303,9 +309,9 @@ function NodeInspector({ projectId, id, el, lists, tokens }: { projectId: string
   return (
     <div>
       {lists}
-      <div className="flex items-baseline justify-between gap-2 border-b px-3 py-2">
-        <b className="min-w-0 truncate font-medium">{el.dataset.name || el.tagName.toLowerCase()}</b>
-        <small className="shrink-0 font-mono text-muted-foreground">{id}</small>
+      <div className="flex h-10 items-center justify-between gap-2 border-b px-3">
+        <b className="min-w-0 truncate text-[13px] font-semibold tracking-[-0.005em]">{el.dataset.name || el.tagName.toLowerCase()}</b>
+        <small className="tnum shrink-0 rounded bg-field px-1.5 py-px text-[10px] text-muted-foreground">{id}</small>
       </div>
       {locked && <p className="border-b px-3 py-2 text-muted-foreground">This layer is locked: unlock it in the Layers panel to edit.</p>}
       {SECTIONS.map((s, si) => (

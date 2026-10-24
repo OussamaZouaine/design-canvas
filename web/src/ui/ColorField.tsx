@@ -23,9 +23,9 @@ export function ColorField({ value, onChange, preview, list, label = 'Colour', c
   };
   const paint = preview ?? value;
   return (
-    <div className={cn('flex h-7 min-w-0 items-center gap-2 rounded-md bg-muted/60 px-1.5 text-xs focus-within:ring-2 focus-within:ring-ring/40', className)}>
+    <div className={cn('flex h-7 min-w-0 items-center gap-2 rounded-md bg-field px-1.5 text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection', className)}>
       {/* The swatch is a button over a transparent native colour input: clicking it opens the OS picker. */}
-      <span className="relative size-4 shrink-0 overflow-hidden rounded-sm border border-border">
+      <span className="relative size-4 shrink-0 overflow-hidden rounded-sm outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10">
         {/* The inline background is a runtime value, which Tailwind cannot generate ahead of time. */}
         <span className="absolute inset-0" style={{ background: CSS.supports('color', paint) ? paint : 'transparent' }} />
         <input

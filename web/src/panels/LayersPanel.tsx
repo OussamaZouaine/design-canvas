@@ -98,8 +98,8 @@ export function LayersPanel({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <div className="border-b p-2">
-        <Input type="search" aria-label="Search layers" placeholder="Search layers" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="px-2 pb-1">
+        <Input type="search" aria-label="Search layers" placeholder="Search layers" value={query} onChange={(e) => setQuery(e.target.value)} className="border-transparent bg-field dark:bg-field focus-visible:border-transparent focus-visible:ring-1 focus-visible:ring-selection" />
       </div>
       <ul className="flex-1 overflow-auto py-1" onMouseLeave={() => engine?.setHover(null)}>
         {rows.map((r) => (
@@ -143,8 +143,9 @@ export function LayersPanel({ projectId }: { projectId: string }) {
             }}
             style={{ paddingLeft: 6 + r.depth * 14 }}
             className={cn(
-              'group relative flex h-7 cursor-default items-center gap-1 pr-1.5 select-none',
-              selected === r.id ? 'bg-[color-mix(in_oklab,var(--selection)_18%,transparent)]' : 'hover:bg-muted',
+              // Rows are inset with rounded ends, so the selection reads as a soft pill instead of a full-bleed stripe.
+              'group relative mx-1.5 flex h-7 cursor-default items-center gap-1 rounded-md pr-1.5 select-none',
+              selected === r.id ? 'bg-selection-soft' : 'pointer-hover:bg-muted',
               drag?.over === r.id && drag.pos === 'inside' && 'outline outline-1 -outline-offset-1 outline-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'before' && 'before:absolute before:inset-x-1.5 before:top-0 before:h-0.5 before:bg-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'after' && 'after:absolute after:inset-x-1.5 after:bottom-0 after:h-0.5 after:bg-[var(--selection)]',

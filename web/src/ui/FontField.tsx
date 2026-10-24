@@ -47,7 +47,7 @@ export function FontField({ value, resolved, projectFonts, onChange }: Props) {
       <DropdownMenuTrigger
         aria-label="Font family"
         title={resolved || 'Font family'}
-        className="flex h-7 w-full min-w-0 items-center rounded-md bg-muted/60 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="flex h-7 w-full min-w-0 items-center rounded-md bg-field text-xs outline-none transition-colors duration-150 pointer-hover:bg-field-hover focus-visible:ring-1 focus-visible:ring-selection"
       >
         <span className="min-w-6 shrink-0 select-none px-1.5 text-center text-muted-foreground">Font</span>
         <span className={cn('min-w-0 flex-1 truncate text-left', !own && 'text-muted-foreground')} style={resolved ? { fontFamily: resolved } : undefined}>
