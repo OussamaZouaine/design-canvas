@@ -25,7 +25,9 @@ export function CoverThumb({ cover, width, height, className }: Props) {
     root.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}</style><div style="position:relative;width:100%;height:100%">${cover.html}</div>`;
   }, [cover]);
 
-  const box = cn('relative shrink-0 overflow-hidden bg-muted/60', className);
+  // A pure black/white 10% outline gives every cover the same crisp edge, whatever colour its own edge is
+  // (a tinted outline would pick up the card underneath and read as dirt).
+  const box = cn('relative shrink-0 overflow-hidden bg-muted/60 outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10', className);
   if (!cover) {
     return <div className={cn(box, 'flex items-center justify-center text-xs text-muted-foreground')} style={{ width, height }}>Empty</div>;
   }
