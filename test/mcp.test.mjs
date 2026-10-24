@@ -202,6 +202,8 @@ test('create_artboard with html writes the first content in the same call', asyn
   const r = await h.call('create_artboard', { project_id: p.project_id, name: 'Home', html: '<div style="padding:8px">Hi</div>' });
   assert.ok(r.id);
   assert.equal(r.created.length, 1);
+  // the written markup is not echoed back (it once returned the whole normalized board)
+  assert.equal(r.html, undefined);
   // the content is really in the board, and omitting html keeps the old shape
   assert.match(await h.call('get_tree', { project_id: p.project_id, node_id: r.id }), /Hi|N\d+/);
   const empty = await h.call('create_artboard', { project_id: p.project_id, name: 'Empty' });
