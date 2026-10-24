@@ -86,12 +86,12 @@ test('finish_working screenshot_artboard_id adds the image only when the layout 
   bad.close();
 });
 
-test('instructions: first turn pairs get_guide with list_projects and names the core tools for one ToolSearch', async () => {
+test('instructions: first turn pairs get_guide with start and names the core tools for one ToolSearch', async () => {
   const h = await harness();
   const i = h.client.getInstructions();
-  assert.match(i, /get_guide\(\) and list_projects\(\) together/);
+  assert.match(i, /get_guide\(\) and start\(\) together/);
   assert.match(i, /ONE ToolSearch/);
-  for (const t of ['get_guide', 'list_projects', 'log_prompt', 'create_artboard', 'write_html', 'update_styles', 'get_tree', 'lint', 'get_screenshot', 'finish_working']) {
+  for (const t of ['get_guide', 'start', 'list_projects', 'log_prompt', 'create_artboard', 'write_html', 'update_styles', 'get_tree', 'lint', 'get_screenshot', 'finish_working']) {
     assert.ok(i.includes(t), t);
   }
   h.close();
@@ -284,5 +284,54 @@ test('batch rejects tools outside the whitelist and a per-op project_id', async 
   const own = await h.client.callTool({ name: 'batch', arguments: { project_id: pid, ops: [{ tool: 'set_text_content', args: { project_id: pid, node_id: node, text: 'x' } }] } });
   assert.match(own.content[0].text, /project_id is not allowed/);
   assert.match(own.content[0].text, /nothing was applied/);
+  h.close();
+});
+
+test('start: new project by name logs the prompt and creates the first board with html', async () => {
+  const h = await harness();
+  const r = await h.call('start', { prompt: 'Make a pricing page', project: 'Pricing', description: 'Plans', brief: 'calm', artboard: { name: 'Home', width: 800, html: '<div style="padding:8px">Hi</div>' } });
+  assert.equal(r.created, true);
+  assert.match(r.project_id, /^p_[a-f0-9]{8}$/);
+  assert.match(r.artboard_id, /^A/);
+  // A brand-new project has nothing to report, and the brief is stored so no reminder appears.
+  assert.equal(r.comments, undefined);
+  assert.equal(r.artboards, undefined);
+  assert.equal(r.reminder, undefined);
+  assert.equal(h.store.get(r.project_id).meta.name, 'Pricing');
+  assert.equal(h.store.activeId, r.project_id);
+  h.close();
+});
+
+test('start: artboard html is optional and the no-brief reminder is kept', async () => {
+  const h = await harness();
+  const r = await h.call('start', { prompt: 'x', project: 'Empty board', artboard: { name: 'A' } });
+  assert.ok(r.artboard_id);
+  assert.match(r.reminder, /No brief/);
+  h.close();
+});
+
+test('start: existing project by name (any case) and by id returns comments and boards, not a new project', async () => {
+  const h = await harness();
+  const { pid, board, node } = await withBoard(h);
+  h.store.addComment(pid, { targetId: node, artboardId: board, text: 'x'.repeat(200) });
+  const byName = await h.call('start', { prompt: 'again', project: 'trim' });
+  assert.equal(byName.created, false);
+  assert.equal(byName.project_id, pid);
+  assert.match(byName.comments, /^1 open\n\S+ \S+ x{120}…$/);
+  assert.match(byName.artboards, new RegExp(`${board} Home \\d+x\\d+`));
+  const byId = await h.call('start', { prompt: 'again', project: pid });
+  assert.equal(byId.project_id, pid);
+  assert.equal(h.store.list().length, 1);
+  h.close();
+});
+
+test('start: no project uses the active one, and errors when there is none', async () => {
+  const h = await harness();
+  const err = await h.client.callTool({ name: 'start', arguments: { prompt: 'x' } });
+  assert.equal(err.isError, true);
+  assert.match(err.content[0].text, /Pass project/);
+  const { pid } = await withBoard(h);
+  const r = await h.call('start', { prompt: 'x' });
+  assert.equal(r.project_id, pid);
   h.close();
 });

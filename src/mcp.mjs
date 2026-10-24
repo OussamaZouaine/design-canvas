@@ -24,9 +24,9 @@ import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } fr
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
 // The first line is a gate: the process and taste rules live in the guide, and clients that skip it skip them.
 const INSTRUCTIONS = `Design Canvas: HTML designs on an infinite canvas, shared live with the user.
-Your first turn: call get_guide() and list_projects() together. get_guide returns the whole method (workflow, brief, type, layout, review) in one call; read it before any design call. Before the first write of a new design post a short brief in chat, then pass it as log_prompt.brief. Only get_guide({topic:"mobile"}) is separate.
-Be economical with turns: send independent tool calls together in one turn. If tools are deferred, load the core set in ONE ToolSearch select: get_guide, list_projects, log_prompt, create_artboard, write_html, update_styles, get_tree, lint, get_screenshot, finish_working.
-Workflow: list_projects (reuse one if it fits, else create_project) -> log_prompt + create_artboard (with html for the first group) -> write_html / update_styles (new lint issues come back in the result) -> one get_screenshot -> finish_working. In a project you just created skip get_basic_info, get_tree and get_comments; use them only in an existing one.
+Your first turn: call get_guide() and start() together. get_guide returns the whole method (workflow, brief, type, layout, review) in one call; read it before any design call. Before the first write of a new design post a short brief in chat, then pass it as start.brief. Only get_guide({topic:"mobile"}) is separate.
+Be economical with turns: send independent tool calls together in one turn. If tools are deferred, load the core set in ONE ToolSearch select: get_guide, start, list_projects, log_prompt, create_artboard, write_html, update_styles, get_tree, lint, get_screenshot, finish_working.
+Workflow: start({prompt, project, brief, artboard}) = find/create project + log the request + first board (with html for the first group) -> write_html / update_styles (new lint issues come back in the result) -> one get_screenshot -> finish_working. start also returns an existing project's open comments, user changes and boards, so skip get_comments, get_changes and get_basic_info. list_projects is for browsing only.
 Rules: inline styles only; colours as oklch(); real content, never lorem ipsum; text contrast at least 4.5:1; edit with update_styles or write_html on a parent id instead of rewriting a board; reuse blocks with <x-clone node-id>. Call get_guide for the full guide.`;
 
 // Compact JSON: every result is re-read on each later turn, and pretty-printing adds ~35-40% for nothing the model needs.
@@ -221,6 +221,17 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       doc.deleteNodes(ids);
       return 'ok';
     },
+  };
+  // The user's hand edits since Claude last looked (shared by get_changes and start); advances the read marker.
+  const userChanges = (meta, doc, since_version) => {
+    const from = since_version ?? ui.lastRead.get(meta.id) ?? 0;
+    const changes = doc.changesSince(from, 'user').map((c) => ({
+      version: c.version, action: c.tool, ids: c.ids,
+      // Outline lines only for things that still exist, one line each.
+      now: c.ids.map((id) => { try { return doc.outline(id, { depth: 0 }).split('\n')[0]; } catch { return `${id} (deleted)`; } }),
+    }));
+    ui.lastRead.set(meta.id, doc.version);
+    return { version: doc.version, changes: changes.length ? changes : 'none' };
   };
   const viaEdit = (name) => safe(async (args) => text(await edits[name](args)));
 
@@ -624,14 +635,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     inputSchema: { ...pid, since_version: z.number().int().min(0).optional() },
   }, safe(({ project_id, since_version }) => {
     const { meta, doc } = target(project_id);
-    const from = since_version ?? ui.lastRead.get(meta.id) ?? 0;
-    const changes = doc.changesSince(from, 'user').map((c) => ({
-      version: c.version, action: c.tool, ids: c.ids,
-      // Outline lines only for things that still exist, one line each.
-      now: c.ids.map((id) => { try { return doc.outline(id, { depth: 0 }).split('\n')[0]; } catch { return `${id} (deleted)`; } }),
-    }));
-    ui.lastRead.set(meta.id, doc.version);
-    return text({ version: doc.version, changes: changes.length ? changes : 'none' });
+    return text(userChanges(meta, doc, since_version));
   }));
 
   server.registerTool('finish_working', {
@@ -818,6 +822,59 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     } finally {
       batchBoards = null;
     }
+  }));
+
+  // start: the first call of a request. Resolve/create the project, log the prompt and optionally create the first
+  // board, so the normal opening (list_projects + create/open + log_prompt + create_artboard) is one turn. For an
+  // existing project it also returns what the agent would otherwise fetch (open comments, user changes, boards).
+  // The MCP is stateless and store.activeId is shared between sessions, so the resolved project_id is always returned.
+  server.registerTool('start', {
+    description: 'Begin a request in ONE call (replaces list_projects + create_project/open_project + log_prompt + create_artboard). project: an id (p_...) or a name; an existing project matches by exact id or name (case-insensitive), otherwise one is created with that name. Without project the active one is used. Returns project_id (pass it on every later call); for an existing project also its open comments, the changes the user made by hand and its artboards, so skip get_comments / get_changes / get_basic_info. artboard (same fields as create_artboard, html optional) creates the first board.',
+    inputSchema: {
+      prompt: z.string().min(1).max(500).describe("The request in the user's own words (one short sentence)."),
+      project: z.string().max(80).optional().describe('Project id or name (2-4 words, e.g. the repo or feature).'),
+      description: z.string().max(300).optional().describe('One line, used only when the project is created.'),
+      brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat.'),
+      artboard: z.object({
+        name: z.string().optional(), width: z.number().min(40).max(5000).optional(), height: z.number().min(40).max(10000).optional(),
+        height_mode: z.enum(['fit', 'fixed']).optional(), page_id: z.string().optional(), x: z.number().optional(), y: z.number().optional(),
+        html: z.string().max(200_000).optional(),
+      }).optional(),
+    },
+  }, safe(async ({ prompt, project, description, brief, artboard }) => {
+    let created = false, meta;
+    if (project) {
+      const wanted = project.trim();
+      const found = /^p_[a-f0-9]{8}$/.test(wanted) ? store.get(wanted) : null;
+      const hit = found && !found.meta.deletedAt ? found.meta : store.findByName(wanted);
+      if (hit) meta = hit;
+      else { meta = store.create({ name: wanted, description, unique: 'error' }); created = true; }
+    } else {
+      if (!store.activeId) throw new Error('No active project. Pass project: a name for a new project, or an id/name of an existing one (list_projects to browse).');
+      meta = target(null).meta;
+    }
+    store.setActive(meta.id);
+    const { doc } = store.get(meta.id);
+    const out = { project_id: meta.id, created };
+    // Read before this request writes anything, so boards/changes describe the state the user left.
+    if (!created) {
+      const open = store.listComments(meta.id).filter((c) => !c.resolved);
+      if (open.length) {
+        out.comments = `${open.length} open` + open.slice(0, 10).map((c) => `\n${c.id} ${c.targetId} ${c.text.length > 120 ? c.text.slice(0, 120) + '…' : c.text}`).join('') + (open.length > 10 ? `\n+${open.length - 10} more (get_comments)` : '');
+      }
+      const ch = userChanges(meta, doc);
+      if (ch.changes !== 'none') out.changes = ch;
+      const boards = doc.data.artboards;
+      if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
+    } else ui.lastRead.set(meta.id, doc.version);
+    store.logPrompt(meta.id, prompt, brief);
+    if (artboard) {
+      // Keep only what the agent needs from the create_artboard result: the id plus its dialect/lint/layout/reminder notes.
+      const r = await edits.create_artboard({ ...artboard, project_id: meta.id });
+      const { created: ids, dialect, lint, layout, reminder } = r;
+      Object.assign(out, { artboard_id: r.id }, ids && { created_ids: ids }, { ...(dialect && { dialect }), ...(lint && { lint }), ...(layout && { layout }), ...(reminder && { reminder }) });
+    }
+    return text(out);
   }));
 
   // Screenshot as MCP content parts (image, plus a note when cut). Shared by get_screenshot and finish_working.
