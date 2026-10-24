@@ -344,6 +344,9 @@ export class Doc {
         for (const a of ['viewBox', 'd', 'fill', 'stroke', 'cx', 'cy', 'r']) {
           if (el.hasAttribute(a)) bits.push(`${a}:${el.getAttribute(a).slice(0, 28)}`);
         }
+        // A pen-tool path keeps its curve on the child <path>; surface it (longer cut-off) on the layer Claude sees.
+        const inner = el.getAttribute('data-shape') === 'path' ? el.querySelector('path') : null;
+        if (inner?.hasAttribute('d')) bits.push(`path:${inner.getAttribute('data-pid')} d:${inner.getAttribute('d').slice(0, 80)}`);
       }
       if (el.hasAttribute('data-locked')) bits.push('locked');
       if (el.hasAttribute('hidden')) bits.push('hidden');
@@ -762,6 +765,38 @@ export class Doc {
       for (const [k, v] of entries) {
         if (v === null) hit.el.removeAttribute(k);
         else hit.el.setAttribute(k, v);
+      }
+      this._save(hit.ab, hit.root);
+    }
+    this._commit();
+  }
+
+  // One undo step that touches several nodes with different values: path editing rewrites `d` on the <path>, the
+  // viewBox on the <svg> and its CSS box (left/top/width/height) together, and a half-applied edit would shift the
+  // path on screen. edits = [{ id, attrs?, styles? }]; everything is validated before anything is written.
+  editVector(edits) {
+    if (!Array.isArray(edits) || !edits.length) throw new Error('editVector: no edits');
+    const checked = edits.map((e) => {
+      const hit = this._find(e.id);
+      if (!hit) throw new Error(`Node ${e.id} not found`);
+      this._assertUnlocked(hit.el, e.id);
+      if (!isSvgNode(hit.el)) throw new Error(`${e.id} is not an SVG node`);
+      return { id: e.id, attrs: checkAttrs(e.attrs ?? {}), styles: Object.entries(e.styles ?? {}) };
+    });
+    this._checkpoint('set_attrs');
+    for (const e of checked) {
+      const hit = this._find(e.id);
+      for (const [k, v] of e.attrs) {
+        if (v === null) hit.el.removeAttribute(k);
+        else hit.el.setAttribute(k, v);
+      }
+      if (e.styles.length) {
+        const map = parseStyle(hit.el.getAttribute('style'));
+        for (const [k, v] of e.styles) {
+          if (v === null || v === '') map.delete(kebab(k));
+          else map.set(kebab(k), String(v));
+        }
+        hit.el.setAttribute('style', styleToString(map));
       }
       this._save(hit.ab, hit.root);
     }
