@@ -7,6 +7,8 @@
 // - vector-effect non-scaling-stroke keeps the outline width constant while it is stretched.
 // - Paint (fill, stroke...) sits on the <svg> root and the shape inherits it. The root is what the user selects
 //   (data-shape marks it, see the engine's pointer handler), so the Inspector only ever edits one element.
+import { fitToBox, type PathModel } from './path';
+
 export type ShapeKind = 'rect' | 'ellipse' | 'line';
 
 export interface ShapeBox { x: number; y: number; w: number; h: number; flipX?: boolean; flipY?: boolean }
@@ -36,4 +38,15 @@ export function shapeHtml(kind: ShapeKind, box: ShapeBox): string {
   }
   const style = `position:absolute;left:${Math.round(box.x)}px;top:${Math.round(box.y)}px;width:${w}px;height:${h}px;overflow:visible`;
   return `<svg data-shape="${kind}" data-name="${NAMES[kind]}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" ${paint} style="${style}">${shape}</svg>`;
+}
+
+// A pen path: one absolutely positioned <svg data-shape="path"> holding a single <path>. `model` is in the board's
+// px; fitToBox sizes the svg to the path plus half the stroke (+1 so antialiasing is not cut), and the path data is
+// shifted into that box. Open paths get no fill, closed ones the soft shape fill. Paint is on the svg root like the
+// other shapes, so the Inspector's Vector section works on it unchanged.
+export function pathHtml(model: PathModel): string {
+  const fit = fitToBox(model, 2);
+  const paint = `fill="${model.closed ? FILL : 'none'}" stroke="${STROKE}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+  const style = `position:absolute;left:${fit.dx}px;top:${fit.dy}px;width:${fit.width}px;height:${fit.height}px;overflow:visible`;
+  return `<svg data-shape="path" data-name="Path" viewBox="${fit.viewBox}" preserveAspectRatio="none" ${paint} style="${style}"><path d="${fit.d}" vector-effect="non-scaling-stroke"/></svg>`;
 }

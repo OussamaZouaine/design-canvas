@@ -7,7 +7,8 @@ import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
 import { isNodeEl } from '@/lib/htmlTree';
 import { toast } from '@/store/toast';
-import { shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
+import type { PathModel } from './path';
+import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
 
 export interface EditHost {
   viewport: HTMLElement;
@@ -357,6 +358,15 @@ export class CanvasEditor {
       const r = await canvasAction(this.host.projectId, 'paste', { html: shapeHtml(kind, box), target: boardId, position: 'append' });
       return (r.result as { ids?: string[] } | undefined)?.ids?.[0];
     } catch (err) { fail(err, 'Could not draw the shape'); }
+  }
+
+  // Pen tool: write the finished path (board px) as one <svg data-shape="path">. Same contract as addShape.
+  async addPath(boardId: string, model: PathModel): Promise<string | undefined> {
+    this.host.markUserEdit();
+    try {
+      const r = await canvasAction(this.host.projectId, 'paste', { html: pathHtml(model), target: boardId, position: 'append' });
+      return (r.result as { ids?: string[] } | undefined)?.ids?.[0];
+    } catch (err) { fail(err, 'Could not draw the path'); }
   }
 
   // Text tool: drop a paragraph into the clicked element (or after it when it is a text leaf, since text

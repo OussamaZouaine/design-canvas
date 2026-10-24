@@ -83,7 +83,7 @@ export function parsePath(d: string): PathModel | null {
         const c1 = lastC && 'cs'.includes(prevCmd) ? sub(mul(cur, 2), lastC) : cur;
         cubic(c1, { x: a[0] + o.x, y: a[1] + o.y }, { x: a[2] + o.x, y: a[3] + o.y });
       } else if (eff === 'q' || eff === 't') {
-        const q = eff === 'q' ? { x: a[0] + o.x, y: a[1] + o.y } : lastQ && 'qt'.includes(prevCmd) ? sub(mul(cur, 2), lastQ) : cur;
+        const q: Pt = eff === 'q' ? { x: a[0] + o.x, y: a[1] + o.y } : lastQ && 'qt'.includes(prevCmd) ? sub(mul(cur, 2), lastQ) : cur;
         const p = eff === 'q' ? { x: a[2] + o.x, y: a[3] + o.y } : { x: a[0] + o.x, y: a[1] + o.y };
         // A quadratic is a cubic whose controls sit 2/3 of the way from each end to the quadratic control point.
         const from = cur;
@@ -175,14 +175,16 @@ export function mapPath(m: PathModel, fn: (p: Pt) => Pt): PathModel {
 // Closest point on the path to `target`: coarse sampling then a local refinement, plenty for picking a segment
 // with the mouse. dist is in the model's units.
 export function nearestOnPath(m: PathModel, target: Pt): { seg: number; t: number; dist: number } | null {
-  let best: { seg: number; t: number; dist: number } | null = null;
+  // A holder object: TypeScript does not see assignments made inside the probe closure on a plain `let`.
+  const state: { best: { seg: number; t: number; dist: number } | null } = { best: null };
   const probe = (i: number, t: number) => {
     const dist = len(sub(cubicAt(segPoints(m, i), t), target));
-    if (!best || dist < best.dist) best = { seg: i, t, dist };
+    if (!state.best || dist < state.best.dist) state.best = { seg: i, t, dist };
   };
   for (let i = 0; i < segCount(m); i++) {
     for (let k = 0; k <= 24; k++) probe(i, k / 24);
     // Refine around the best sample of this segment.
+    const best = state.best;
     if (best && best.seg === i) {
       let lo = Math.max(0, best.t - 1 / 24), hi = Math.min(1, best.t + 1 / 24);
       for (let k = 0; k < 12; k++) {
@@ -193,7 +195,7 @@ export function nearestOnPath(m: PathModel, target: Pt): { seg: number; t: numbe
       probe(i, (lo + hi) / 2);
     }
   }
-  return best;
+  return state.best;
 }
 
 // Splits segment `i` at t (de Casteljau) and returns the new anchor's index. The curve keeps its exact shape.

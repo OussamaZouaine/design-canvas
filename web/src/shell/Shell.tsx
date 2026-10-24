@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Ruler, Slash, Square, Sun, Circle, RectangleHorizontal, Type } from 'lucide-react';
+import { Crosshair, Hand, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, Plus, Ruler, Slash, Square, PenTool, Sun, Circle, RectangleHorizontal, Type } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { pageOfBoard } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
@@ -141,6 +141,7 @@ const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string }[] = [
   { id: 'rect', icon: <RectangleHorizontal />, label: 'Rectangle', key: 'R' },
   { id: 'ellipse', icon: <Circle />, label: 'Ellipse', key: 'O' },
   { id: 'line', icon: <Slash />, label: 'Line', key: 'L' },
+  { id: 'pen', icon: <PenTool />, label: 'Pen', key: 'P' },
   { id: 'text', icon: <Type />, label: 'Text', key: 'T' },
   { id: 'image', icon: <Image />, label: 'Image', key: 'I' },
   { id: 'comment', icon: <MessageSquare />, label: 'Comment', key: 'C' },

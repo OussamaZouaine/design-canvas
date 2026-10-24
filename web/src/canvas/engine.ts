@@ -7,6 +7,7 @@
 //   .dc-overlay    selection / hover / "Claude is working here" boxes, in screen pixels (never scaled)
 import { canvasAction } from '@/api/projects';
 import { isNodeEl } from '@/lib/htmlTree';
+import { PathTools } from './pen';
 import { toast } from '@/store/toast';
 import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
@@ -39,7 +40,7 @@ export interface EngineEvents {
   onContextMenu: (x: number, y: number, targetId: string | null) => void;
 }
 
-export type CanvasTool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'text' | 'image' | 'comment' | 'hand';
+export type CanvasTool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'pen' | 'text' | 'image' | 'comment' | 'hand';
 
 // Everything the engine tracks per artboard. Kept in one object instead of expando properties on the DOM.
 interface Board {
@@ -109,6 +110,7 @@ export class CanvasEngine {
   private reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   private abort = new AbortController(); // one signal removes every listener on destroy
   private editor: CanvasEditor;
+  private paths: PathTools; // pen tool + path edit mode
   private commentMode = false;
   private tool: CanvasTool = 'move';
   private spaceDown = false;  // holding Space turns any tool into a temporary hand
@@ -139,6 +141,23 @@ export class CanvasEngine {
       redraw: () => this.drawSelection(),
       markUserEdit: () => this.markUserEdit(),
       activePage: () => this.activePage,
+    }, this.abort.signal);
+    this.paths = new PathTools({
+      viewport,
+      overlay: this.overlay,
+      projectId,
+      zoom: () => this.view.k,
+      frameRect: (id) => { const b = this.boards.get(id); return b ? this.relRect(b.frame) : null; },
+      rectOf: (el) => this.relRect(el),
+      findElement: (id) => this.findElement(id),
+      selected: () => this.selected,
+      select: (id) => this.select(id),
+      markUserEdit: () => this.markUserEdit(),
+      done: () => this.events.onToolDone(),
+      addPath: (boardId, model) => this.editor.addPath(boardId, model),
+      selectWhenReady: (id) => this.selectWhenReady(id),
+      hideSel: () => this.selBox.classList.add('dc-hide'),
+      remove: (id) => this.editor.remove(id),
     }, this.abort.signal);
     // Remember when the user last touched the canvas; capture phase so nothing can stop it first.
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
@@ -211,6 +230,7 @@ export class CanvasEngine {
   setTool(tool: CanvasTool) {
     this.tool = tool;
     this.viewport.dataset.tool = tool;
+    this.paths.toolChanged(tool);
     if (tool !== 'move' && tool !== 'comment') this.select(null);
   }
 
@@ -316,6 +336,7 @@ export class CanvasEngine {
 
   select(id: string | null) {
     this.selected = id;
+    this.paths.selectionChanged(id);
     this.events.onSelect(id);
     canvasAction(this.projectId, 'selection', { ids: id ? [id] : [] }).catch(() => {}); // lets Claude's get_selection see it
     this.drawSelection();
@@ -800,6 +821,11 @@ export class CanvasEngine {
   }
 
   private drawSelection() {
+    this.drawSelectionBox();
+    this.paths.redraw(); // pen preview and path edit overlay; edit mode hides the selection box
+  }
+
+  private drawSelectionBox() {
     this.drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
     this.drawClaims();
     this.drawHover();
@@ -900,6 +926,8 @@ export class CanvasEngine {
       return;
     }
 
+    // Pressing anywhere outside the anchors (they stop propagation) leaves path edit mode.
+    if (this.paths.editing) this.paths.leaveEdit();
     // Hand tool / held Space: always pan, even over elements.
     if (this.tool === 'hand' || this.spaceDown) { this.panFrom(e); return; }
     if (this.tool === 'frame') { this.drawFrame(e); return; }
@@ -907,6 +935,11 @@ export class CanvasEngine {
       const boardId = abEl && !onLabel ? abEl.dataset.ab : undefined;
       if (boardId) { e.preventDefault(); this.drawShape(e, boardId, this.tool); }
       else toast('Draw inside an artboard');
+      return;
+    }
+    if (this.tool === 'pen') {
+      const boardId = abEl && !onLabel ? abEl.dataset.ab : undefined;
+      this.paths.penDown(e, boardId);
       return;
     }
     if (this.tool === 'text') {
