@@ -93,6 +93,12 @@ optional, per-action required checks via `need()` that name the action in the er
 - **Per-MCP-session project binding** (already in PROGRESS "Next work" 6): `project_id` could then leave most schemas.
 - **`response_format: concise|detailed`** on the readers (get_tree, get_comments, get_design_tokens), as Anthropic's tool-writing guide suggests.
 
+## Live test (2026-10-24, project "Design Canvas UI" `p_5f9fde61`)
+Built a dark design system + editor layout upgrade through the new tools (start, batch, components, create_artboard html, get_screenshot review, finish_working screenshot), checked in Chrome.
+- Fixed: `create_artboard` with `html` echoed the whole normalized board back (spread of the live artboard object; a 27k-char write returned ~9k tokens). Now returns only the board fields + notes (test in `mcp.test.mjs`).
+- Fixed: Foundations / Components sheets used the starter role names one by one, so a theme with `color-surface` but no `color-fg` got invisible labels. `chromeColours` in `src/foundations.mjs` uses themed roles only as a set (when `color-fg` exists), else a fixed light palette.
+- Open: `components` schema does not say names must be kebab-case (only the error does). The normalizer unwraps attribute-less spans, so flex `gap` stops applying to that text. Generated sheets still fail the app's own lint (margins, 10px padding). Sessions started before the merge keep stale tool schemas (restart Claude Code).
+
 ## How to verify
 Run `node examples/evals/run.mjs run <label>` before and after each group (A, B, C), then `report turns-cut <label>`. Fix the meter (A2) first,
 or the screenshot savings are invisible. Compare turns, cache-read and output, not only `toolTokens`.
