@@ -59,7 +59,8 @@ Implemented in `src/sessions.mjs` + `/mcp` in `src/server.mjs`. Call-log entries
 - Thread the agent id through `log()`, `doc.record(agent, ...)`, the call log and the `agent` highlight event.
 - Done = two Claude Code sessions on the same project show two distinct agents in `/api/p/<id>/calls`; tools/list size measured again.
 
-### Phase 3: Live agent feed in the UI
+### Phase 3: Live agent feed in the UI — DONE 2026-10-24
+Built in `web/`: `store/agents.ts` (call feed from SSE `call`/`call-start` + seed from `/calls`, presence, read/write/review kinds), `panels/AgentsPanel.tsx` (Agents tab, filters, follow-agent select, `usePresence`), header chips + tinted pill + "Waiting for screenshot" pill in `shell/Shell.tsx`, engine boxes/ring tinted per agent with a name tag (`setAgentIds(ids, agent)`). McpPanel no longer polls (token bars come from the stored calls). Server: `call-start` now carries the agent. Presence comes from the call log, so the headless worker never shows. Follow-agent is approximate on the first write after a switch (doc delta arrives just before the `agent` event). **Finding:** after a server restart an SDK MCP client gets `404 Session not found` on every call and does NOT re-initialize (verified with the SDK client against a scratch server); Claude Code itself was not restarted-tested. Needs a fix before relying on sessions: serve unknown session ids statelessly (anonymous session) instead of 404.
 - **Presence:** header chips for each agent active on this project (colour, name, current tool, idle after 2 min). Replace the
   3 s `/api/status` poll in `McpPanel` with the SSE `call` events.
 - **Agents tab** (or rebuilt MCP tab): live timeline of calls, newest first: icon read/write/review, tool label, board name,
