@@ -109,8 +109,10 @@ Order is a suggestion; the user decides.
    `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
    reword on the next schema change. Still open: PDF export; per-MCP-session project binding + agent identity/presence;
    make `askBrowser` handlers work in hidden tabs.
-7. **MCP token/turn optimization (analysed 2026-10-24, nothing built):** ranked plan in `docs/notes/mcp-token-optimization.md`
-   (quick wins A1-A9 first; the meter undercounts JPEG screenshots ~10x, fix that before measuring).
+7. **MCP token/turn optimization (branch `perf/mcp-tokens`, A, B and C done 2026-10-24, not merged to main):** plan and numbers in
+   `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
+   `tokens`, `history`, `export_code` (get_tree_summary dropped); 64 -> 46 tools, tools/list 9.41k -> 8.40k tokens. **Restart Claude Code to see the new tools.**
+   Open: run the evals (`examples/evals`) A/B on the branch before merging; D and E ideas in the plan.
 8. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
 
 ## How to resume in a new session

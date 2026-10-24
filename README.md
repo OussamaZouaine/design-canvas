@@ -102,26 +102,25 @@ Claude should call `get_guide` first; it returns the design rules for this canva
 | Area | Tools |
 | --- | --- |
 | Guide | `get_guide` |
-| Projects | `list_projects`, `create_project`, `open_project`, `rename_project`, `delete_project` |
-| History | `save_version`, `log_prompt` |
+| Projects | `start` (one-call opening), `list_projects`, `create_project`, `project` (open / update / save_version / delete) |
+| History | `history` (undo / redo), `log_prompt` |
 | Comments | `get_comments`, `reply_comment`, `resolve_comment` |
-| Tokens | `get_design_tokens` (scan what designs use), `get_design_system`, `set_tokens`, `create_foundations` (stored theme: CSS variables with modes) |
-| Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_tree_summary`, `get_node_info`, `get_changes` (what the user edited by hand) |
-| Token sync | `link_repo`, `import_tokens`, `export_tokens` |
-| Pages | `create_page`, `update_page`, `delete_page`, `move_to_page`, `set_page`; `create_artboard` takes `page_id` |
-| References | `add_reference_image`, `compare_to_reference`, `delete_reference`; paste or drop an image on the canvas |
-| Components | `set_component`, `insert_component`, `detach_component`, `delete_component`, `create_components_sheet` |
+| Tokens | `tokens` (extract what designs use / export / import / link_repo), `get_design_system`, `set_tokens`, `create_foundations` (stored theme: CSS variables with modes) |
+| Reading the design | `get_basic_info`, `get_selection`, `get_tree` (compact outline + search), `get_node_info`, `get_changes` (what the user edited by hand) |
+| Pages | `pages` (create / set / update / delete / move_boards); `create_artboard` takes `page_id` |
+| References | `references` (add / delete), `compare_to_reference`, `capture_url`; paste or drop an image on the canvas |
+| Components | `components` (set / detach / delete / sheet), `insert_component` |
 | Editing in the app | Drag handles to resize, drag absolute layers to move, Ctrl+C / Ctrl+V layers. Design tab (`I`): style fields with token suggestions; double-click text to edit; Ctrl+Z / Ctrl+Shift+Z; Layers panel (`L`) |
 | Layers | `move_node`, `set_flags` (hidden / locked); in the app: Layers panel (`L`) |
-| Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `undo` |
+| Editing | `create_artboard`, `write_html` (append / prepend / replace / before / after, `<x-clone node-id>`), `update_styles`, `set_text_content`, `rename_nodes`, `duplicate_nodes`, `delete_nodes`, `batch` |
 | Verifying | `lint` (contrast, small text, spacing, undefined tokens; resolves `var()`), `get_screenshot` (1x JPEG, crop with `node_id`), `get_computed_styles`, `finish_working` |
-| Output | `export_html`, `export_react` (JSX + Tailwind arbitrary-property classes) |
+| Output | `export_code` (format react / html / jsx; JSX uses Tailwind arbitrary-property classes), `export` (PNG) |
 
 Typical flow: `list_projects` -> `create_project` -> `create_artboard` -> `write_html` -> `get_screenshot` (check the
 result) -> refine with `update_styles` / `set_text_content` -> `get_comments` and reply.
 
 ## Design tokens
-The **Tokens** tab (or `get_design_tokens`) scans a project and lists the colours, type, radii, spacing and shadows
+The **Tokens** tab (or `tokens` action `extract`) scans a project and lists the colours, type, radii, spacing and shadows
 actually used. Colours are reported in **OKLCH**. Output formats: CSS variables, W3C design-token JSON, or a Tailwind config.
 
 ## Data and backups
