@@ -26,6 +26,8 @@ export class Session {
     this.projectId = null; // bound by start / project open
     this.seen = new Map(); // projectId -> journal version this agent last read (other agents' changes, get_changes/start)
     this.lastSeen = Date.now();
+    this.delivered = new Map(); // commentId -> time it was shown to this agent as HUMAN FEEDBACK (feedback.mjs)
+    this.status = null; // one-line present-tense status the agent published; shown in the Agents tab
   }
 
   setClient(info) { if (info) this.client = { name: String(info.name ?? '').slice(0, 60), version: String(info.version ?? '').slice(0, 30) }; }
@@ -36,7 +38,7 @@ export class Session {
   get agent() {
     const base = slug(this.client?.name) || 'agent';
     const id = this.label ?? `${base}-${String(this.id).replace(/-/g, '').slice(0, 4)}`;
-    return { id, name: this.label ?? (this.client?.name || 'agent'), version: this.client?.version ?? '', color: agentColor(id) };
+    return { id, name: this.label ?? (this.client?.name || 'agent'), version: this.client?.version ?? '', color: agentColor(id), status: this.status };
   }
 }
 

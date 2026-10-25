@@ -25,6 +25,10 @@ import { anonymousSession } from './sessions.mjs';
 import { Claims, PAUSED_MESSAGE } from './claims.mjs';
 import { kindOf } from './efficiency.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { clampStatus, pendingFeedback, formatFeedback, markDelivered, STATUS_MAX } from './feedback.mjs';
+
+// Optional on the hot tools (no new tool): shown beside the agent's name in the Agents tab, cleared by finish_working.
+const STATUS_FIELD = z.string().max(STATUS_MAX * 2).optional().describe(`One present-tense line (max ${STATUS_MAX} chars) on what you are doing now, e.g. "Building the pricing section". Once per phase, not per call.`);
 import { extractSvg, MAX_SVG_BYTES } from './svg.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
@@ -80,6 +84,9 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       // Project the call targets: explicit id, else the session's (resolved again after, since start/open can bind it).
       const projectOf = () => input?.project_id ?? currentId();
       const t0 = Date.now();
+      // Optional `status` on hot tools (start, write_html): a one-line "what I'm doing now". Set before the call is
+      // logged so this very entry carries it to the Agents tab (the log entry's agent snapshot is the transport).
+      if (typeof input?.status === 'string') session.status = clampStatus(input.status);
       const callId = calls?.start(projectOf(), name, input, agentOf());
       // The user can pause an agent from the Agents panel: its writes (not its reads) get a polite error until resumed.
       const paused = claims.isPaused(session.agent.id) && kindOf(name, input) === 'write';
@@ -91,6 +98,8 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
         : await callScope.run(scratch, () => handler(...args));
       // Only a real conflict adds text; the normal case returns the handler's result untouched (zero extra tokens).
       if (scratch.notes.size && !result?.isError && Array.isArray(result?.content)) result.content.push({ type: 'text', text: [...scratch.notes].join('\n') });
+      if (name === 'finish_working' && !result?.isError) session.status = null; // done: nothing left to narrate
+      appendFeedback(name, result, projectOf());
       meter?.record(name, result);
       // Logging is derived from what already happened: no new fields in the result, so it costs the model nothing.
       try {
@@ -104,7 +113,24 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     });
   };
   // Who is calling, as stored on call-log entries (id for joins, name + colour so the UI needs no second lookup).
-  const agentOf = () => { const { id, name, color } = session.agent; return { id, name, color }; };
+  const agentOf = () => { const { id, name, color } = session.agent; return { id, name, color, ...(session.status && { status: session.status }) }; };
+
+  // HUMAN FEEDBACK: append the user's new/unresolved comments to this call's result, once per session (feedback.mjs).
+  // Skipped for the anonymous fallback session (shared by every id-less client, so "delivered" would be meaningless and
+  // it would spam), for errors, and for the comment tools themselves; start / get_comments list comments already, so
+  // they only mark what they showed as delivered.
+  const appendFeedback = (tool, result, pid) => {
+    if (session.id === 'anon' || !pid || result?.isError || !Array.isArray(result?.content)) return;
+    const p = store.get(pid);
+    if (!p || p.meta.deletedAt) return;
+    const due = pendingFeedback(store.listComments(pid), session.delivered);
+    if (!due.length) return;
+    if (tool === 'start' || tool === 'get_comments') { for (const c of due) session.delivered.set(c.id, Date.now()); return; }
+    if (tool === 'reply_comment' || tool === 'resolve_comment') return;
+    const block = formatFeedback(due, (c) => p.doc.getArtboard(c.artboardId)?.name?.replace(/[^\w .-]/g, '').slice(0, 30) ?? '');
+    markDelivered(session.delivered, due);
+    result.content.push({ type: 'text', text: block });
+  };
   const url = (id) => `http://localhost:${port}/p/${id}`;
 
   // Resolve which project a call targets: explicit id, else the active one.
@@ -543,6 +569,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       target_id: z.string().describe('Artboard id (A#) or node id (N#)'),
       html: z.string().max(200_000),
       mode: z.enum(['append', 'prepend', 'replace', 'before', 'after']).optional(),
+      status: STATUS_FIELD,
       stream: z.enum(['start', 'next', 'end']).optional().describe('Stream a big section in pieces: "start" with the first chunk, "next" for each following chunk, "end" with the last. Chunks may stop mid-element (the server closes it); each call shows the section so far. Appends to the end of target_id; node ids are final only after "end".'),
     },
   }, viaEdit('write_html'));
@@ -972,6 +999,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       description: z.string().max(300).optional().describe('One line, used only when the project is created.'),
       agent: z.string().max(40).optional().describe('Optional name for you (e.g. reviewer) so the user can tell agents apart.'),
       brief: z.string().min(1).max(1500).optional().describe('For a new design: the brief you posted in chat.'),
+      status: STATUS_FIELD,
       artboard: z.object({
         name: z.string().optional(), width: z.number().min(40).max(5000).optional(), height: z.number().min(40).max(10000).optional(),
         height_mode: z.enum(['fit', 'fixed']).optional(), page_id: z.string().optional(), x: z.number().optional(), y: z.number().optional(),
