@@ -688,7 +688,7 @@ export class CanvasEngine {
   private mountFrame(b: Board) {
     if (b.shown === b.html) return;
     b.oldHtml = b.shown ?? '';
-    b.shadow.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}${BOARD_CSS}</style><style data-theme>:host{${this.themeDecls()}}</style>${boardRoot(b.ab.heightMode === 'fit', b.html ?? '')}`;
+    b.shadow.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}${BOARD_CSS}[contenteditable]{outline:none}</style><style data-theme>:host{${this.themeDecls()}}</style>${boardRoot(b.ab.heightMode === 'fit', b.html ?? '')}`;
     b.shown = b.html;
     b.el.classList.remove('lod');
     this.watchGrowth(b);
