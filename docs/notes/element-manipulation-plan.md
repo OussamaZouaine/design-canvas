@@ -1,7 +1,6 @@
 # Element manipulation plan (Figma / Paper-style selection, moving, Design tab)
 
-Written 2026-10-25. Status: phases 1-4 done, 5 not started. One phase per session, in order (phases 2-5 need phase 1).
-Update the "Status" line of each phase when it is done and collapse finished phases to 2-3 lines.
+Written 2026-10-25. Status: **all 5 phases done (2026-10-25 / 26).** Kept as a record of what exists and its gotchas.
 
 ## Where we start (state on 2026-10-25)
 - Selection is one id: `engine.ts` `selected: string | null`, pushed to zustand `store/canvas.ts` `selected` via `events.onSelect`,
@@ -105,14 +104,20 @@ Gotchas
 ---
 
 ## Phase 5: polish and structure
-Status: not started.
-- Group / ungroup: Ctrl+G wraps the selection in a new flex div (direction guessed from the nodes' layout), Ctrl+Shift+G /
-  Ctrl+Alt+G unwraps (server: `Doc.wrapNodes` / `Doc.unwrapNode`, one undo step, tests).
-- "Add auto layout" (Shift+A): wraps the selection in a flex container with gap measured from the current spacing.
-- Hover hints while dragging: outline of the parent and siblings, padding / gap areas shaded (Figma's auto-layout overlay).
-- Selection colours per agent stay as today (`setAgentIds`); user selection stays signal blue.
-- Context menu entries for all of the above; shortcuts listed in the help dialog.
-- Fit boards: re-measure after user moves / resizes (the Phase A leftover ResizeObserver in PROGRESS.md item 0).
+Status: **done 2026-10-26** (browser-checked on a scratch server: group / ungroup / add auto layout, undo, fit regrow, drag hints, shortcuts dialog; light theme glanced, dark theme used throughout; real mouse drags not available, synthetic pointer events only).
+
+Summary: `Doc.wrapNodes(ids, {styles, perId, name})` (siblings only, document order, wrapper takes the first node's place, one undo step) and `Doc.unwrapNode(id, {perId})`;
+canvas actions `wrap` / `unwrap` (in `USER_EDITS`, results returned so the browser selects the wrapper / freed children) and `grow`. The browser measures, pure `web/src/canvas/structure.ts`
+(`planWrap`, `planUnwrap`, `measureGap`; tests `test/structure.test.mjs`) decides styles: flow nodes -> flex wrapper (direction from `inferAxis`, median gap), absolute nodes ->
+absolute wrapper over the union box (Ctrl+G, children re-based) or absolute flex wrapper with freed children (Shift+A). Keys in `CanvasEditor.onKey`: Ctrl+G, Ctrl+Shift+G / Ctrl+Alt+G, Shift+A;
+context menu has Group / Add auto layout / Ungroup / Keyboard shortcuts; `shell/ShortcutsDialog.tsx` (top-bar button or ?) lists every shortcut (keep it in sync). Drag in flow now draws
+`.dc-hints` (container outline, dashed siblings, shaded padding and gaps; `CanvasEditor.drawHints`). Fit boards: `Board.growObs` ResizeObserver on the live root -> `grow` action after a user edit.
+Gotchas
+- Flow and absolute nodes cannot be wrapped together (toast); wrapping needs a live (zoomed-in) board; ungroup is single-node only.
+- A child's own margins plus the measured gap can double the spacing (gap is measured from border boxes).
+- `selectNew` / `selectWhenReady` polls with setTimeout, not rAF (rAF is paused in a hidden tab, e.g. the Browser pane when not shown) and accepts an id once `pidIndex` has it.
+- The regrow only fires within ~1.5 s of `markUserEdit`; Claude's writes keep the server-side measure path. It never shrinks (use `fit_artboard`).
+- Agent tints / signal blue untouched; hint colours are a light wash of `--dc-accent`.
 
 ## Out of scope for now
 Rotation handles on the canvas, vector boolean ops, constraints (left/right/scale) for responsive resize, components overrides UI.
