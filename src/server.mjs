@@ -256,7 +256,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -282,6 +282,8 @@ const canvasActions = {
   },
   // Layers panel: reorder / reparent a node, and the hidden + locked toggles.
   'move-node': (p, b) => p.doc.moveNode(String(b.id), String(b.target), b.position),
+  // Canvas drag in a flow parent: one or many nodes, optionally copied (Alt). One undo step.
+  'move-nodes': (p, b) => p.doc.moveNodes(Array.isArray(b.ids) ? b.ids.map(String) : [], String(b.target), b.position, { copy: !!b.copy }),
   // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
   style: (p, b) => p.doc.updateStyles(b.ids, b.styles),
   // Inspector fields for vectors: SVG attributes (fill, stroke...) go through the same allowlist as the set_attrs tool.

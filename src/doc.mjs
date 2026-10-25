@@ -883,33 +883,59 @@ export class Doc {
   // Move a node next to or inside another node, keeping its ids. position: before | after (siblings
   // of the target) or start | end (first / last child of the target). Works across artboards.
   moveNode(id, targetId, position = 'end') {
+    this.moveNodes([id], targetId, position);
+  }
+
+  // Move several nodes in one undo step (drag reorder in the canvas). They land in document order, so their
+  // relative order survives whatever the selection order was. copy:true clones them with fresh ids instead
+  // (Alt-drag) and leaves the originals where they are. Every check runs before the first change, so a
+  // refused move never leaves a half-moved document.
+  moveNodes(ids, targetId, position = 'end', { copy = false } = {}) {
     if (!['before', 'after', 'start', 'end'].includes(position)) throw new Error('position must be before, after, start or end');
-    if (id === targetId) throw new Error('A node cannot be moved onto itself');
-    const src = this._find(id);
-    if (!src) throw new Error(`Node ${id} not found`);
-    this._assertUnlocked(src.el, id);
+    ids = [...new Set(ids)];
+    if (!ids.length) throw new Error('Nothing to move');
     const inside = position === 'start' || position === 'end';
     const targetIsBoard = !!this.getArtboard(targetId);
     if (targetIsBoard && !inside) throw new Error('Use position start or end to move a node into an artboard');
-    // The target must not be the node itself or live inside it, or the node would swallow itself.
+    const tgt0 = targetIsBoard ? null : this._find(targetId);
     if (!targetIsBoard) {
-      const tgt = this._find(targetId);
-      if (!tgt) throw new Error(`Target ${targetId} not found`);
-      if (src.el.querySelector(`[data-pid="${targetId}"]`)) throw new Error('Cannot move a node into its own descendant');
-      if (inside) this._assertUnlocked(tgt.el, targetId);
+      if (!tgt0) throw new Error(`Target ${targetId} not found`);
+      if (inside) this._assertUnlocked(tgt0.el, targetId);
     }
-    const html = src.el.toString();
-    this._checkpoint('move_node');
-    src.el.remove();
-    this._save(src.ab, src.root);
+    for (const id of ids) {
+      if (id === targetId) throw new Error('A node cannot be moved onto itself');
+      const src = this._find(id);
+      if (!src) throw new Error(`Node ${id} not found`);
+      if (!copy) this._assertUnlocked(src.el, id);
+      // The target must not live inside a moved node, or the node would swallow itself.
+      if (!targetIsBoard && src.el.querySelector(`[data-pid="${targetId}"]`)) throw new Error('Cannot move a node into its own descendant');
+    }
+    // Document order: artboard order, then the position of the node's tag inside the board's HTML.
+    const order = (id) => {
+      const hit = this._find(id);
+      return [this.data.artboards.indexOf(hit.ab), String(hit.ab.html).indexOf(`data-pid="${id}"`)];
+    };
+    ids.sort((a, b) => { const x = order(a), y = order(b); return x[0] - y[0] || x[1] - y[1]; });
+    // Capture the HTML up front: removing one node must not disturb reading the next.
+    const items = ids.map((id) => {
+      const el = this._find(id).el;
+      return copy ? this._prepare(el.toString().replace(/ data-pid="[^"]*"/g, '')).toString() : el.toString();
+    });
+    this._checkpoint(copy ? 'copy_nodes' : 'move_nodes');
+    if (!copy) for (const id of ids) { const hit = this._find(id); hit.el.remove(); this._save(hit.ab, hit.root); }
+    // Inserting each node "after" / "at the start" would reverse the group, so those two walk the list backwards.
+    const reverse = !targetIsBoard && (position === 'after' || position === 'start'); // a board concatenates, so it keeps the order
+    const html = reverse ? [...items].reverse() : items;
     if (targetIsBoard) {
       const ab = this.getArtboard(targetId);
-      ab.html = position === 'start' ? html + ab.html : ab.html + html;
+      ab.html = position === 'start' ? html.join('') + ab.html : ab.html + html.join('');
     } else {
-      const tgt = this._find(targetId); // re-find: the source artboard was just re-saved
       const where = { before: 'beforebegin', after: 'afterend', start: 'afterbegin', end: 'beforeend' }[position];
-      tgt.el.insertAdjacentHTML(where, html);
-      this._save(tgt.ab, tgt.root);
+      for (const h of html) {
+        const tgt = this._find(targetId); // re-find: the previous insert re-saved the artboard
+        tgt.el.insertAdjacentHTML(where, h);
+        this._save(tgt.ab, tgt.root);
+      }
     }
     this._commit();
   }

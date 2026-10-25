@@ -111,3 +111,51 @@ test('undo and redo record who asked', () => {
   doc.undo(1, 'user');
   assert.equal(doc.changesSince(0, 'user').at(-1).tool, 'undo');
 });
+
+// ---- moveNodes (canvas drag reorder / reparent) ----
+const flowNames = (doc, id) => [...doc.getArtboard(id).html.matchAll(/data-name="(\w+)"/g)].map((m) => m[1]);
+function flowSetup() {
+  const doc = new Doc(null);
+  const ab = doc.createArtboard({ name: 'T' });
+  const [a, b, c, d] = doc.writeHtml(ab.id, '<div data-name="A"></div><div data-name="B"></div><div data-name="C"></div><div data-name="D"></div>');
+  return { doc, ab, a, b, c, d };
+}
+
+test('moveNodes keeps document order whatever the selection order, for every position', () => {
+  // Selection order is c,a on purpose: the result must follow document order (a before c).
+  const cases = [
+    ['before', 'D', ['B', 'A', 'C', 'D']],
+    ['after', 'B', ['B', 'A', 'C', 'D']],
+    ['end', null, ['B', 'D', 'A', 'C']],
+    ['start', null, ['A', 'C', 'B', 'D']],
+  ];
+  for (const [pos, target, expected] of cases) {
+    const { doc, ab, a, b, c, d } = flowSetup();
+    const ids = { B: b, D: d };
+    doc.moveNodes([c, a], target ? ids[target] : ab.id, pos);
+    assert.deepEqual(flowNames(doc, ab.id), expected, pos);
+  }
+});
+
+test('moveNodes is one undo step, and refused moves change nothing', () => {
+  const { doc, ab, a, b, c } = flowSetup();
+  doc.moveNodes([a, b], c, 'after');
+  assert.deepEqual(flowNames(doc, ab.id), ['C', 'A', 'B', 'D']);
+  doc.undo();
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']);
+  const [inner] = doc.writeHtml(a, '<p></p>');
+  assert.throws(() => doc.moveNodes([b, a], inner, 'end'), /own descendant/);
+  assert.throws(() => doc.moveNodes([b, c], c, 'before'), /itself/);
+  doc.setFlags([b], { locked: true });
+  assert.throws(() => doc.moveNodes([a, b], c, 'end'), /locked/);
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']); // nothing half-moved
+});
+
+test('moveNodes copy leaves the originals and mints new ids', () => {
+  const { doc, ab, a, d } = flowSetup();
+  doc.moveNodes([a], d, 'after', { copy: true });
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D', 'A']);
+  assert.equal([...doc.getArtboard(ab.id).html.matchAll(new RegExp(`data-pid="${a}"`, 'g'))].length, 1);
+  doc.undo();
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']);
+});
