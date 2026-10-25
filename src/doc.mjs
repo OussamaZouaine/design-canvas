@@ -944,6 +944,88 @@ export class Doc {
     this._commit();
   }
 
+  // Merge a { prop: value } map into an element's inline style (null / '' removes). Shared by wrap / unwrap, which
+  // restyle several nodes inside ONE checkpoint and so cannot call updateStyles (it would add its own undo step).
+  _applyStyles(el, styles) {
+    const map = parseStyle(el.getAttribute('style'));
+    for (const [k, v] of Object.entries(styles || {})) {
+      if (v === null || v === '') map.delete(kebab(k));
+      else map.set(kebab(k), String(v));
+    }
+    el.setAttribute('style', styleToString(map));
+  }
+
+  // Group (Ctrl+G) / Add auto layout (Shift+A): wrap sibling nodes in a new flex div that takes the first node's place.
+  // `styles` go on the wrapper (the browser measures direction, gap, or the union box for absolute nodes), `perId`
+  // restyles members in the same step (absolute members get left / top relative to the new box). One undo step.
+  // Members must share a parent: a wrapper cannot sit in two places at once. Returns the wrapper's id.
+  wrapNodes(ids, { styles = {}, perId = null, name = 'Group' } = {}) {
+    ids = [...new Set(ids || [])];
+    if (!ids.length) throw new Error('Nothing to wrap');
+    let parent;
+    for (const id of ids) {
+      if (this.getArtboard(id)) throw new Error('An artboard cannot be wrapped');
+      const hit = this._find(id);
+      if (!hit) throw new Error(`Node ${id} not found`);
+      this._assertUnlocked(hit.el, id);
+      const p = this.parentOf(id);
+      if (parent !== undefined && p !== parent) throw new Error('Only nodes with the same parent can be grouped');
+      parent = p;
+    }
+    // Document order, so the group keeps the visual stacking / reading order whatever the selection order was.
+    const order = (id) => {
+      const hit = this._find(id);
+      return [this.data.artboards.indexOf(hit.ab), String(hit.ab.html).indexOf(`data-pid="${id}"`)];
+    };
+    ids.sort((a, b) => { const x = order(a), y = order(b); return x[0] - y[0] || x[1] - y[1]; });
+    const id = this._newId('N');
+    const attrs = ` data-pid="${id}" data-name="${String(name).replace(/[^\w .-]/g, '')}"`;
+    const items = ids.map((i) => this._find(i).el.toString());
+    this._checkpoint('wrap_nodes');
+    // Drop an empty wrapper before the first member, remove the members, then fill it. Filling last avoids two
+    // elements carrying the same data-pid while the originals are still in the tree.
+    const first = this._find(ids[0]);
+    first.el.insertAdjacentHTML('beforebegin', `<div${attrs}></div>`);
+    this._save(first.ab, first.root);
+    for (const i of ids) { const hit = this._find(i); hit.el.remove(); this._save(hit.ab, hit.root); }
+    const w = this._find(id);
+    w.el.set_content(items.join(''));
+    this._applyStyles(w.el, styles);
+    this._save(w.ab, w.root);
+    for (const [cid, st] of Object.entries(perId || {})) {
+      const hit = this._find(cid);
+      if (!hit) continue;
+      this._applyStyles(hit.el, st);
+      this._save(hit.ab, hit.root);
+    }
+    this._commit();
+    return id;
+  }
+
+  // Ungroup (Ctrl+Shift+G): the node's children take its place and the wrapper (with its own styles) goes away.
+  // `perId` restyles the freed children in the same undo step (the client re-bases absolute children on the old box).
+  unwrapNode(id, { perId = null } = {}) {
+    if (this.getArtboard(id)) throw new Error('An artboard cannot be unwrapped');
+    const hit = this._find(id);
+    if (!hit) throw new Error(`Node ${id} not found`);
+    this._assertUnlocked(hit.el, id);
+    const kids = hit.el.childNodes.filter((c) => c instanceof HTMLElement);
+    if (!kids.length) throw new Error('Nothing inside to unwrap');
+    const childIds = kids.map((k) => k.getAttribute('data-pid'));
+    this._checkpoint('unwrap_node');
+    hit.el.insertAdjacentHTML('beforebegin', hit.el.innerHTML);
+    hit.el.remove();
+    this._save(hit.ab, hit.root);
+    for (const [cid, st] of Object.entries(perId || {})) {
+      const h = this._find(cid);
+      if (!h) continue;
+      this._applyStyles(h.el, st);
+      this._save(h.ab, h.root);
+    }
+    this._commit();
+    return childIds;
+  }
+
   // Toggle the two flags the layers panel exposes: hidden (not drawn) and data-locked (not editable).
   setFlags(ids, { hidden, locked }) {
     for (const id of ids) {

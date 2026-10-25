@@ -256,7 +256,7 @@ const projectActions = {
 };
 
 // Canvas actions that change the design (the rest are selection, comments, screenshots).
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'wrap', 'unwrap', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -284,6 +284,10 @@ const canvasActions = {
   'move-node': (p, b) => p.doc.moveNode(String(b.id), String(b.target), b.position),
   // Canvas drag in a flow parent: one or many nodes, optionally copied (Alt). One undo step.
   'move-nodes': (p, b) => p.doc.moveNodes(Array.isArray(b.ids) ? b.ids.map(String) : [], String(b.target), b.position, { copy: !!b.copy }),
+  // Ctrl+G / Shift+A wrap the selection in a flex div, Ctrl+Shift+G unwraps; one undo step each. The result ids let the
+  // browser select the new wrapper / the freed children.
+  wrap: (p, b) => ({ id: p.doc.wrapNodes(Array.isArray(b.ids) ? b.ids.map(String) : [], { styles: b.styles, perId: b.perId, name: b.name ? String(b.name) : undefined }) }),
+  unwrap: (p, b) => ({ ids: p.doc.unwrapNode(String(b.id), { perId: b.perId }) }),
   // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
   style: (p, b) => p.doc.updateStyles(b.ids, b.styles, b.perId),
   // Inspector fields for vectors: SVG attributes (fill, stroke...) go through the same allowlist as the set_attrs tool.
