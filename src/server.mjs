@@ -86,6 +86,7 @@ store.on((type, payload) => {
     if (type === 'doc' && c.projectId === payload.id) sendDoc(c, payload.data);
     else if (type === 'meta' && c.projectId === payload.id) send(c.res, 'meta', payload.meta);
     else if (type === 'comments' && c.projectId === payload.id) send(c.res, 'comments', payload.comments);
+    else if (type === 'memory' && c.projectId === payload.id) send(c.res, 'memory', payload.memory);
     else if (type === 'activity' && c.projectId === payload.id) send(c.res, 'activity', {});
     else if ((type === 'call' || type === 'call-start') && c.projectId === payload.project) send(c.res, type, payload.call);
     else if (type === 'projects' && c.projectId === null) send(c.res, 'projects', {});
@@ -373,6 +374,7 @@ const server = http.createServer(async (req, res) => {
         send(res, 'meta', p.meta);
         sendDoc(client, p.doc.data);
         send(res, 'comments', store.listComments(projectId));
+        send(res, 'memory', store.listMemory(projectId));
       } else {
         send(res, 'projects', {});
       }
@@ -455,6 +457,23 @@ const server = http.createServer(async (req, res) => {
           projectActions[parts[3]](id, await readJson(req));
           return json(res, 200, { ok: true });
         }
+      }
+
+      // Design memory: GET list, POST {kind,text} adds (the UI adds rules as agent "user"), DELETE ?id=<m_...> removes.
+      // Text is clipped and flattened in memory.mjs; ids are checked here so nothing odd reaches the store.
+      if (parts[1] === 'p' && ID_RE.test(parts[2] || '') && parts[3] === 'memory') {
+        const p = store.get(parts[2]);
+        if (!p) return json(res, 404, { error: 'Project not found' });
+        try {
+          if (req.method === 'GET') return json(res, 200, store.listMemory(p.meta.id));
+          if (req.method === 'POST') return json(res, 200, store.addMemory(p.meta.id, { ...(await readJson(req)), agent: 'user' }));
+          if (req.method === 'DELETE') {
+            const mid = new URL(req.url, 'http://x').searchParams.get('id') ?? '';
+            if (!/^m_[a-f0-9]{8}$/.test(mid)) return json(res, 400, { error: 'Bad memory id' });
+            store.removeMemory(p.meta.id, mid);
+            return json(res, 200, { ok: true });
+          }
+        } catch (e) { return json(res, 400, { error: e.message }); }
       }
 
       // Read-only canvas data: /api/p/:id/tokens

@@ -9,7 +9,8 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { Doc } from './doc.mjs';
 import { displayDiff, patchable } from './stepdiff.mjs';
-import { imageInfo, EXT, MAX_IMAGE_BYTES } from './images.mjs';
+import { makeEntry, addEntry } from './memory.mjs';
+import { imageInfo,EXT, MAX_IMAGE_BYTES } from './images.mjs';
 
 // Ids arrive over HTTP and end up in file paths, so only accept our own format.
 // This is what stops a request like /api/projects/..%2F..%2Fsecret from escaping data/.
@@ -508,6 +509,33 @@ export class ProjectStore {
   _commentsChanged(id) {
     this._saveListSoon(id, 'comments');
     this._emit('comments', { id, comments: this._list(id, 'comments') });
+  }
+
+  // ---- design memory: rules + decisions (memory.json, pure logic in memory.mjs) ----------
+  // Stored as one flat array so it reuses the debounced atomic list files like comments do.
+  listMemory(id) { return this._list(id, 'memory'); }
+
+  addMemory(id, input) {
+    const entry = makeEntry(input, 'm_' + randomBytes(4).toString('hex'));
+    const cur = this._list(id, 'memory');
+    const next = addEntry(cur, entry);
+    // _list hands out a cached array that other code may hold, so mutate it in place instead of swapping it.
+    cur.splice(0, cur.length, ...next);
+    this._memoryChanged(id);
+    return next.includes(entry) ? entry : next.find((x) => x.kind === entry.kind && x.text.toLowerCase() === entry.text.toLowerCase());
+  }
+
+  removeMemory(id, entryId) {
+    const cur = this._list(id, 'memory');
+    const i = cur.findIndex((x) => x.id === entryId);
+    if (i < 0) throw new Error(`Memory entry ${entryId} not found`);
+    cur.splice(i, 1);
+    this._memoryChanged(id);
+  }
+
+  _memoryChanged(id) {
+    this._saveListSoon(id, 'memory');
+    this._emit('memory', { id, memory: this._list(id, 'memory') });
   }
 
   // Write everything pending to disk (called on shutdown).
