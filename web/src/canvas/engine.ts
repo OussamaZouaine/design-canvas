@@ -13,7 +13,7 @@ import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
-import { enterTarget, intersects, normalize, pickDeep, pickInChain, toggleId, unionBox, type Box } from './selection';
+import { enterTarget, intersects, normalize, pickDeep, pickInChain, soleDescent, toggleId, unionBox, type Box } from './selection';
 import { fontsSignature, setProjectFonts } from './fonts';
 import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
@@ -356,8 +356,14 @@ export class CanvasEngine {
 
   // What a click on this chain selects: the context's child (plain) or the deepest node (Ctrl/Cmd).
   private pickFrom(chain: string[], deep: boolean) {
-    return deep ? pickDeep(chain, (id) => !!this.findElement(id)?.hasAttribute('data-locked')) : pickInChain(chain, this.context, this.selected);
+    return deep ? pickDeep(chain, (id) => !!this.findElement(id)?.hasAttribute('data-locked')) : pickInChain(chain, this.context, this.selected, this.isSole);
   }
+
+  // A node that is the only layer child of its parent (board root included): a transparent wrapper for picking.
+  private isSole = (id: string) => {
+    const p = this.parentId(id);
+    return !!p && this.childrenOf(p).length === 1;
+  };
 
   // Viewport-relative box of a node on an unmounted board, from the index. Null if the board is live or the node is unknown.
   private indexRect(id: string) {
@@ -461,9 +467,11 @@ export class CanvasEngine {
   // nodes of the primary's board, or every board when nothing is selected.
   private selectAll() {
     const p = this.primary();
-    if (this.context) { this.select(this.childrenOf(this.context), this.context); return; }
+    if (this.context) { const l = soleDescent(this.context, (id) => this.childrenOf(id)); this.select(this.childrenOf(l), l); return; }
     const board = p ? (p.startsWith('A') ? null : this.pidIndex.get(p) ?? null) : null;
-    this.select(board ? this.childrenOf(board) : this.boardsHere().map((a) => a.id), null);
+    if (!board) { this.select(this.boardsHere().map((a) => a.id), null); return; }
+    const l = soleDescent(board, (id) => this.childrenOf(id));
+    this.select(this.childrenOf(l), l.startsWith('A') ? null : l);
   }
 
   // Read-only copy of the camera (screen = world * k + x/y). The rulers use it; they must not mutate the engine's own object.
@@ -1213,7 +1221,10 @@ export class CanvasEngine {
     }
     const b = this.boards.get(boardId);
     if (!b || !b.html) return [];
-    const parent = ctx && this.pidIndex.get(ctx) === boardId ? ctx : null;
+    // Start from the context (or the board) and step through sole wrappers, so the marquee sees what a click sees.
+    const start = ctx && this.pidIndex.get(ctx) === boardId ? ctx : boardId;
+    const level = soleDescent(start, (id) => this.childrenOf(id));
+    const parent = level.startsWith('A') ? null : level;
     return this.boardIndex(b)
       .filter((n) => n.parent === parent && intersects(world, { left: b.ab.x + n.x, top: b.ab.y + n.y, width: n.w, height: n.h }))
       .map((n) => n.pid);
@@ -1226,7 +1237,7 @@ export class CanvasEngine {
     if (this.tool !== 'move' || this.commentMode) return;
     let chain = this.chainFrom(e.composedPath(), e.clientX, e.clientY);
     if (!chain.length && Date.now() - this.lastDown.t < 600) chain = this.lastDown.chain;
-    const into = enterTarget(chain, this.primary());
+    const into = enterTarget(chain, this.primary(), this.isSole);
     if (into) { this.select([into]); return; }
     const el = chain.length ? this.findElement(chain[0]) : null;
     if (el) this.editor.editText(el);

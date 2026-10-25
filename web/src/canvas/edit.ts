@@ -8,7 +8,7 @@ import type { Artboard } from '@/api/types';
 import { toast } from '@/store/toast';
 import type { PathModel } from './path';
 import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
-import { siblingStep } from './selection';
+import { siblingStep, soleDescent } from './selection';
 import { inEdgeBand, inferAxis, insertionIndex, insertionLine, resolveDrop, stepDrop, type Axis, type Drop } from './dragflow';
 import { isNodeEl } from '@/lib/htmlTree';
 import { annotate, measure as measureBoxes, resizeBox, scaleInto, snapMove, snapResize, unionOf, type Box } from './snap';
@@ -594,7 +594,8 @@ export class CanvasEditor {
         host.select([...new Set(sel.map((id) => host.parentOf(id)).filter((p): p is string => !!p))]);
       } else {
         // Enter: go into the selection. A lone text leaf has no children, so Enter edits it instead.
-        const kids = sel.flatMap((id) => host.childrenOf(id));
+        // ...past sole-child wrappers, like a double-click does (Shift+Enter still steps out one real level at a time).
+        const kids = sel.flatMap((id) => host.childrenOf(soleDescent(id, host.childrenOf)));
         const el = sel.length === 1 && primary ? host.findElement(primary) : null;
         if (kids.length) host.select(kids);
         else if (el && !el.children.length && el.textContent?.trim() && !primary!.startsWith('A')) this.startTextEdit(el);
