@@ -28,3 +28,11 @@ test('workflow tells the agent to call get_guide and start together', () => {
 test('guide points at reply_comment with resolve instead of two calls', () => {
   assert.match(TOPICS.start, /reply_comment with resolve: true/);
 });
+
+// The taste doctrine must stay in the guide: scene-derived colour, named cliches, hero checkpoint.
+test('guide carries the colour method, cliche list and hero checkpoint', () => {
+  assert.match(TOPICS.brief, /derive EVERY colour/);
+  assert.match(TOPICS.brief, /AI-look cliches/);
+  assert.match(TOPICS.brief, /ONE reference/);
+  assert.match(TOPICS.review, /FIRST section/);
+});

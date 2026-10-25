@@ -6,7 +6,7 @@
 
 const WORKFLOW = `Design Canvas workflow (this one call also contains the brief, type, layout and review rules below, so you do not need to fetch them separately; only "mobile" and "svg" (icons, logos, illustrations) are on demand). Every turn re-reads the whole conversation, so use few turns: send independent tool calls together in ONE turn (for example get_guide + start, or several write_html calls for different boards).
 0. START. Call get_guide, and in the same turn start({prompt, project, description?, brief?, artboard?}). project is a short (2-4 word) name from what you are building (the repo, product or feature, e.g. "Checkout redesign") or a project id; an existing one is reused, otherwise it is created. Never create a second project for the same work. start resolves the project, logs the request (prompt: the user's own words, one short sentence) and can create the first board (artboard, with html for the first group) in ONE call. Pass the returned project_id on every later call so parallel sessions don't mix up projects. list_projects is only for browsing when you do not know the name.
-0b. BRIEF. For a NEW design pass brief (mood, palette, type, direction: see get_guide topic "brief") to start and post the same brief in chat before the first write. It is stored with the project so later sessions know the intent. Later requests in the same project: log_prompt (or start again).
+0b. BRIEF. For a NEW design with no established style, pass brief (mood, palette, type, hero, direction: see get_guide topic "brief") to start and post the same brief in chat before the first write. It is stored with the project so later sessions know the intent. Later requests in the same project: log_prompt (or start again).
 1. start already returns an existing project's open comments, the user's hand changes and its artboards, so do not call get_comments, get_changes or get_basic_info first; use get_tree for an outline (query finds a node by name or text). A project start just created is empty: go straight to the first board.
 2. create_artboard WITH html for the first group (or start's artboard), then write_html for the next groups. Add roughly one visual group (header, hero, card row) per call, and review it (topic "review") before the next.
 3. Style with inline style attributes only. No <script>, <link> or event handlers: they are stripped. Layout rules: topic "layout".
@@ -21,17 +21,19 @@ Consistency: call tokens (action extract) before adding pages to an existing des
 Safety net: the app auto-saves version history, so a bad generation can be rolled back from the History panel.
 On demand: topic "mobile".`;
 
-const BRIEF = `Brief (do this before the first write_html of a new design; post it in chat, then pass it as log_prompt.brief):
+const BRIEF = `Brief (do this before the first write_html of a new design; post it in chat, then pass it as start.brief / log_prompt.brief). Skip it when the project already dictates the style (existing boards, tokens, a design system, a linked repo): extract the tokens and follow them instead. Write it in this order: mood candidates -> chosen mood and why -> palette with roles -> type -> hero device -> one-line direction.
 1. Mood. List three candidate moods, then pick one that is NOT your first instinct. A mood is a place or material ("quiet pharmacy at 7am", "oxidised copper roof"), not an adjective like "modern and clean".
-2. Palette from a scene. Name 3-5 physical objects in that scene and take colours from them. Give each colour a role: ground, surface, ink, muted ink, one accent, one status set. Write them as oklch(L C H). Hold C and H and step L to build a ramp.
+2. Palette from a scene. Name 3-5 physical objects in that scene and derive EVERY colour from one of them (say which). Shape: one ground, ONE strong accent, supporting tones from the same scene. Give each colour a role: ground, surface, ink, muted ink, accent, one status set. Write them as oklch(L C H). Hold C and H and step L to build a ramp.
    - Pure white (oklch(1 0 0)) is the normal ground. Use a tinted off-white (C 0.004-0.012) only when the mood asks for it.
    - Neutrals carry a trace of the accent hue (C about 0.005-0.02) so they sit together; never a flat grey beside a saturated accent.
    - One intense colour moment per screen (a button, a number, a hero block). Everything else stays quiet.
    - Pairings that read as real: deep green ground + warm cream ink; slate + oxidised-copper accent; limestone + ink-black + one terracotta; near-black + a single signal yellow.
-   - Pairings to avoid: purple-to-blue gradients on white, neon on near-black "tech", rainbow chart palettes, a different accent per card, pastel + pastel.
-3. Type scale. Pick one display size and a small ladder (for example 12 / 14 / 16 / 20 / 32 / 56). See topic "type".
-4. Register. Product UI: clarity first, dense and calm, one accent. Portfolio or marketing: impressive, big type, asymmetry, whitespace. Consumer or kids: playful shapes and colour, but contrast rules still hold.
-5. One sentence of direction that a stranger could use to say "yes, that matches" or "no, it doesn't".
+   - AI-look cliches to avoid: purple-to-blue gradients on white; navy or charcoal with an electric blue/cyan accent; warm off-white + terracotta as the default "tasteful" pair; shadows, glass blur or gradients on every surface; neon on near-black "tech"; rainbow chart palettes; a different accent per card; pastel + pastel.
+3. Hero device. Name the one signature move (a huge number, an oversized crop, a rule system, a texture) the first section is built around.
+4. Type scale. Pick one display size and a small ladder (for example 12 / 14 / 16 / 20 / 32 / 56). See topic "type".
+5. Register. Product UI: clarity first, dense and calm, one accent. Portfolio or marketing: impressive, big type, asymmetry, whitespace. Consumer or kids: playful shapes and colour, but contrast rules still hold.
+6. One sentence of direction that a stranger could use to say "yes, that matches" or "no, it doesn't".
+One exemplar: if the project has reference boards or the user names a style, follow that ONE reference closely; do not blend several. Without one, the chosen mood is the exemplar.
 Restraint: fewer elements than your first draft. Put content on the page surface instead of wrapping everything in cards; use scale contrast and alignment before borders and shadows. Real, specific content only (real names, numbers, dates), never lorem ipsum.
 Non-negotiable: text contrast at least 4.5:1 (3:1 for 24px+ or bold 19px+), minimum text size 12px, touch targets at least 40px on mobile.`;
 
@@ -53,14 +55,15 @@ const LAYOUT = `Layout dialect (keeps boxes predictable so nothing is cut off):
 - Spacing sits on a 4px grid (8 / 12 / 16 / 24 / 32 / 48 / 64). Related things are closer together than unrelated things.
 - Sizes: phone 390x844, tablet 768x1024, desktop 1440x900.`;
 
-const REVIEW = `Review loop (after each section, not only at the end):
+const REVIEW = `Review loop (after each section, not only at the end). Direction checkpoint: screenshot right after the FIRST section (the hero) and judge it against the brief (mood, palette, hero device); fix direction problems there, before building the rest, since later sections copy its mistakes.
 Take one get_screenshot of the section, then write ONE line verdict on each checkpoint, fix what fails with a targeted update_styles / write_html on the parent id, and continue:
 1. Spacing: rhythm on the 4px grid, related items grouped, no cramped or floating blocks.
 2. Typography: clear hierarchy, sizes from the scale, nothing under 12px, line lengths sensible.
 3. Contrast: text at least 4.5:1 on its real background (run lint), status text uses the dark "ink" variants.
 4. Alignment: edges line up across rows and sections, icon and action columns are fixed-width slots.
 5. Artboard fit: no "layout" warning, no clipped or overflowing content (check_layout). A fit board grows by itself; a fixed board needs fit_artboard.
-6. Repetition: no three identical cards in a row that could be a list, no copy-pasted placeholder text.
+6. Repetition and realism: no three identical cards in a row that could be a list, no copy-pasted placeholder text; real names, numbers and dates. Hierarchy: one clear focal point per screen.
+End checklist before finishing: fit, spacing, hierarchy, contrast, alignment, realism.
 Stop after 3 fix rounds per section. Never delete and rebuild a board to fix one problem.`;
 
 const MOBILE = `Mobile screens:
