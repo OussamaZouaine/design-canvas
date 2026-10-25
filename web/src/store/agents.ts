@@ -31,7 +31,7 @@ export type CallKind = 'read' | 'write' | 'review';
 export function kindOf(tool: string, args: Record<string, unknown> = {}): CallKind {
   if (REVIEW.has(tool)) return 'review';
   if (WRITE.has(tool)) return 'write';
-  if (['pages', 'components', 'references', 'project', 'tokens', 'history', 'export_code'].includes(tool)) {
+  if (['pages', 'components', 'references', 'project', 'tokens', 'history', 'export_code', 'memory'].includes(tool)) {
     return typeof args.action === 'string' && !READ_ACTION.test(args.action) ? 'write' : 'read';
   }
   return 'read';

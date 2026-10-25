@@ -25,7 +25,8 @@ import { anonymousSession } from './sessions.mjs';
 import { Claims, PAUSED_MESSAGE } from './claims.mjs';
 import { kindOf } from './efficiency.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { clampStatus, pendingFeedback, formatFeedback, markDelivered, STATUS_MAX } from './feedback.mjs';
+import { formatMemory } from './memory.mjs';
+import { clampStatus,pendingFeedback, formatFeedback, markDelivered, STATUS_MAX } from './feedback.mjs';
 
 // Optional on the hot tools (no new tool): shown beside the agent's name in the Agents tab, cleared by finish_working.
 const STATUS_FIELD = z.string().max(STATUS_MAX * 2).optional().describe(`One present-tense line (max ${STATUS_MAX} chars) on what you are doing now, e.g. "Building the pricing section". Once per phase, not per call.`);
@@ -441,6 +442,31 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       return text('Version saved');
     }
     return text({ ...summary(store.update(meta.id, { name, description, normalize })), normalize: !!meta.normalize });
+  }));
+
+  // Design memory (low traffic, so one action-enum tool like pages/project). start already delivers the rules and the
+  // latest decisions, so agents mostly only WRITE here: add_decision when a choice was made and add_rule when the user
+  // states a standing rule. list is for the older entries start does not show.
+  server.registerTool('memory', {
+    description: 'Project design memory that survives between sessions; start already returns the rules and latest decisions. action: add_rule (text): a durable one-line style rule the user stated or that every board must follow, e.g. "one accent colour, oklch hue 150". add_decision (text, optional target_id board/node): a choice made and why, e.g. "pricing cards have no borders, shadow only". list: every rule and decision with ids. remove (id): delete an entry that is wrong or outdated.',
+    inputSchema: {
+      ...pid,
+      action: z.enum(['add_rule', 'add_decision', 'list', 'remove']),
+      text: z.string().max(400).optional(),
+      target_id: z.string().max(40).optional(),
+      id: z.string().max(20).optional(),
+    },
+  }, safe(({ project_id, action, text: body, target_id, id }) => {
+    const { meta } = target(project_id);
+    if (action === 'list') return text(store.listMemory(meta.id).map((e) => ({ id: e.id, kind: e.kind, text: e.text, at: new Date(e.at).toISOString().slice(0, 10), ...(e.agent && { agent: e.agent }), ...(e.targetId && { target: e.targetId }) })));
+    if (action === 'remove') {
+      need('memory', action, { id }, 'id');
+      store.removeMemory(meta.id, id);
+      return text('Removed');
+    }
+    need('memory', action, { text: body }, 'text');
+    const e = store.addMemory(meta.id, { kind: action === 'add_rule' ? 'rule' : 'decision', text: body, targetId: target_id, agent: session.agent.name });
+    return text({ saved: e.id });
   }));
 
   // ---- design tools ------------------------------------------------------
@@ -1032,6 +1058,9 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const ch = userChanges(meta, doc);
       if (ch.changes !== 'none') out.changes = ch;
       if (ch.others) out.others = ch.others;
+      // Rules + latest decisions ride along so agents obey them without another call; absent when memory is empty.
+      const mem = formatMemory(store.listMemory(meta.id));
+      if (mem) out.memory = mem;
       const boards = doc.data.artboards;
       if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
     } else ui.lastRead.set(meta.id, doc.version);

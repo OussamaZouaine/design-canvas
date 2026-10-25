@@ -13,7 +13,7 @@ const WRITE = new Set([
   'create_project', 'reply_comment', 'resolve_comment', 'start', 'log_prompt', 'capture_url',
 ]);
 const REVIEW = new Set(['get_screenshot', 'lint', 'check_layout', 'compare_to_reference', 'finish_working']);
-const ACTION_TOOLS = new Set(['pages', 'components', 'references', 'project', 'tokens', 'history', 'export_code']);
+const ACTION_TOOLS = new Set(['pages', 'components', 'references', 'project', 'tokens', 'history', 'export_code', 'memory']);
 const READ_ACTION = /^(list|get|show|info|read|find|preview|export|check)/;
 
 export function kindOf(tool, args = {}) {
