@@ -9,6 +9,8 @@ import { toast } from '@/store/toast';
 import type { PathModel } from './path';
 import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
 import { siblingStep } from './selection';
+import { inEdgeBand, inferAxis, insertionIndex, insertionLine, resolveDrop, stepDrop, type Axis, type Drop } from './dragflow';
+import { isNodeEl } from '@/lib/htmlTree';
 
 export interface EditHost {
   viewport: HTMLElement;
@@ -30,6 +32,10 @@ export interface EditHost {
   markUserEdit: () => void;
   activePage: () => string | null;
   selBox: HTMLElement;
+  overlay: HTMLElement;                        // screen-px layer for the drag ghost and insertion line
+  // Live nodes under a screen point, deepest first, plus the board there and its root wrapper (null over bare canvas
+  // or a bitmap board, which has no DOM to drop into).
+  nodesAt: (x: number, y: number) => { board: string | null; nodes: HTMLElement[]; root: HTMLElement | null };
 }
 
 const HANDLE_DIRS = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const;
@@ -178,11 +184,13 @@ export class CanvasEditor {
     }, host.zoom());
   }
 
-  // Drag an absolutely positioned node (left / top). A drag under 3 px counts as a click. Returns false when
-  // the node cannot be dragged (it flows with its siblings, or is locked), so the caller treats it as a click.
+  // Drag a node. An absolutely positioned one moves freely (left / top); a node that flows with its siblings is
+  // reordered or reparented (dragFlow). A drag under 3 px counts as a click. Returns false when the node cannot be
+  // dragged (locked), so the caller treats it as a click.
   dragNode(e: PointerEvent, el: HTMLElement) {
     const { host } = this;
-    if (!isAbs(el) || el.closest('[data-locked]')) return false;
+    if (el.closest('[data-locked]')) return false;
+    if (!isAbs(el)) { this.dragFlow(e, el); return true; }
     const id = el.dataset.pid!;
     const { x: l0, y: t0 } = boxOf(el, host.zoom());
     let moved = false, mx = 0, my = 0;
@@ -200,6 +208,191 @@ export class CanvasEditor {
         .catch((err) => fail(err, 'Could not move'));
     }, host.zoom());
     return true;
+  }
+
+  // ---- Drag in flow: reorder among siblings / move into another container ---------------------------------
+  // Nothing in the document changes while dragging: the original is dimmed, a ghost follows the pointer in the
+  // overlay, and a 2 px blue line shows where the nodes would land. Release sends ONE move-nodes (one undo step).
+  // The pure maths (axis, index, which sibling to name) is in dragflow.ts.
+
+  // A child that takes part in its parent's layout: a node box, not hidden, not absolutely positioned, not display:contents.
+  private flowKids(container: Element): HTMLElement[] {
+    return [...container.children].filter((c): c is HTMLElement => {
+      if (!isNodeEl(c) || c.hasAttribute('hidden')) return false;
+      const cs = getComputedStyle(c);
+      if (cs.display === 'none' || cs.display === 'contents' || cs.position === 'absolute' || cs.position === 'fixed') return false;
+      const r = c.getBoundingClientRect();
+      return r.width > 0 || r.height > 0;
+    });
+  }
+
+  // Can a node be dropped inside this element? Not images / vectors / controls, not text (a leaf with text or text
+  // mixed with elements), not display:contents (no box), and not locked.
+  private canHold(n: HTMLElement) {
+    if (/^(img|svg|input|textarea|select|br|hr|video|canvas|iframe|button)$/i.test(n.tagName) || n.hasAttribute('data-shape') || n.closest('[data-locked]')) return false;
+    if ([...n.childNodes].some((c) => c.nodeType === 3 && c.textContent?.trim())) return false;
+    if (!n.children.length && n.textContent?.trim()) return false;
+    const d = getComputedStyle(n).display;
+    return d !== 'contents' && d !== 'none' && d !== 'inline';
+  }
+
+  private dragFlow(e: PointerEvent, el: HTMLElement) {
+    const { host } = this;
+    const id = el.dataset.pid!;
+    // The set that moves: the whole selection when the pressed node is part of it (the server restores document
+    // order), else just this node. Boards, absolute and locked nodes stay out.
+    const picked = host.selected().includes(id) ? host.selected() : [id];
+    const moving = picked.filter((m) => !m.startsWith('A')).map((m) => host.findElement(m))
+      .filter((m): m is HTMLElement => !!m && !isAbs(m) && !m.closest('[data-locked]'));
+    if (!moving.length) return;
+    const ids = moving.map((m) => m.dataset.pid!);
+    const origin = { el: el.parentElement as HTMLElement, id: host.parentOf(id) ?? '' };
+    const vp = host.viewport.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    let started = false, cancelled = false;
+    let cur = origin;                                 // the container the line is drawn in
+    let cand: { el: HTMLElement; id: string } | null = null, candSince = 0, timer = 0;
+    let drop: Drop | null = null;
+    let last = { x: sx, y: sy };
+    const ghosts: HTMLElement[] = [];
+    const line = document.createElement('div'), outline = document.createElement('div');
+    line.className = 'dc-dropline dc-hide'; outline.className = 'dc-dropbox dc-hide';
+    const saved = moving.map((m) => m.style.opacity);
+
+    const begin = () => {
+      started = true;
+      host.viewport.classList.add('panning');
+      // Ghost = a translucent copy of each moved node at its on-screen size. Inline styles survive the clone; text
+      // colour / font are inherited from the board, so they are copied across explicitly. Capped at 6 for cost.
+      moving.slice(0, 6).forEach((m) => {
+        const r = m.getBoundingClientRect(), cs = getComputedStyle(m), k = host.zoom();
+        const g = document.createElement('div');
+        g.className = 'dc-ghost';
+        Object.assign(g.style, { left: r.left - vp.left + 'px', top: r.top - vp.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+        const inner = m.cloneNode(true) as HTMLElement;
+        Object.assign(inner.style, {
+          position: 'absolute', left: '0', top: '0', margin: '0', width: r.width / k + 'px', height: r.height / k + 'px',
+          transformOrigin: '0 0', transform: `scale(${k})`, color: cs.color, fontFamily: cs.fontFamily, fontSize: cs.fontSize,
+        });
+        g.append(inner);
+        host.overlay.append(g);
+        ghosts.push(g);
+      });
+      host.overlay.append(line, outline);
+      moving.forEach((m) => { m.style.opacity = '0.35'; });
+    };
+
+    // The container under the pointer: the deepest droppable node that is not (inside) a moved node, else the
+    // board's root wrapper when the pointer is on a board.
+    const candidateAt = (x: number, y: number) => {
+      const hit = host.nodesAt(x, y);
+      for (const n of hit.nodes) {
+        if (moving.some((m) => m === n || m.contains(n))) continue;
+        if (this.canHold(n)) return { el: n, id: n.dataset.pid! };
+      }
+      return hit.root && hit.board ? { el: hit.root, id: hit.board } : null;
+    };
+    const hintOf = (c: Element) => (getComputedStyle(c).flexDirection.startsWith('row') ? 'x' : 'y');
+
+    const evaluate = () => {
+      const { x, y } = last;
+      window.clearTimeout(timer);
+      let c = candidateAt(x, y);
+      // Over the middle of a sibling container the candidate is that container; over its outer band the drop stays
+      // in the current one (see inEdgeBand).
+      if (c && c.el !== cur.el && c.el.parentElement === cur.el) {
+        const axis = inferAxis(this.flowKids(cur.el).map((k) => k.getBoundingClientRect()), hintOf(cur.el));
+        if (inEdgeBand(c.el.getBoundingClientRect(), axis, x, y)) c = null;
+      }
+      if (c && c.el !== cur.el) {
+        if (c.el === origin.el) { cur = origin; cand = null; }
+        else {
+          // Dwell: only reparent once the pointer has stayed ~150 ms over the other container (re-check on a timer,
+          // because a still pointer sends no more move events).
+          if (!cand || cand.el !== c.el) { cand = c; candSince = performance.now(); }
+          const wait = 150 - (performance.now() - candSince);
+          if (wait <= 0) { cur = c; cand = null; } else timer = window.setTimeout(evaluate, wait + 5);
+        }
+      } else cand = null;
+
+      const kids = this.flowKids(cur.el);
+      const rects = kids.map((k) => k.getBoundingClientRect());
+      const axis: Axis = inferAxis(rects, hintOf(cur.el));
+      const index = insertionIndex(rects, axis, x, y);
+      drop = resolveDrop(cur.id, kids.map((k) => k.dataset.pid!), ids, index);
+      const box = cur.el.getBoundingClientRect();
+      const place = (b: HTMLElement, r: { left: number; top: number; width: number; height: number }) =>
+        Object.assign(b.style, { left: r.left - vp.left + 'px', top: r.top - vp.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+      place(line, insertionLine(rects, index, axis, box)); line.classList.remove('dc-hide');
+      place(outline, box); outline.classList.toggle('dc-hide', cur.el === origin.el);
+    };
+
+    const move = (ev: PointerEvent) => {
+      last = { x: ev.clientX, y: ev.clientY };
+      if (!started) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 3) return; begin(); }
+      const t = `translate(${ev.clientX - sx}px, ${ev.clientY - sy}px)`;
+      ghosts.forEach((g) => { g.style.transform = t; });
+      evaluate();
+    };
+
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      host.viewport.removeEventListener('pointermove', move);
+      host.viewport.removeEventListener('pointerup', up);
+      window.removeEventListener('keydown', onKey, true);
+      host.viewport.classList.remove('panning');
+      ghosts.forEach((g) => g.remove()); line.remove(); outline.remove();
+      moving.forEach((m, i) => { m.style.opacity = saved[i]; });
+    };
+    const up = (ev: PointerEvent) => {
+      const d = drop, target = cur;
+      cleanup();
+      if (!started || cancelled || !d) return;
+      const copy = ev.altKey;
+      if (d.noop && !copy) return;
+      // A grid child placed by grid-column / grid-row keeps its cell: only the DOM order changes.
+      if (getComputedStyle(target.el).display.includes('grid') && ids.some((i) => /grid-(column|row|area)/.test(host.findElement(i)?.getAttribute('style') ?? ''))) toast('Grid items keep their explicit cell; only the order changed');
+      host.markUserEdit();
+      canvasAction(host.projectId, 'move-nodes', { ids, target: d.target, position: d.position, copy })
+        .catch((err) => fail(err, 'Could not move'));
+    };
+    // Esc cancels. Capture phase + stopImmediatePropagation so the Esc shortcut (select parent) does not also fire.
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.stopImmediatePropagation(); ev.preventDefault();
+      cancelled = true;
+      cleanup();
+    };
+    host.viewport.setPointerCapture(e.pointerId);
+    host.viewport.addEventListener('pointermove', move);
+    host.viewport.addEventListener('pointerup', up);
+    window.addEventListener('keydown', onKey, true);
+  }
+
+  // Arrow keys reorder the selection along the parent's axis (left/up = earlier). Returns true when the key was ours.
+  private arrowReorder(e: KeyboardEvent): boolean {
+    const { host } = this;
+    const ids = host.selected();
+    if (!ids.length || ids.some((i) => i.startsWith('A'))) return false;
+    const parent = host.parentOf(ids[0]);
+    if (!parent || ids.some((i) => host.parentOf(i) !== parent)) return false;
+    // Absolute nodes are left alone: arrows will nudge them in the free-move phase.
+    const els = ids.map((i) => host.findElement(i));
+    if (els.some((n) => !n || isAbs(n) || n.closest('[data-locked]'))) return false;
+    const kidIds = host.childrenOf(parent);
+    const kids = kidIds.map((k) => host.findElement(k));
+    if (kids.some((k) => !k)) return false;
+    const container = kids[0]!.parentElement!;
+    const axis = inferAxis(kids.map((k) => k!.getBoundingClientRect()), getComputedStyle(container).flexDirection.startsWith('row') ? 'x' : 'y');
+    const vertical = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+    if ((axis === 'x' && vertical) || (axis === 'y' && !vertical)) return false; // across the axis: nothing to reorder
+    const dir = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1;
+    const d = stepDrop(parent, kidIds, ids, dir);
+    if (d && !d.noop) {
+      host.markUserEdit();
+      canvasAction(host.projectId, 'move-nodes', { ids, target: d.target, position: d.position }).catch((err) => fail(err, 'Could not move'));
+    }
+    return true; // an edge press is still ours: do not scroll
   }
 
   // ---- Text edit -----------------------------------------------------------------------
@@ -247,6 +440,8 @@ export class CanvasEditor {
     const nodes = sel.filter((id) => !id.startsWith('A')); // boards cannot be copied as nodes
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length) {
       this.remove(sel);
+    } else if (e.key.startsWith('Arrow') && !mod && !e.altKey && sel.length && this.arrowReorder(e)) {
+      e.preventDefault();
     } else if (e.key === 'Escape') {
       // Up one level (the parent becomes the selection and so the context), then deselect at board level.
       const parent = primary && !primary.startsWith('A') ? host.parentOf(primary) : null;

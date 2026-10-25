@@ -139,6 +139,8 @@ export class CanvasEngine {
       viewport,
       projectId,
       selBox: this.selBox,
+      overlay: this.overlay,
+      nodesAt: (x, y) => this.nodesAt(x, y),
       zoom: () => this.view.k,
       selected: () => this.selected,
       primary: () => this.primary(),
@@ -921,6 +923,23 @@ export class CanvasEngine {
 
   private place(box: HTMLElement, r: { left: number; top: number; width: number; height: number }) {
     Object.assign(box.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+  }
+
+  // Live nodes under a screen point (deepest first) for the drag-in-flow drop target. elementsFromPoint on the
+  // document only sees the board's host element; the shadow root answers for what is inside it.
+  private nodesAt(x: number, y: number) {
+    for (const hit of document.elementsFromPoint(x, y)) {
+      const abEl = hit.closest<HTMLElement>('.dc-artboard');
+      if (!abEl) continue;
+      const b = this.boards.get(abEl.dataset.ab!);
+      if (!b || b.shown == null || b.ab.generated === 'reference') return { board: null, nodes: [] as HTMLElement[], root: null };
+      return {
+        board: b.ab.id,
+        nodes: b.shadow.elementsFromPoint(x, y).filter(isNodeEl),
+        root: b.shadow.querySelector<HTMLElement>('[data-board-root]'),
+      };
+    }
+    return { board: null, nodes: [] as HTMLElement[], root: null };
   }
 
   // Look an element up through the pid index instead of scanning every shadow root.

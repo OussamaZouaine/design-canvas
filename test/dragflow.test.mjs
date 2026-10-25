@@ -70,3 +70,12 @@ test('stepDrop moves the set one slot and stops at the edges', () => {
   assert.equal(stepDrop('P', kids, ['d'], 1), null);
   assert.deepEqual(stepDrop('P', kids, ['b', 'c'], 1), { target: 'd', position: 'after', noop: false });
 });
+
+test('edge band: outer part of a sibling along the axis', async () => {
+  const { inEdgeBand } = await import('../web/src/canvas/dragflow.ts');
+  const r = R(0, 0, 100, 100);
+  assert.equal(inEdgeBand(r, 'x', 10, 50), true);
+  assert.equal(inEdgeBand(r, 'x', 50, 50), false);
+  assert.equal(inEdgeBand(r, 'y', 50, 95), true);
+  assert.equal(inEdgeBand(r, 'y', 5, 50), false);
+});
