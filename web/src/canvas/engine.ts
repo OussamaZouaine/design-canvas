@@ -984,8 +984,8 @@ export class CanvasEngine {
     // On-screen size divided by zoom = design pixels, what the inspector shows.
     this.sizeLabel.textContent = `${Math.round(union.width / this.view.k)} × ${Math.round(union.height / this.view.k)}`;
     this.selBox.classList.remove('dc-hide');
-    // Handles only for one live node; several nodes resize together in a later phase, snapshots have no DOM to resize.
-    if (items.length === 1 && items[0].el) this.editor.showHandles(items[0].el); else this.editor.hideHandles();
+    // Handles when every member is a live element (snapshots have no DOM to resize); several nodes resize in their union box.
+    if (items.every((i) => i.el)) this.editor.showHandles(items.map((i) => i.el!)); else this.editor.hideHandles();
   }
 
   private drawHover() {
@@ -1001,9 +1001,12 @@ export class CanvasEngine {
   private hoverRaf = 0;
   private onPointerMove = (e: PointerEvent) => {
     if (e.buttons || this.tool !== 'move' || this.commentMode || this.hoverRaf) return;
-    const { clientX, clientY } = e, path = e.composedPath(), deep = e.ctrlKey || e.metaKey;
+    const { clientX, clientY } = e, path = e.composedPath(), deep = e.ctrlKey || e.metaKey, alt = e.altKey;
     this.hoverRaf = requestAnimationFrame(() => {
       this.hoverRaf = 0;
+      // Alt + hover with something selected = measure mode: distances to the node under the pointer (deepest pick).
+      if (alt && this.selected.length) this.editor.measure(this.pickFrom(this.chainFrom(path, clientX, clientY), true));
+      else this.editor.endMeasure();
       const id = this.pickFrom(this.chainFrom(path, clientX, clientY), deep);
       const shown = id && !this.selected.includes(id) ? id : null; // the selection box already marks selected nodes
       if (shown !== this.hoverId) this.setHover(shown);
