@@ -8,6 +8,7 @@ export interface RectEntry {
   pid: string;
   x: number; y: number; w: number; h: number; // board-local px at scale 1
   depth: number;                              // nesting level among data-pid nodes (0 = direct child of the board)
+  parent: string | null;                      // pid of the nearest data-pid ancestor, null for a direct child of the board
 }
 
 const MAX_ENTRIES = 5000; // a runaway board must not make the index (or the measure pass) unbounded
@@ -98,7 +99,7 @@ export function measureBoard(html: string, width: number, height: number, themeD
     const depth = parent ? (depthOf.get(parent) ?? 0) + 1 : 0;
     depthOf.set(el, depth);
     if (r.width < 1 || r.height < 1) continue; // display:none / empty nodes cannot be hit
-    out.push({ pid: el.dataset.pid!, x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height, depth });
+    out.push({ pid: el.dataset.pid!, x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height, depth, parent: (parent as HTMLElement | null)?.dataset.pid ?? null });
   }
   root.replaceChildren(); // free the nodes; the host stays for the next board
   return out;
