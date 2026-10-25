@@ -12,7 +12,8 @@ export interface MenuState {
 interface CanvasState {
   engine: CanvasEngine | null;
   zoom: number;
-  selected: string | null;
+  // Ordered selection; the last id is the primary (the Inspector shows that one for now).
+  selected: string[];
   live: { id: string; name: string } | null;
   activePage: string | null;
   follow: boolean;
@@ -28,7 +29,7 @@ interface CanvasState {
   setMenu: (m: MenuState | null) => void;
   setEngine: (e: CanvasEngine | null) => void;
   setZoom: (k: number) => void;
-  setSelected: (id: string | null) => void;
+  setSelected: (ids: string[]) => void;
   setLive: (l: { id: string; name: string } | null) => void;
   setActivePage: (id: string | null) => void;
   setFollow: (on: boolean) => void;
@@ -39,7 +40,7 @@ const initialFollow = (() => { try { return localStorage.getItem('dc-follow') !=
 export const useCanvas = create<CanvasState>((set, get) => ({
   engine: null,
   zoom: 0.5,
-  selected: null,
+  selected: [],
   live: null,
   activePage: null,
   follow: initialFollow,

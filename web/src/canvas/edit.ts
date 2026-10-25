@@ -5,17 +5,22 @@
 // Previews while dragging write straight to the element, and the server's version replaces them on release.
 import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
-import { isNodeEl } from '@/lib/htmlTree';
 import { toast } from '@/store/toast';
 import type { PathModel } from './path';
 import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
+import { siblingStep } from './selection';
 
 export interface EditHost {
   viewport: HTMLElement;
   projectId: string;
   zoom: () => number;
-  selected: () => string | null;
-  select: (id: string | null) => void;
+  selected: () => string[];                    // ordered, last = primary
+  primary: () => string | null;
+  select: (ids: string[]) => void;
+  parentOf: (id: string) => string | null;    // parent node id, the board id for a top-level node, null for a board
+  siblingsOf: (id: string) => string[];       // ids sharing id's parent, in document order
+  childrenOf: (id: string) => string[];       // direct child node ids (a board's top-level nodes for a board id)
+  selectAll: () => void;                      // Ctrl+A: every child of the current context
   board: (id: string) => Artboard | undefined;
   boardsHere: () => Artboard[];
   boardEl: (id: string) => HTMLElement | undefined;
@@ -43,7 +48,6 @@ const fail = (err: unknown, fallback: string) => toast((err as Error)?.message |
 
 export class CanvasEditor {
   private handles = new Map<Dir, HTMLElement>();
-  private lastDown: { node: HTMLElement | null; t: number } = { node: null, t: 0 };
   private nodeClip: string | null = null; // HTML of the node last copied with Ctrl+C
   private pasteSeen = false;
 
@@ -63,7 +67,6 @@ export class CanvasEditor {
     window.addEventListener('keydown', this.onKey, sig);
     window.addEventListener('keydown', this.onPasteKey, sig);
     window.addEventListener('paste', this.onPaste, sig);
-    host.viewport.addEventListener('dblclick', this.onDblClick, sig);
     host.viewport.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault(); }, sig);
     host.viewport.addEventListener('drop', (e) => {
       const file = [...(e.dataTransfer?.files ?? [])].find((f) => f.type.startsWith('image/'));
@@ -79,7 +82,7 @@ export class CanvasEditor {
   hideHandles() { for (const el of this.handles.values()) el.hidden = true; }
 
   showHandles(target: HTMLElement) {
-    const sel = this.host.selected() ?? '';
+    const sel = this.host.primary() ?? '';
     const isBoard = sel.startsWith('A');
     const locked = !isBoard && !!target.closest('[data-locked]');
     const allowed: readonly Dir[] = locked ? [] : isBoard || isAbs(target) ? HANDLE_DIRS : ['e', 's', 'se'];
@@ -88,8 +91,8 @@ export class CanvasEditor {
 
   private beginResize(dir: Dir, e: PointerEvent) {
     const { host } = this;
-    const id = host.selected();
-    if (!id) return;
+    const id = host.primary();
+    if (!id || host.selected().length > 1) return; // multi-resize arrives with the free-move phase
     const board = id.startsWith('A') ? host.board(id) : undefined;
     const el = board ? null : host.findElement(id);
     if (!board && !el) return;
@@ -175,10 +178,6 @@ export class CanvasEditor {
     }, host.zoom());
   }
 
-  // Remember what the pointer went down on: dragging an absolute node captures the pointer, which retargets
-  // the click that follows, so a later double-click (text edit) would lose its element.
-  noteDown(node: HTMLElement | null) { this.lastDown = { node, t: Date.now() }; }
-
   // Drag an absolutely positioned node (left / top). A drag under 3 px counts as a click. Returns false when
   // the node cannot be dragged (it flows with its siblings, or is locked), so the caller treats it as a click.
   dragNode(e: PointerEvent, el: HTMLElement) {
@@ -204,15 +203,14 @@ export class CanvasEditor {
   }
 
   // ---- Text edit -----------------------------------------------------------------------
-  // Double-click a text element, type, click away or press Enter to save (Escape cancels). Only leaf elements
-  // qualify: setting text on a node with children would replace them. contenteditable turns any element into a
-  // text field right inside its shadow root; plaintext-only keeps pasted formatting out.
-  private onDblClick = (e: MouseEvent) => {
-    const fromPath = e.composedPath().find(isNodeEl);
-    const el = fromPath ?? (Date.now() - this.lastDown.t < 600 ? this.lastDown.node : null);
-    if (!el || el.children.length || !el.textContent?.trim() || el.isContentEditable) return;
+  // Double-click a text leaf (the engine decides when a double-click enters a node and when it edits), type, click
+  // away or press Enter to save (Escape cancels). Only leaf elements qualify: setting text on a node with children
+  // would replace them. contenteditable turns any element into a text field right inside its shadow root;
+  // plaintext-only keeps pasted formatting out.
+  editText(el: HTMLElement) {
+    if (el.children.length || !el.textContent?.trim() || el.isContentEditable) return;
     this.startTextEdit(el);
-  };
+  }
 
   private startTextEdit(el: HTMLElement) {
     const { host } = this;
@@ -243,44 +241,73 @@ export class CanvasEditor {
   private onKey = (e: KeyboardEvent) => {
     if (typing(e.target)) return; // typing is not a shortcut
     const { host } = this;
-    const sel = host.selected();
+    const sel = host.selected(), primary = host.primary();
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-    if ((e.key === 'Delete' || e.key === 'Backspace') && sel) {
+    const nodes = sel.filter((id) => !id.startsWith('A')); // boards cannot be copied as nodes
+    if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length) {
       this.remove(sel);
     } else if (e.key === 'Escape') {
-      // Up one level in the tree, then deselect.
-      const parent = sel && !sel.startsWith('A') ? host.findElement(sel)?.parentElement?.closest<HTMLElement>('[data-pid]')?.dataset.pid : undefined;
-      host.select(parent ?? (sel && !sel.startsWith('A') ? host.boardOf(sel) ?? null : null));
+      // Up one level (the parent becomes the selection and so the context), then deselect at board level.
+      const parent = primary && !primary.startsWith('A') ? host.parentOf(primary) : null;
+      host.select(parent && !parent.startsWith('A') ? [parent] : []);
+    } else if (e.key === 'Enter' && !mod && sel.length) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // Shift+Enter: select the parent(s); a top-level node's parent is its board.
+        host.select([...new Set(sel.map((id) => host.parentOf(id)).filter((p): p is string => !!p))]);
+      } else {
+        // Enter: go into the selection. A lone text leaf has no children, so Enter edits it instead.
+        const kids = sel.flatMap((id) => host.childrenOf(id));
+        const el = sel.length === 1 && primary ? host.findElement(primary) : null;
+        if (kids.length) host.select(kids);
+        else if (el && !el.children.length && el.textContent?.trim() && !primary!.startsWith('A')) this.startTextEdit(el);
+      }
+    } else if (e.key === '\\' &&!mod && sel.length) {
+      e.preventDefault();
+      host.select([...new Set(sel.map((id) => host.parentOf(id)).filter((p): p is string => !!p))]);
+    } else if (e.key === 'Tab' && primary) {
+      // Tab walks the siblings of the primary node (wrapping); focus must not leave the canvas.
+      e.preventDefault();
+      const next = siblingStep(host.siblingsOf(primary), primary, e.shiftKey ? -1 : 1);
+      if (next) host.select([next]);
+    } else if (mod && key === 'a' && !e.shiftKey) {
+      e.preventDefault();
+      host.selectAll();
     } else if (mod && !e.altKey && (key === 'z' || key === 'y')) {
       // Undo / redo go through the server so they cover Claude's changes and the theme too.
       e.preventDefault();
       host.markUserEdit();
       canvasAction(host.projectId, key === 'y' || e.shiftKey ? 'redo' : 'undo').catch((err) => fail(err, 'Nothing to do'));
-    } else if (mod && key === 'c' && sel && !sel.startsWith('A') && !getSelection()?.toString()) {
-      this.copy(sel);
-    } else if (mod && key === 'd' && sel) {
+    } else if (mod && (key === 'c' || key === 'x') && nodes.length && !getSelection()?.toString()) {
+      this.copy(nodes);
+      if (key === 'x') this.remove(nodes);
+    } else if (mod && key === 'd' && sel.length) {
       e.preventDefault();
       this.duplicate(sel);
     }
   };
 
-  // The actions below are shared by the keyboard shortcuts and the right-click menu.
-  remove(id: string) {
+  // The actions below are shared by the keyboard shortcuts and the right-click menu. They take the whole set:
+  // the server actions already accept `ids`, so a multi-selection is still one request and one undo step.
+  remove(ids: string[]) {
+    if (!ids.length) return;
     this.host.markUserEdit();
-    canvasAction(this.host.projectId, 'delete', { ids: [id] }).catch((err) => fail(err, 'Could not delete'));
-    this.host.select(null);
+    canvasAction(this.host.projectId, 'delete', { ids }).catch((err) => fail(err, 'Could not delete'));
+    this.host.select([]);
   }
 
-  duplicate(id: string) {
+  duplicate(ids: string[]) {
+    if (!ids.length) return;
     this.host.markUserEdit();
-    canvasAction(this.host.projectId, 'duplicate', { ids: [id] }).catch((err) => fail(err, 'Could not duplicate'));
+    canvasAction(this.host.projectId, 'duplicate', { ids }).catch((err) => fail(err, 'Could not duplicate'));
   }
 
-  // Copy a node's HTML now, paste it later (even on another board or page).
-  copy(id: string) {
-    const html = this.nodeHtml(id);
-    if (html) { this.nodeClip = html; toast('Copied. Paste with Ctrl+V.'); }
+  // Copy the nodes' HTML now, paste it later (even on another board or page). Several nodes are joined in the
+  // order they were selected; the server's paste writes them as siblings.
+  copy(ids: string[]) {
+    const html = ids.map((id) => this.nodeHtml(id)).filter(Boolean).join('');
+    if (html) { this.nodeClip = html; toast(ids.length > 1 ? `Copied ${ids.length} layers. Paste with Ctrl+V.` : 'Copied. Paste with Ctrl+V.'); }
   }
 
   get canPaste() { return !!this.nodeClip; }
@@ -300,7 +327,7 @@ export class CanvasEditor {
   // Pasting into an artboard appends; pasting with a node selected puts the copy right after it.
   pasteNode() {
     const { host } = this;
-    const sel = host.selected();
+    const sel = host.primary();
     const target = sel ?? host.boardsHere()[0]?.id;
     if (!this.nodeClip || !target) return;
     host.markUserEdit();
@@ -386,7 +413,7 @@ export class CanvasEditor {
       for (let i = 0; i < 40; i++) {
         const node = host.findElement(id);
         // Select only now: before the board redraws there is no element to draw the selection box around.
-        if (node) { host.select(id); this.startTextEdit(node); return; }
+        if (node) { host.select([id]); this.startTextEdit(node); return; }
         await new Promise((res) => requestAnimationFrame(res));
       }
     } catch (err) { fail(err, 'Could not add text'); }

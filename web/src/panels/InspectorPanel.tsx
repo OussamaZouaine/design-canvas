@@ -201,7 +201,8 @@ function PaddingField({ value, onSet }: { value: string; onSet: (v: string) => v
 
 export function InspectorPanel({ projectId }: { projectId: string }) {
   const doc = useProject((s) => s.doc);
-  const selected = useCanvas((s) => s.selected);
+  // The primary node (last selected); editing several nodes at once comes with the Design tab rewrite.
+  const selected = useCanvas((s) => s.selected.at(-1) ?? null);
   const page = useCanvas((s) => s.activePage);
   const mode = useCanvas((s) => s.mode);
   const engine = useCanvas((s) => s.engine);

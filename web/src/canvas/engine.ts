@@ -13,6 +13,7 @@ import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
+import { enterTarget, intersects, normalize, pickDeep, pickInChain, toggleId, unionBox, type Box } from './selection';
 import { fontsSignature, setProjectFonts } from './fonts';
 import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
@@ -25,7 +26,8 @@ const MIN_K = 0.05, MAX_K = 4;
 
 export interface EngineEvents {
   onZoom: (k: number) => void;
-  onSelect: (id: string | null) => void;
+  // The whole selection, ordered; the last id is the primary (what the Inspector shows).
+  onSelect: (ids: string[]) => void;
   // Claude is writing to a board (name) or has stopped (null): drives the header pill.
   onLive: (live: { id: string; name: string } | null) => void;
   // The visible page changed (user switched, a page was deleted, or Claude drew on another one).
@@ -59,6 +61,7 @@ interface Board {
   thumbReady: boolean;
   pinUntil: number;         // Claude drew here recently: keep it mounted until this time
   index: RectEntry[] | null; // node boxes for picking while only the snapshot is drawn (see rects.ts)
+  indexMap: Map<string, RectEntry> | null; // the same entries by pid, for walking up the ancestors of a hit
   indexKey: string;         // html + theme the index was measured from; a mismatch means re-measure
   genTimer?: number;
   thumbTimer?: number;
@@ -82,6 +85,8 @@ export class CanvasEngine {
   private overlay = div('dc-overlay');
   private selBox = div('dc-sel dc-hide');
   private hoverBox = div('dc-hover dc-hide');
+  private memberHost = div('dc-members'); // thin outline per selected node when more than one is selected
+  private marqueeBox = div('dc-marquee dc-hide');
   private agentHost = div('dc-agent');
   private claimHost = div('dc-claims'); // coloured outlines of boards an agent claimed (soft claims, see src/claims.mjs)
   private claims: { board: string; agent: { id: string; name: string; color: string } }[] = [];
@@ -90,7 +95,11 @@ export class CanvasEngine {
 
   private doc: DocData = { counter: 0, artboards: [] };
   private view = { x: 80, y: 90, k: 0.5 };
-  private selected: string | null = null;
+  // Ordered selection, last = primary. `context` is the node whose children a plain click picks (null = board level);
+  // it follows the selection (the parent of the primary) so Figma-style scoping needs no extra bookkeeping.
+  private selected: string[] = [];
+  private context: string | null = null;
+  private lastDown: { chain: string[]; t: number } = { chain: [], t: 0 }; // for a double-click whose target pointer capture hid
   private hoverId: string | null = null;
   private agentIds: string[] = [];
   private agent: { id: string; name: string; color: string } | null = null; // who wrote them (tints boxes + ring)
@@ -120,7 +129,7 @@ export class CanvasEngine {
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     this.activePage = lsGet(`dc-page:${projectId}`);
-    this.overlay.append(this.claimHost, this.agentHost, this.hoverBox, this.selBox, this.draft);
+    this.overlay.append(this.claimHost, this.agentHost, this.hoverBox, this.memberHost, this.selBox, this.draft, this.marqueeBox);
     this.selBox.append(this.sizeLabel);
     viewport.append(this.world, this.overlay);
     this.applyView();
@@ -132,7 +141,12 @@ export class CanvasEngine {
       selBox: this.selBox,
       zoom: () => this.view.k,
       selected: () => this.selected,
-      select: (id) => this.select(id),
+      primary: () => this.primary(),
+      select: (ids) => this.select(ids),
+      parentOf: (id) => this.parentId(id),
+      siblingsOf: (id) => this.siblingsOf(id),
+      childrenOf: (id) => this.childrenOf(id),
+      selectAll: () => this.selectAll(),
       board: (id) => this.doc.artboards.find((a) => a.id === id),
       boardsHere: () => this.boardsHere(),
       boardEl: (id) => this.boards.get(id)?.el,
@@ -150,14 +164,14 @@ export class CanvasEngine {
       frameRect: (id) => { const b = this.boards.get(id); return b ? this.relRect(b.frame) : null; },
       rectOf: (el) => this.relRect(el),
       findElement: (id) => this.findElement(id),
-      selected: () => this.selected,
-      select: (id) => this.select(id),
+      selected: () => this.primary(),
+      select: (id) => this.select(id ? [id] : []),
       markUserEdit: () => this.markUserEdit(),
       done: () => this.events.onToolDone(),
       addPath: (boardId, model) => this.editor.addPath(boardId, model),
       selectWhenReady: (id) => this.selectWhenReady(id),
       hideSel: () => this.selBox.classList.add('dc-hide'),
-      remove: (id) => this.editor.remove(id),
+      remove: (id) => this.editor.remove([id]),
     }, this.abort.signal);
     // Remember when the user last touched the canvas; capture phase so nothing can stop it first.
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
@@ -165,6 +179,7 @@ export class CanvasEngine {
     viewport.addEventListener('pointerdown', this.onPointerDown, sig);
     viewport.addEventListener('pointermove', this.onPointerMove, { passive: true, ...sig });
     viewport.addEventListener('contextmenu', this.onContextMenu, sig);
+    viewport.addEventListener('dblclick', this.onDblClick, sig);
     window.addEventListener('keydown', this.onSpace, sig);
     window.addEventListener('keyup', this.onSpace, sig);
     window.addEventListener('blur', () => this.setSpace(false), sig);
@@ -223,7 +238,7 @@ export class CanvasEngine {
   setCommentMode(on: boolean) {
     this.commentMode = on;
     this.viewport.classList.toggle('commenting', on);
-    if (on) this.select(null);
+    if (on) this.select([]);
   }
 
   // Active toolbar tool. Comment mode keeps its own switch (the comments layer owns that flow).
@@ -231,17 +246,20 @@ export class CanvasEngine {
     this.tool = tool;
     this.viewport.dataset.tool = tool;
     this.paths.toolChanged(tool);
-    if (tool !== 'move' && tool !== 'comment') this.select(null);
+    if (tool !== 'move' && tool !== 'comment') this.select([]);
   }
 
   // Menu / toolbar actions that need the editor.
-  duplicate(id: string) { this.editor.duplicate(id); }
-  remove(id: string) { this.editor.remove(id); }
-  copy(id: string) { this.editor.copy(id); }
+  // These act on the whole selection (the context menu and the shortcuts share them).
+  duplicate() { this.editor.duplicate([...this.selected]); }
+  remove() { this.editor.remove([...this.selected]); }
+  copy() { this.editor.copy(this.selected.filter((id) => !id.startsWith('A'))); }
+  get selection(): readonly string[] { return this.selected; }
   paste() { this.editor.pasteNode(); }
   get canPaste() { return this.editor.canPaste; }
   addImageFile(file: File) { return this.editor.addReferenceFile(file); }
-  selectNode(id: string | null) { this.select(id); }
+  selectNode(id: string | null) { this.select(id ? [id] : []); }
+  selectIds(ids: string[]) { this.select(ids); }
   parentOf(id: string) {
     if (id.startsWith('A')) return null;
     return this.findElement(id)?.parentElement?.closest<HTMLElement>('[data-pid]')?.dataset.pid ?? this.pidIndex.get(id) ?? null;
@@ -283,22 +301,54 @@ export class CanvasEngine {
     const key = (b.html ?? '') + '\u0000' + this.themeDecls() + '\u0000' + fontsSignature(); // a web font changes line breaks
     if (!b.index || b.indexKey !== key) {
       b.index = measureBoard(b.html ?? '', b.ab.width, b.ab.height, this.themeDecls(), b.ab.heightMode === 'fit');
+      b.indexMap = null;
       b.indexKey = key;
     }
     return b.index;
   }
 
-  // Node id under a viewport point, from the index of the (unmounted) board there; null when it is a live board or empty.
-  private pickAt(clientX: number, clientY: number): string | null {
+  private boardMap(b: Board) {
+    const list = this.boardIndex(b);
+    return (b.indexMap ??= new Map(list.map((n) => [n.pid, n])));
+  }
+
+  // Ancestor chain (deepest first, top-level node last) of the node under a viewport point on an unmounted board,
+  // from its rect index; empty when the point is on a live board or on nothing.
+  private chainAt(clientX: number, clientY: number): string[] {
     const v = this.viewport.getBoundingClientRect(), { x, y, k } = this.view;
     const wx = (clientX - v.left - x) / k, wy = (clientY - v.top - y) / k;
     for (const b of this.boards.values()) {
       const { ab } = b;
       if (b.shown != null || !this.inPage(ab) || !b.html) continue;
       if (wx < ab.x || wy < ab.y || wx > ab.x + ab.width || wy > ab.y + ab.height) continue;
-      return pickRect(this.boardIndex(b), wx - ab.x, wy - ab.y, k)?.pid ?? null;
+      const hit = pickRect(this.boardIndex(b), wx - ab.x, wy - ab.y, k);
+      const chain: string[] = [];
+      const map = this.boardMap(b);
+      for (let e: RectEntry | undefined = hit ?? undefined; e && chain.length < 200; e = e.parent ? map.get(e.parent) : undefined) chain.push(e.pid);
+      return chain;
     }
-    return null;
+    return [];
+  }
+
+  // Ancestor chain of a pointer event's hit, deepest first. Live boards answer from the composed path (it pierces
+  // the shadow roots); pieces inside a shape <svg> are not layers, the <svg data-shape> root is.
+  private chainOf(path: EventTarget[]): string[] {
+    const out: string[] = [];
+    for (const n of path) {
+      if (!isNodeEl(n) || n.parentElement?.closest('svg[data-shape]')) continue;
+      out.push(n.dataset.pid!);
+    }
+    return out;
+  }
+
+  private chainFrom(path: EventTarget[], x: number, y: number) {
+    const live = this.chainOf(path);
+    return live.length ? live : this.chainAt(x, y);
+  }
+
+  // What a click on this chain selects: the context's child (plain) or the deepest node (Ctrl/Cmd).
+  private pickFrom(chain: string[], deep: boolean) {
+    return deep ? pickDeep(chain, (id) => !!this.findElement(id)?.hasAttribute('data-locked')) : pickInChain(chain, this.context, this.selected);
   }
 
   // Viewport-relative box of a node on an unmounted board, from the index. Null if the board is live or the node is unknown.
@@ -322,7 +372,7 @@ export class CanvasEngine {
     if (id === this.activePage) return;
     this.activePage = id;
     lsSet(`dc-page:${this.projectId}`, id);
-    this.select(null);
+    this.select([]);
     this.events.onPage(id);
     this.syncPage();
     if (fitView) this.fit();
@@ -334,13 +384,78 @@ export class CanvasEngine {
     else this.pendingPage = id;
   }
 
-  select(id: string | null) {
-    this.selected = id;
-    this.paths.selectionChanged(id);
-    this.events.onSelect(id);
-    canvasAction(this.projectId, 'selection', { ids: id ? [id] : [] }).catch(() => {}); // lets Claude's get_selection see it
+  // Replace the selection. Ids are normalized (a node and its own descendant are never selected together, the
+  // newer one wins). The context follows the primary's parent unless the caller names one.
+  select(ids: string[], context?: string | null) {
+    this.selected = normalize(ids, (id) => this.parentId(id));
+    const p = this.primary();
+    if (context !== undefined) this.context = context;
+    else {
+      const par = p ? this.parentId(p) : null;
+      this.context = par && !par.startsWith('A') ? par : null;
+    }
+    this.paths.selectionChanged(this.selected.length === 1 ? p : null);
+    this.events.onSelect(this.selected);
+    canvasAction(this.projectId, 'selection', { ids: this.selected }).catch(() => {}); // lets Claude's get_selection see it
     this.drawSelection();
-    for (const b of this.boards.values()) b.el.querySelector('.dc-label')?.classList.toggle('sel', b.ab.id === id);
+    for (const b of this.boards.values()) b.el.querySelector('.dc-label')?.classList.toggle('sel', this.selected.includes(b.ab.id));
+  }
+
+  private primary() { return this.selected.at(-1) ?? null; }
+
+  // ---- Tree lookups for selection ------------------------------------------------------
+  // Work on live boards (DOM) and on snapshot boards (rect index) alike, so keyboard navigation does not care
+  // about the level of detail. Board ids stand in for "board level": a top-level node's parent is its board.
+  private mountedBoard(id: string) {
+    const b = this.boards.get(this.pidIndex.get(id) ?? '');
+    return b && b.shown != null ? b : null;
+  }
+
+  private parentId(id: string): string | null {
+    if (id.startsWith('A')) return null;
+    const abId = this.pidIndex.get(id) ?? null;
+    const b = abId ? this.boards.get(abId) : undefined;
+    if (!b) return abId;
+    if (b.shown != null) {
+      const el = b.shadow.querySelector(`[data-pid="${id}"]`);
+      return el?.parentElement?.closest<HTMLElement>('[data-pid]')?.dataset.pid ?? abId;
+    }
+    return this.boardMap(b).get(id)?.parent ?? abId;
+  }
+
+  // Direct child nodes of a node, or the top-level nodes of a board. Hidden nodes are skipped.
+  private childrenOf(id: string): string[] {
+    if (id.startsWith('A')) {
+      const b = this.boards.get(id);
+      if (!b || !b.html) return [];
+      if (b.shown != null) {
+        return [...b.shadow.querySelectorAll<HTMLElement>('[data-pid]')]
+          .filter((n) => !n.parentElement?.closest('[data-pid]') && !n.hasAttribute('hidden')).map((n) => n.dataset.pid!);
+      }
+      return this.boardIndex(b).filter((n) => n.parent == null).map((n) => n.pid);
+    }
+    const mounted = this.mountedBoard(id);
+    if (mounted) {
+      const el = mounted.shadow.querySelector(`[data-pid="${id}"]`);
+      if (!el || el.hasAttribute('data-shape')) return [];
+      return [...el.children].filter((c) => isNodeEl(c) && !c.hasAttribute('hidden')).map((c) => (c as HTMLElement).dataset.pid!);
+    }
+    const b = this.boards.get(this.pidIndex.get(id) ?? '');
+    return b?.html ? this.boardIndex(b).filter((n) => n.parent === id).map((n) => n.pid) : [];
+  }
+
+  private siblingsOf(id: string): string[] {
+    const p = this.parentId(id);
+    return p ? this.childrenOf(p) : [];
+  }
+
+  // Ctrl+A: everything at the current level. In a context that is its children; at board level the top-level
+  // nodes of the primary's board, or every board when nothing is selected.
+  private selectAll() {
+    const p = this.primary();
+    if (this.context) { this.select(this.childrenOf(this.context), this.context); return; }
+    const board = p ? (p.startsWith('A') ? null : this.pidIndex.get(p) ?? null) : null;
+    this.select(board ? this.childrenOf(board) : this.boardsHere().map((a) => a.id), null);
   }
 
   // Read-only copy of the camera (screen = world * k + x/y). The rulers use it; they must not mutate the engine's own object.
@@ -466,7 +581,7 @@ export class CanvasEngine {
     const el = div('dc-artboard lod', label, ring, frame, img, lodName, div('dc-shimmer', 'Claude is designing…'));
     el.dataset.ab = ab.id;
     this.world.appendChild(el);
-    return { ab, el, frame, shadow, img, labelName, lodName, html: null, shown: null, oldHtml: '', hash: null, thumbKey: null, thumbReady: false, pinUntil: 0, index: null, indexKey: '' };
+    return { ab, el, frame, shadow, img, labelName, lodName, html: null, shown: null, oldHtml: '', hash: null, thumbKey: null, thumbReady: false, pinUntil: 0, index: null, indexMap: null, indexKey: '' };
   }
 
   private render({ animate }: { animate: boolean }) {
@@ -478,7 +593,7 @@ export class CanvasEngine {
     // Claude is drawing on a page we are not looking at: follow it there.
     if (showGen) {
       const away = changed.find((a) => !this.inPage(a));
-      if (away) { this.activePage = pageOfBoard(this.doc, away); lsSet(`dc-page:${this.projectId}`, this.activePage); this.select(null); this.events.onPage(this.activePage); this.syncPage(); }
+      if (away) { this.activePage = pageOfBoard(this.doc, away); lsSet(`dc-page:${this.projectId}`, this.activePage); this.select([]); this.events.onPage(this.activePage); this.syncPage(); }
     }
 
     for (const ab of this.doc.artboards) {
@@ -501,7 +616,7 @@ export class CanvasEngine {
       b.el.classList.toggle('offpage', !this.inPage(ab));
       b.labelName.textContent = ab.name; // textContent: names are untrusted
       b.lodName.textContent = ab.name;
-      b.el.querySelector('.dc-label')!.classList.toggle('sel', this.selected === ab.id);
+      b.el.querySelector('.dc-label')!.classList.toggle('sel', this.selected.includes(ab.id));
 
       // Skip the re-parse when nothing changed so dragging stays smooth.
       if (b.html !== ab.html) {
@@ -529,6 +644,9 @@ export class CanvasEngine {
       this.boards.delete(id);
     }
     this.updateVisibility();
+    // Undo, delete or Claude may have removed selected nodes: drop them so the Inspector and Layers never point at a ghost.
+    const alive = this.selected.filter((id) => (id.startsWith('A') ? this.boards.has(id) : this.pidIndex.has(id)));
+    if (alive.length !== this.selected.length) this.select(alive);
     this.drawSelection();
   }
 
@@ -829,15 +947,26 @@ export class CanvasEngine {
     this.drawAgent(); // piggybacks on every selection redraw (pan, zoom, render)
     this.drawClaims();
     this.drawHover();
-    const target = this.selected ? this.findElement(this.selected) : null;
-    // No element (board is a snapshot): fall back to the rect index, box only, no resize handles.
-    const rect = target ? this.relRect(target) : this.selected ? this.indexRect(this.selected) : null;
-    if (!rect) { this.selBox.classList.add('dc-hide'); return; }
-    this.place(this.selBox, rect);
+    // Each member's box: the live element when the board is mounted, else the rect index (snapshot board).
+    const items = this.selected.map((id) => {
+      const el = this.findElement(id);
+      return { el, rect: el ? this.relRect(el) : this.indexRect(id) };
+    }).filter((x): x is { el: HTMLElement | null; rect: NonNullable<typeof x.rect> } => !!x.rect);
+    const union = unionBox(items.map((i) => i.rect));
+    // Thin outline per member, only when there is more than one (a single node is its own union box).
+    const members = items.length > 1 ? items.map((i) => i.rect) : [];
+    while (this.memberHost.children.length > members.length) this.memberHost.lastChild!.remove();
+    members.forEach((r, i) => {
+      const box = (this.memberHost.children[i] as HTMLElement) || this.memberHost.appendChild(document.createElement('i'));
+      this.place(box, r);
+    });
+    if (!union) { this.selBox.classList.add('dc-hide'); return; }
+    this.place(this.selBox, union);
     // On-screen size divided by zoom = design pixels, what the inspector shows.
-    this.sizeLabel.textContent = `${Math.round(rect.width / this.view.k)} × ${Math.round(rect.height / this.view.k)}`;
+    this.sizeLabel.textContent = `${Math.round(union.width / this.view.k)} × ${Math.round(union.height / this.view.k)}`;
     this.selBox.classList.remove('dc-hide');
-    if (target) this.editor.showHandles(target); else this.editor.hideHandles();
+    // Handles only for one live node; several nodes resize together in a later phase, snapshots have no DOM to resize.
+    if (items.length === 1 && items[0].el) this.editor.showHandles(items[0].el); else this.editor.hideHandles();
   }
 
   private drawHover() {
@@ -848,15 +977,17 @@ export class CanvasEngine {
     this.hoverBox.classList.remove('dc-hide');
   }
 
-  // Hover highlight on snapshot boards (live boards get none today). rAF-throttled: one pick per frame at most.
+  // Hover outline = what a click would select (Ctrl/Cmd previews the deep pick). rAF-throttled: one pick per frame at
+  // most. The composed path must be read inside the event, so it is captured before the frame callback.
   private hoverRaf = 0;
   private onPointerMove = (e: PointerEvent) => {
     if (e.buttons || this.tool !== 'move' || this.commentMode || this.hoverRaf) return;
-    const { clientX, clientY } = e;
+    const { clientX, clientY } = e, path = e.composedPath(), deep = e.ctrlKey || e.metaKey;
     this.hoverRaf = requestAnimationFrame(() => {
       this.hoverRaf = 0;
-      const id = this.pickAt(clientX, clientY);
-      if (id !== this.hoverId) this.setHover(id);
+      const id = this.pickFrom(this.chainFrom(path, clientX, clientY), deep);
+      const shown = id && !this.selected.includes(id) ? id : null; // the selection box already marks selected nodes
+      if (shown !== this.hoverId) this.setHover(shown);
     });
   };
 
@@ -909,6 +1040,7 @@ export class CanvasEngine {
   };
 
   private onPointerDown = (e: PointerEvent) => {
+    if (e.button === 1) { e.preventDefault(); this.panFrom(e); return; } // middle mouse always pans
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     const path = e.composedPath(); // pierces the shadow root to find the real clicked element
@@ -948,14 +1080,106 @@ export class CanvasEngine {
       return;
     }
 
-    this.editor.noteDown(node ?? null);
-    if (onLabel && abEl) { this.select(abEl.dataset.ab!); this.editor.dragBoard(e, abEl.dataset.ab!); return; }
-    if (node) { this.select(node.dataset.pid!); this.editor.dragNode(e, node); return; }
-    // Zoomed out the board is a bitmap: pick from the rect index. Dragging then pans (moving needs live DOM).
-    const picked = this.pickAt(e.clientX, e.clientY);
-    if (picked) { this.select(picked); this.panFrom(e); return; }
-    this.select(null);
-    this.panFrom(e);
+    this.lastDown = { chain: this.chainFrom(path, e.clientX, e.clientY), t: Date.now() };
+    const chain = this.lastDown.chain;
+    const deep = e.ctrlKey || e.metaKey;
+    if (onLabel && abEl) {
+      const id = abEl.dataset.ab!;
+      if (e.shiftKey) { this.select(toggleId(this.selected, id)); return; }
+      this.select([id]);
+      this.editor.dragBoard(e, id);
+      return;
+    }
+    if (chain.length) {
+      const id = this.pickFrom(chain, deep)!;
+      if (e.shiftKey) { this.select(toggleId(this.selected, id)); return; } // Shift+click toggles, no drag
+      const wasInSet = this.selected.length > 1 && this.selected.includes(id);
+      if (!this.selected.includes(id)) this.select([id]);
+      const el = this.findElement(id);
+      // Zoomed out the board is a bitmap (no live element): dragging pans, since moving needs the DOM.
+      if (!el) { this.panFrom(e); return; }
+      this.editor.dragNode(e, el);
+      // Pressing a member of a multi-selection keeps the set for a drag; a plain click on it narrows to that node.
+      if (wasInSet) {
+        const sx = e.clientX, sy = e.clientY;
+        const up = (ev: PointerEvent) => {
+          removeEventListener('pointerup', up, true);
+          if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 3) this.select([id]);
+        };
+        addEventListener('pointerup', up, true);
+      }
+      return;
+    }
+    // Empty space (board background or bare canvas): a left drag draws a selection rectangle.
+    this.startMarquee(e, abEl && !onLabel ? abEl.dataset.ab! : null);
+  };
+
+  // Rubber-band selection (the move tool's drag on empty space; Space / hand tool / middle mouse pan instead). It
+  // selects the children of the current context on the board where the drag started (intersecting is enough, as in
+  // Figma), or boards when it starts outside any board. Hits come from the rect index, so it works on bitmap boards.
+  // A press without a drag is just a click on nothing: it clears the selection (unless Shift is held).
+  private startMarquee(e: PointerEvent, boardId: string | null) {
+    const v = this.viewport.getBoundingClientRect();
+    const sx = e.clientX - v.left, sy = e.clientY - v.top;
+    const base = e.shiftKey ? [...this.selected] : [];
+    const ctx = this.context;
+    if (!e.shiftKey && this.selected.length) this.select([]);
+    let cx = sx, cy = sy, dragged = false, raf = 0;
+    this.viewport.setPointerCapture(e.pointerId);
+    const box = (): Box => ({ left: Math.min(sx, cx), top: Math.min(sy, cy), width: Math.abs(cx - sx), height: Math.abs(cy - sy) });
+    const apply = () => {
+      raf = 0;
+      const next = normalize([...base, ...this.marqueeHits(box(), boardId, ctx)], (id) => this.parentId(id));
+      if (next.join() !== this.selected.join()) this.select(next);
+    };
+    const move = (ev: PointerEvent) => {
+      cx = ev.clientX - v.left; cy = ev.clientY - v.top;
+      if (!dragged && Math.hypot(cx - sx, cy - sy) < 3) return; // under 3 px it is still a click
+      dragged = true;
+      this.place(this.marqueeBox, box());
+      this.marqueeBox.classList.remove('dc-hide');
+      if (!raf) raf = requestAnimationFrame(apply); // one selection pass per frame, not per pointer event
+    };
+    const finish = () => {
+      this.viewport.removeEventListener('pointermove', move);
+      this.viewport.removeEventListener('pointerup', finish);
+      this.viewport.removeEventListener('pointercancel', finish);
+      cancelAnimationFrame(raf);
+      this.marqueeBox.classList.add('dc-hide');
+      if (dragged) apply();
+    };
+    this.viewport.addEventListener('pointermove', move);
+    this.viewport.addEventListener('pointerup', finish);
+    this.viewport.addEventListener('pointercancel', finish);
+  }
+
+  // Ids a marquee (viewport px) touches. With a board: its context children (the context only counts on that same
+  // board, else board level). Without one: the boards on this page.
+  private marqueeHits(rect: Box, boardId: string | null, ctx: string | null): string[] {
+    const { x, y, k } = this.view;
+    const world: Box = { left: (rect.left - x) / k, top: (rect.top - y) / k, width: rect.width / k, height: rect.height / k };
+    if (!boardId) {
+      return this.boardsHere().filter((a) => intersects(world, { left: a.x, top: a.y, width: a.width, height: a.height })).map((a) => a.id);
+    }
+    const b = this.boards.get(boardId);
+    if (!b || !b.html) return [];
+    const parent = ctx && this.pidIndex.get(ctx) === boardId ? ctx : null;
+    return this.boardIndex(b)
+      .filter((n) => n.parent === parent && intersects(world, { left: b.ab.x + n.x, top: b.ab.y + n.y, width: n.w, height: n.h }))
+      .map((n) => n.pid);
+  }
+
+  // Double-click: on a selected container it goes in (selects the child under the pointer, which also moves the
+  // context there); on a text leaf it edits the text. Pointer capture (dragging an absolute node) retargets the
+  // event, so the chain remembered at pointer-down is the fallback.
+  private onDblClick = (e: MouseEvent) => {
+    if (this.tool !== 'move' || this.commentMode) return;
+    let chain = this.chainFrom(e.composedPath(), e.clientX, e.clientY);
+    if (!chain.length && Date.now() - this.lastDown.t < 600) chain = this.lastDown.chain;
+    const into = enterTarget(chain, this.primary());
+    if (into) { this.select([into]); return; }
+    const el = chain.length ? this.findElement(chain[0]) : null;
+    if (el) this.editor.editText(el);
   };
 
   // Pan with the pointer. Capture keeps the drag alive when the cursor leaves the viewport.
@@ -1046,16 +1270,17 @@ export class CanvasEngine {
 
   // A new board only exists after the doc event redraws; select it as soon as it does.
   private selectWhenReady(id: string, tries = 40) {
-    if (this.findElement(id)) { this.select(id); return; }
+    if (this.findElement(id)) { this.select([id]); return; }
     if (tries > 0) requestAnimationFrame(() => this.selectWhenReady(id, tries - 1));
   }
 
+  // Right-click selects what a click would (keeping the set when the target is already in it, so the menu acts on all).
   private onContextMenu = (e: MouseEvent) => {
     e.preventDefault();
-    const node = e.composedPath().find(isNodeEl);
+    const chain = this.chainFrom(e.composedPath(), e.clientX, e.clientY);
     const abEl = (e.target as HTMLElement).closest<HTMLElement>('.dc-artboard');
-    const id = node ? node.dataset.pid! : abEl ? abEl.dataset.ab! : null;
-    if (id) this.select(id); // right-click selects, like every design tool
+    const id = chain.length ? this.pickFrom(chain, e.ctrlKey || e.metaKey) : abEl ? abEl.dataset.ab! : null;
+    if (id && !this.selected.includes(id)) this.select([id]);
     this.events.onContextMenu(e.clientX, e.clientY, id);
   };
 }

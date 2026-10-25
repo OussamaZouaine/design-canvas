@@ -83,6 +83,10 @@
 /* Overlays are in viewport pixels and never scaled, so lines stay crisp at any zoom. */
 .dc-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .dc-sel { position: absolute; border: 2px solid var(--dc-accent); z-index: 5; }
+/* One thin outline per member of a multi-selection (the union box is .dc-sel); rubber band while dragging on empty space. */
+.dc-members { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.dc-members i { position: absolute; border: 1px solid var(--dc-accent); }
+.dc-marquee { position: absolute; z-index: 6; border: 1px solid var(--dc-accent); background: color-mix(in oklch, var(--dc-accent) 10%, transparent); pointer-events: none; }
 .dc-hover { position: absolute; border: 1px solid var(--dc-accent); background: color-mix(in oklch, var(--dc-accent) 8%, transparent); z-index: 4; }
 .dc-agent { position: absolute; inset: 0; z-index: 4; }
 .dc-agent i { --c: var(--dc-glow-a); position: absolute; border: 1.5px dashed var(--c); border-radius: 3px; background: color-mix(in oklch, var(--c) 10%, transparent); animation: dc-agent-in 200ms var(--ease-out); }
