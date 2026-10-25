@@ -133,8 +133,8 @@ Order is a suggestion; the user decides.
    Code: `web/src/canvas/pen.ts` (`PathTools`), pure maths `web/src/canvas/path.ts` + `test/path.test.mjs`. Verified on a scratch server with synthetic pointer events (draw open/closed,
    drag, undo/redo, insert, delete, smooth). Not covered: arcs / multi-subpath `d` (edit mode refuses with a toast), rotated svgs, snapping, shift-constrain.
    Later: boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
-10. **Ideas from the doop analysis (2026-10-25, `docs/DOOP-ANALYSIS.md`, AGPL: ideas only, no code), none started:** (a) port the taste doctrine, mood-from-a-scene
-    colour method and one-exemplar brief ritual into `src/guide.mjs`; (b) section-by-section streaming write with chunk healing; (c) append human comments as a
+10. **Ideas from the doop analysis (2026-10-25, `docs/DOOP-ANALYSIS.md`, AGPL: ideas only, no code), (a) DONE 2026-10-26, rest not started:** (a) port the taste doctrine, mood-from-a-scene
+    colour method and one-exemplar brief ritual into `src/guide.mjs` (DONE: brief topic got scene-derived palette, cliche list, hero device, one-exemplar rule, skip-if-styled; review topic got a hero checkpoint + end checklist); (b) section-by-section streaming write with chunk healing; (c) append human comments as a
     priority block on tool results + optional agent `set_status`; (d) design memory (save decision, distilled style rules); (e) `search_icons` / `search_logos` /
     `search_images` tools; (f) optional CSS-pruned mode for `capture_url`. Suggested order a, b, c, d, e, f.
 11. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
