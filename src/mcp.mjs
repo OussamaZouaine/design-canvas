@@ -9,6 +9,7 @@ import { formatIssues } from './lint.mjs';
 import { dialectNote, dialectStylesNote } from './dialect.mjs';
 import { artboardToReact, nodeToReact } from './export.mjs';
 import { findNodes } from './find.mjs';
+import { healHtml } from './heal.mjs';
 import { parse } from 'node-html-parser';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -171,12 +172,14 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     const extra = fresh.length - 5;
     return { lint: fresh.slice(0, 5).join('\n') + (extra > 0 ? `\n+${extra} more` : '') };
   };
+  // Open streamed write_html runs, by `projectId:targetId` -> { raw, ids } (see edits.write_html).
+  const streams = new Map();
   // write_html / create_artboard html: write, then report dialect, lint (new issues only) and layout notes.
-  const writeWithNotes = async (meta, doc, targetId, html, mode, tool, quiet = false) => {
+  const writeWithNotes = async (meta, doc, targetId, html, mode, tool, quiet = false, opts = {}) => {
     // before/after write siblings, so the target's own subtree is not what changes: lint the new nodes alone.
     const sibling = mode === 'before' || mode === 'after';
     const before = sibling || quiet ? [] : lintIds(doc, [targetId]);
-    const created = doc.writeHtml(targetId, html, mode);
+    const created = doc.writeHtml(targetId, html, mode, opts);
     log(meta, doc, tool, targetId);
     // Dialect notes only for projects that normalize (new ones); Sprig and imports keep their own style.
     const dialect = meta.normalize ? dialectNote(html) : '';
@@ -217,9 +220,29 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       const { html: _written, ...board } = ab;
       return { ...board, ...written, ...reminder };
     },
-    async write_html({ project_id, target_id, html, mode }, quiet) {
+    async write_html({ project_id, target_id, html, mode, stream }, quiet) {
       const { meta, doc } = target(project_id);
-      return writeWithNotes(meta, doc, target_id, html, mode, 'write_html', quiet);
+      if (!stream) return writeWithNotes(meta, doc, target_id, html, mode, 'write_html', quiet);
+      // Streamed run: the chunks of one section may split mid-element, so we keep the raw text of the run so far and
+      // each call rewrites the run's nodes from its healed prefix (one undo step per call, in document order, always
+      // valid markup). Ids of the run's nodes are provisional until the call with stream "end".
+      if (mode && mode !== 'append') throw new Error('stream runs append to the end of the target; drop mode or use "append"');
+      const key = `${meta.id}:${target_id}`;
+      let run = streams.get(key);
+      if (stream === 'start' || !run) {
+        if (stream !== 'start') throw new Error(`No open stream on ${target_id} (the server may have restarted). Send stream "start" with the first chunk.`);
+        run = { raw: '', ids: [] };
+        streams.set(key, run);
+      }
+      const raw = run.raw + html;
+      try {
+        const res = await writeWithNotes(meta, doc, target_id, healHtml(raw), 'append', 'write_html', quiet, { drop: run.ids });
+        run.raw = raw;
+        run.ids = res.created;
+        return { ...res, stream: stream === 'end' ? 'closed' : 'open' };
+      } finally {
+        if (stream === 'end') streams.delete(key);
+      }
     },
     async insert_component({ project_id, target_id, name, variant, slots = {}, mode }) {
       const { meta, doc } = target(project_id);
@@ -520,6 +543,7 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
       target_id: z.string().describe('Artboard id (A#) or node id (N#)'),
       html: z.string().max(200_000),
       mode: z.enum(['append', 'prepend', 'replace', 'before', 'after']).optional(),
+      stream: z.enum(['start', 'next', 'end']).optional().describe('Stream a big section in pieces: "start" with the first chunk, "next" for each following chunk, "end" with the last. Chunks may stop mid-element (the server closes it); each call shows the section so far. Appends to the end of target_id; node ids are final only after "end".'),
     },
   }, viaEdit('write_html'));
 
