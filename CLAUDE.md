@@ -52,6 +52,8 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
   double-click / Enter on a selected path shows anchors + handles (overlay svgs `.dc-pathsvg`), drags patch the DOM live and send ONE `vector` canvas action on release
   (`Doc.editVector`: `d` on the child path + viewBox/left/top/width/height on the svg, one undo step; the box is refitted by `fitToBox`). Pure maths (parse/serialize/insert/
   bounds...) is DOM-free `web/src/canvas/path.ts`, unit-tested by `test/path.test.mjs` (Node strips the types; keep it import-free and erasable-TS only). Arcs/multi-subpath `d` is not editable.
+- Selection (`web/src/canvas/selection.ts`, pure, tested by `test/selection.test.mjs`): `engine.selected` is an ordered id array (last = primary), `context` is derived from the
+  primary's parent; Figma-style picking (click = context child, dblclick enters, Ctrl = deepest, Shift toggles), marquee, keyboard nav. Details: `docs/notes/element-manipulation-plan.md`.
 - `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `export_code` format `jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
 - `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.

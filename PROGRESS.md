@@ -133,7 +133,14 @@ Order is a suggestion; the user decides.
    Code: `web/src/canvas/pen.ts` (`PathTools`), pure maths `web/src/canvas/path.ts` + `test/path.test.mjs`. Verified on a scratch server with synthetic pointer events (draw open/closed,
    drag, undo/redo, insert, delete, smooth). Not covered: arcs / multi-subpath `d` (edit mode refuses with a toast), rotated svgs, snapping, shift-constrain.
    Later: boolean ops. Vectors stay plain inline `<svg>` in board HTML (no separate vector model).
-10. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+10. **Ideas from the doop analysis (2026-10-25, `docs/DOOP-ANALYSIS.md`, AGPL: ideas only, no code), none started:** (a) port the taste doctrine, mood-from-a-scene
+    colour method and one-exemplar brief ritual into `src/guide.mjs`; (b) section-by-section streaming write with chunk healing; (c) append human comments as a
+    priority block on tool results + optional agent `set_status`; (d) design memory (save decision, distilled style rules); (e) `search_icons` / `search_logos` /
+    `search_images` tools; (f) optional CSS-pruned mode for `capture_url`. Suggested order a, b, c, d, e, f.
+11. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
+12. **Element manipulation (Figma/Paper-style), plan written 2026-10-25, phase 1 (selection model) done 2026-10-25:** `docs/notes/element-manipulation-plan.md`. Phases, one session each:
+    1 selection model (multi-select, context scoping, marquee, keyboard nav), 2 drag reorder/reparent in flow (`moveNodes`), 3 snapping + smart guides + nudge + better resize,
+    4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Next: phase 2.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
