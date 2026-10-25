@@ -11,6 +11,8 @@ import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
 import { siblingStep } from './selection';
 import { inEdgeBand, inferAxis, insertionIndex, insertionLine, resolveDrop, stepDrop, type Axis, type Drop } from './dragflow';
 import { isNodeEl } from '@/lib/htmlTree';
+import { annotate, measure as measureBoxes, resizeBox, scaleInto, snapMove, snapResize, unionOf, type Box } from './snap';
+import { Guides } from './guides';
 
 export interface EditHost {
   viewport: HTMLElement;
@@ -56,8 +58,13 @@ export class CanvasEditor {
   private handles = new Map<Dir, HTMLElement>();
   private nodeClip: string | null = null; // HTML of the node last copied with Ctrl+C
   private pasteSeen = false;
+  private guides: Guides;                      // smart guides + distance pills drawn in the overlay
+  private measuring = false;                   // Alt-hover measure is showing, so it must be cleared later
+  private nudgePending = new Map<string, { l: number; t: number }>(); // absolute target left/top of a nudge burst
+  private nudgeTimer = 0;
 
   constructor(private host: EditHost, signal: AbortSignal) {
+    this.guides = new Guides(host.overlay, host.viewport, host.zoom);
     // Eight handles ride on the selection box. They are children of it so they move with it for free.
     for (const dir of HANDLE_DIRS) {
       const el = document.createElement('i');
@@ -72,6 +79,9 @@ export class CanvasEditor {
     const sig = { signal };
     window.addEventListener('keydown', this.onKey, sig);
     window.addEventListener('keydown', this.onPasteKey, sig);
+    window.addEventListener('keyup', this.onKeyUp, sig);
+    // A click elsewhere must not race a nudge that is still waiting to be saved.
+    host.viewport.addEventListener('pointerdown', () => this.flushNudge(), { capture: true, ...sig });
     window.addEventListener('paste', this.onPaste, sig);
     host.viewport.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types ?? [])].includes('Files')) e.preventDefault(); }, sig);
     host.viewport.addEventListener('drop', (e) => {
@@ -87,77 +97,137 @@ export class CanvasEditor {
   // A node picked on a snapshot board has no DOM to resize, so the handles stay hidden until you zoom in.
   hideHandles() { for (const el of this.handles.values()) el.hidden = true; }
 
-  showHandles(target: HTMLElement) {
+  showHandles(targets: HTMLElement[]) {
     const sel = this.host.primary() ?? '';
     const isBoard = sel.startsWith('A');
-    const locked = !isBoard && !!target.closest('[data-locked]');
-    const allowed: readonly Dir[] = locked ? [] : isBoard || isAbs(target) ? HANDLE_DIRS : ['e', 's', 'se'];
+    const locked = !isBoard && targets.some((t) => t.closest('[data-locked]'));
+    // One node: all eight when it is a board or absolute, else e/s/se. Several nodes resize together inside their
+    // union box, which only makes sense when every one of them is absolutely positioned.
+    const free = isBoard || targets.every(isAbs);
+    const allowed: readonly Dir[] = locked ? [] : free ? HANDLE_DIRS : targets.length === 1 ? ['e', 's', 'se'] : [];
     for (const [dir, el] of this.handles) el.hidden = !allowed.includes(dir);
   }
 
+  // Resize works on the union box of the selection (for one node that is the node itself): resizeBox applies the
+  // modifiers (Shift = keep ratio, Alt = from the centre), snapping nudges the moving edges, then every member is scaled
+  // inside the union (scaleInto). Boards go through the same maths in world units. Snapping is skipped with Shift
+  // (the ratio wins) and with Ctrl (off). One 'style' action with per-id values = one undo step on release.
   private beginResize(dir: Dir, e: PointerEvent) {
     const { host } = this;
-    const id = host.primary();
-    if (!id || host.selected().length > 1) return; // multi-resize arrives with the free-move phase
-    const board = id.startsWith('A') ? host.board(id) : undefined;
-    const el = board ? null : host.findElement(id);
-    if (!board && !el) return;
-    const abs = !board && !!el && isAbs(el);
-    const start = board
-      ? { x: board.x, y: board.y, w: board.width, h: board.height }
-      : boxOf(el!, host.zoom());
+    const sel = host.selected();
+    const board = sel.length === 1 && sel[0].startsWith('A') ? host.board(sel[0]) : undefined;
+    interface Sub { id: string; el: HTMLElement; abs: boolean; local: Box; rect: Box; next: Box }
+    const subs: Sub[] = [];
+    if (board) {
+      const frame = host.findElement(board.id);
+      if (!frame) return;
+      const local = { x: board.x, y: board.y, w: board.width, h: board.height };
+      subs.push({ id: board.id, el: frame, abs: false, local, rect: this.rbox(frame), next: local });
+    } else {
+      for (const id of sel) {
+        const el = id.startsWith('A') ? null : host.findElement(id);
+        if (!el) return; // a snapshot board or a mixed selection: nothing to resize
+        const b = boxOf(el, host.zoom());
+        const local = { x: b.x, y: b.y, w: b.w, h: b.h };
+        subs.push({ id, el, abs: isAbs(el), local, rect: this.rbox(el), next: local });
+      }
+    }
+    if (!subs.length) return;
+    const U = unionOf(subs.map((m) => m.rect))!;
     const min = board ? 40 : 4;
-    const next = { ...start };
-    const sx = e.clientX, sy = e.clientY;
+    const ids = subs.map((m) => m.id);
+    const cands = board
+      ? host.boardsHere().filter((b) => b.id !== board.id).map((b) => host.findElement(b.id)).filter((x): x is HTMLElement => !!x).map((x) => this.rbox(x))
+      : this.neighbours(ids, subs[0].el);
+    const parent = board || !subs[0].el.parentElement ? null : this.rbox(subs[0].el.parentElement);
     host.viewport.setPointerCapture?.(e.pointerId);
+    const sx = e.clientX, sy = e.clientY;
     const move = (ev: PointerEvent) => {
       // Screen pixels to design pixels: everything on the canvas is scaled by the zoom.
-      const dx = (ev.clientX - sx) / host.zoom(), dy = (ev.clientY - sy) / host.zoom();
-      Object.assign(next, start);
-      if (dir.includes('e')) next.w = Math.max(min, start.w + dx);
-      if (dir.includes('s')) next.h = Math.max(min, start.h + dy);
-      if (dir.includes('w')) { next.w = Math.max(min, start.w - dx); next.x = start.x + (start.w - next.w); }
-      if (dir.includes('n')) { next.h = Math.max(min, start.h - dy); next.y = start.y + (start.h - next.h); }
-      if (board) {
-        Object.assign(host.boardEl(board.id)!.style, { left: next.x + 'px', top: next.y + 'px', width: next.w + 'px', height: next.h + 'px' });
-      } else {
-        if (dir.includes('e') || dir.includes('w')) el!.style.width = next.w + 'px';
-        if (dir.includes('s') || dir.includes('n')) el!.style.height = next.h + 'px';
-        if (abs && dir.includes('w')) el!.style.left = next.x + 'px';
-        if (abs && dir.includes('n')) el!.style.top = next.y + 'px';
+      const k = host.zoom(), dx = (ev.clientX - sx) / k, dy = (ev.clientY - sy) / k;
+      let u = resizeBox(U, dir, dx, dy, { shift: ev.shiftKey, alt: ev.altKey, min });
+      if (ev.ctrlKey || ev.metaKey) this.guides.clear();
+      else {
+        if (!ev.shiftKey) {
+          const snapped = snapResize(u, dir, cands, parent, 5 / k).box;
+          if (ev.altKey) {
+            // From the centre: whatever the dragged edge gained by snapping, the opposite edge gains too.
+            const gx = dir.includes('e') ? snapped.x + snapped.w - (u.x + u.w) : dir.includes('w') ? u.x - snapped.x : 0;
+            const gy = dir.includes('s') ? snapped.y + snapped.h - (u.y + u.h) : dir.includes('n') ? u.y - snapped.y : 0;
+            u = { x: u.x - gx, y: u.y - gy, w: u.w + 2 * gx, h: u.h + 2 * gy };
+          } else u = snapped;
+        }
+        const a = annotate(u, cands, parent);
+        this.guides.show(a.guides, a.guides.length ? a.pills : []);
       }
-      host.redraw();
+      for (const m of subs) {
+        const r = scaleInto(m.rect, U, u);
+        m.next = { x: m.local.x + (r.x - m.rect.x), y: m.local.y + (r.y - m.rect.y), w: r.w, h: r.h };
+        const n = m.next, l = m.local, moved = (a: number, b: number) => Math.abs(a - b) > 0.01;
+        if (board) {
+          Object.assign(host.boardEl(board.id)!.style, { left: n.x + 'px', top: n.y + 'px', width: n.w + 'px', height: n.h + 'px' });
+          continue;
+        }
+        if (moved(n.w, l.w)) m.el.style.width = n.w + 'px';
+        if (moved(n.h, l.h)) m.el.style.height = n.h + 'px';
+        if (m.abs && moved(n.x, l.x)) m.el.style.left = n.x + 'px';
+        if (m.abs && moved(n.y, l.y)) m.el.style.top = n.y + 'px';
+      }
+      host.redraw(); // also refreshes the live W x H pill under the box
     };
     const up = () => {
       removeEventListener('pointermove', move);
       removeEventListener('pointerup', up);
+      this.guides.clear();
       host.markUserEdit();
       const r = Math.round;
       if (board) {
-        if (next.w !== start.w || next.h !== start.h) canvasAction(host.projectId, 'resize', { id, width: r(next.w), height: r(next.h) }).catch((err) => fail(err, 'Could not resize'));
-        if (next.x !== start.x || next.y !== start.y) canvasAction(host.projectId, 'move', { id, x: r(next.x), y: r(next.y) }).catch((err) => fail(err, 'Could not move'));
+        const n = subs[0].next, l = subs[0].local;
+        if (r(n.w) !== r(l.w) || r(n.h) !== r(l.h)) canvasAction(host.projectId, 'resize', { id: board.id, width: r(n.w), height: r(n.h) }).catch((err) => fail(err, 'Could not resize'));
+        if (r(n.x) !== r(l.x) || r(n.y) !== r(l.y)) canvasAction(host.projectId, 'move', { id: board.id, x: r(n.x), y: r(n.y) }).catch((err) => fail(err, 'Could not move'));
         return;
       }
-      const styles: Record<string, string> = {};
-      if (next.w !== start.w) styles.width = `${r(next.w)}px`;
-      if (next.h !== start.h) styles.height = `${r(next.h)}px`;
-      if (abs && next.x !== start.x) styles.left = `${r(next.x)}px`;
-      if (abs && next.y !== start.y) styles.top = `${r(next.y)}px`;
-      if (Object.keys(styles).length) canvasAction(host.projectId, 'style', { ids: [id], styles }).catch((err) => fail(err, 'Could not resize'));
+      const perId: Record<string, Record<string, string>> = {};
+      for (const m of subs) {
+        const n = m.next, l = m.local, st: Record<string, string> = {};
+        if (r(n.w) !== r(l.w)) st.width = `${r(n.w)}px`;
+        if (r(n.h) !== r(l.h)) st.height = `${r(n.h)}px`;
+        if (m.abs && r(n.x) !== r(l.x)) st.left = `${r(n.x)}px`;
+        if (m.abs && r(n.y) !== r(l.y)) st.top = `${r(n.y)}px`;
+        if (Object.keys(st).length) perId[m.id] = st;
+      }
+      if (Object.keys(perId).length) canvasAction(host.projectId, 'style', { ids: Object.keys(perId), perId }).catch((err) => fail(err, 'Could not resize'));
     };
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
   }
 
+  // Box of an element in the snap space: client px divided by the zoom, so nodes and boards compare directly.
+  private rbox(el: Element): Box {
+    const r = el.getBoundingClientRect(), k = this.host.zoom();
+    return { x: r.left / k, y: r.top / k, w: r.width / k, h: r.height / k };
+  }
+
+  // Snap candidates for a node move / resize: the visible siblings of `el` that are not themselves being moved.
+  private neighbours(movingIds: string[], el: HTMLElement): Box[] {
+    const { host } = this;
+    return host.siblingsOf(movingIds[0])
+      .filter((s) => !movingIds.includes(s))
+      .map((s) => host.findElement(s))
+      .filter((n): n is HTMLElement => !!n && n !== el && !n.hasAttribute('hidden') && getComputedStyle(n).display !== 'none')
+      .map((n) => this.rbox(n))
+      .filter((b) => b.w > 0 || b.h > 0);
+  }
+
   // ---- Dragging --------------------------------------------------------------------
   // Generic pointer drag. `scale` converts screen px into the unit being moved: boards live in world
   // units (divide by zoom). Pointer capture keeps the drag alive when the cursor leaves the viewport.
-  private startDrag(e: PointerEvent, onMove: (dx: number, dy: number) => void, onEnd: () => void, scale: number) {
+  private startDrag(e: PointerEvent, onMove: (dx: number, dy: number, ev: PointerEvent) => void, onEnd: () => void, scale: number) {
     const { viewport } = this.host;
     const sx = e.clientX, sy = e.clientY;
     viewport.classList.add('panning');
     viewport.setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => onMove((ev.clientX - sx) / scale, (ev.clientY - sy) / scale);
+    const move = (ev: PointerEvent) => onMove((ev.clientX - sx) / scale, (ev.clientY - sy) / scale, ev);
     const up = () => {
       viewport.classList.remove('panning');
       viewport.removeEventListener('pointermove', move);
@@ -168,23 +238,45 @@ export class CanvasEditor {
     viewport.addEventListener('pointerup', up);
   }
 
-  // Drag an artboard by its label.
+  // Snap a moving box (client px / zoom space) against candidates and draw the guides. Ctrl switches snapping off,
+  // Shift locks to one axis (`lock` names the axis that must not move). Distances only show once something lines up,
+  // otherwise the pills would flicker on every pointer move.
+  private snapBox(box: Box, cands: Box[], parent: Box | null, ev: PointerEvent, lock: { x?: boolean; y?: boolean }) {
+    if (ev.ctrlKey || ev.metaKey) { this.guides.clear(); return { dx: 0, dy: 0 }; }
+    const r = snapMove(box, cands, parent, 5 / this.host.zoom(), lock);
+    this.guides.show(r.guides, r.guides.length || r.pills.some((p) => p.equal) ? r.pills : []);
+    return r;
+  }
+
+  // Shift: keep only the axis the pointer has travelled furthest on.
+  private lockAxis(dx: number, dy: number, shift: boolean) {
+    if (!shift) return { dx, dy, lock: {} as { x?: boolean; y?: boolean } };
+    return Math.abs(dx) >= Math.abs(dy) ? { dx, dy: 0, lock: { y: true } } : { dx: 0, dy, lock: { x: true } };
+  }
+
+  // Drag an artboard by its label; it snaps to the other boards on the page.
   dragBoard(e: PointerEvent, id: string) {
     const { host } = this;
-    const ab = host.board(id), el = host.boardEl(id);
-    if (!ab || !el) return;
+    const ab = host.board(id), el = host.boardEl(id), frame = host.findElement(id);
+    if (!ab || !el || !frame) return;
+    const start = this.rbox(frame);
+    const cands = host.boardsHere().filter((b) => b.id !== id).map((b) => host.findElement(b.id)).filter((x): x is HTMLElement => !!x).map((x) => this.rbox(x));
     let x = ab.x, y = ab.y;
-    this.startDrag(e, (dx, dy) => {
-      x = ab.x + dx; y = ab.y + dy;
+    this.startDrag(e, (rawX, rawY, ev) => {
+      const l = this.lockAxis(rawX, rawY, ev.shiftKey);
+      const s = this.snapBox({ ...start, x: start.x + l.dx, y: start.y + l.dy }, cands, null, ev, l.lock);
+      x = ab.x + l.dx + s.dx; y = ab.y + l.dy + s.dy;
       el.style.left = x + 'px'; el.style.top = y + 'px';
       host.redraw();
     }, () => {
+      this.guides.clear();
       if (x === ab.x && y === ab.y) return;
       canvasAction(host.projectId, 'move', { id, x: Math.round(x), y: Math.round(y) }).catch((err) => fail(err, 'Could not move'));
     }, host.zoom());
   }
 
-  // Drag a node. An absolutely positioned one moves freely (left / top); a node that flows with its siblings is
+  // Drag a node. Absolutely positioned nodes move freely (left / top): the whole selection moves together when the
+  // pressed node is part of it, with snapping to siblings and the parent. A node that flows with its siblings is
   // reordered or reparented (dragFlow). A drag under 3 px counts as a click. Returns false when the node cannot be
   // dragged (locked), so the caller treats it as a click.
   dragNode(e: PointerEvent, el: HTMLElement) {
@@ -192,20 +284,32 @@ export class CanvasEditor {
     if (el.closest('[data-locked]')) return false;
     if (!isAbs(el)) { this.dragFlow(e, el); return true; }
     const id = el.dataset.pid!;
-    const { x: l0, y: t0 } = boxOf(el, host.zoom());
+    const picked = host.selected().includes(id) ? host.selected() : [id];
+    // Only absolute, unlocked nodes can move freely; flow members of a mixed selection stay where they are.
+    const items = picked.filter((m) => !m.startsWith('A')).map((m) => host.findElement(m))
+      .filter((m): m is HTMLElement => !!m && isAbs(m) && !m.closest('[data-locked]'))
+      .map((m) => ({ el: m, id: m.dataset.pid!, ...boxOf(m, host.zoom()) }));
+    if (!items.length) return false;
+    const start = unionOf(items.map((i) => this.rbox(i.el)))!;
+    const cands = this.neighbours(items.map((i) => i.id), el);
+    const parent = el.parentElement ? this.rbox(el.parentElement) : null;
     let moved = false, mx = 0, my = 0;
-    this.startDrag(e, (dx, dy) => {
-      mx = dx; my = dy;
-      if (!moved && Math.hypot(dx, dy) * host.zoom() < 3) return;
+    this.startDrag(e, (rawX, rawY, ev) => {
+      if (!moved && Math.hypot(rawX, rawY) * host.zoom() < 3) return;
       moved = true;
-      el.style.left = `${l0 + dx}px`;
-      el.style.top = `${t0 + dy}px`;
+      const l = this.lockAxis(rawX, rawY, ev.shiftKey);
+      const s = this.snapBox({ ...start, x: start.x + l.dx, y: start.y + l.dy }, cands, parent, ev, l.lock);
+      mx = l.dx + s.dx; my = l.dy + s.dy;
+      for (const i of items) { i.el.style.left = `${i.x + mx}px`; i.el.style.top = `${i.y + my}px`; }
       host.redraw();
     }, () => {
+      this.guides.clear();
       if (!moved) return;
       host.markUserEdit();
-      canvasAction(host.projectId, 'style', { ids: [id], styles: { left: `${Math.round(l0 + mx)}px`, top: `${Math.round(t0 + my)}px` } })
-        .catch((err) => fail(err, 'Could not move'));
+      // One 'style' action with a value per node = one undo step for the whole drag.
+      const perId: Record<string, Record<string, string>> = {};
+      for (const i of items) perId[i.id] = { left: `${Math.round(i.x + mx)}px`, top: `${Math.round(i.y + my)}px` };
+      canvasAction(host.projectId, 'style', { ids: items.map((i) => i.id), perId }).catch((err) => fail(err, 'Could not move'));
     }, host.zoom());
     return true;
   }
@@ -376,7 +480,7 @@ export class CanvasEditor {
     if (!ids.length || ids.some((i) => i.startsWith('A'))) return false;
     const parent = host.parentOf(ids[0]);
     if (!parent || ids.some((i) => host.parentOf(i) !== parent)) return false;
-    // Absolute nodes are left alone: arrows will nudge them in the free-move phase.
+    // Absolute nodes are left alone: arrows nudge them instead (see nudge).
     const els = ids.map((i) => host.findElement(i));
     if (els.some((n) => !n || isAbs(n) || n.closest('[data-locked]'))) return false;
     const kidIds = host.childrenOf(parent);
@@ -440,7 +544,7 @@ export class CanvasEditor {
     const nodes = sel.filter((id) => !id.startsWith('A')); // boards cannot be copied as nodes
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length) {
       this.remove(sel);
-    } else if (e.key.startsWith('Arrow') && !mod && !e.altKey && sel.length && this.arrowReorder(e)) {
+    } else if (e.key.startsWith('Arrow') && !mod && !e.altKey && sel.length && (this.nudge(e) || this.arrowReorder(e))) {
       e.preventDefault();
     } else if (e.key === 'Escape') {
       // Up one level (the parent becomes the selection and so the context), then deselect at board level.
@@ -472,6 +576,7 @@ export class CanvasEditor {
     } else if (mod && !e.altKey && (key === 'z' || key === 'y')) {
       // Undo / redo go through the server so they cover Claude's changes and the theme too.
       e.preventDefault();
+      this.flushNudge(); // an unsaved nudge must land before the undo, or it would undo the wrong step
       host.markUserEdit();
       canvasAction(host.projectId, key === 'y' || e.shiftKey ? 'redo' : 'undo').catch((err) => fail(err, 'Nothing to do'));
     } else if (mod && (key === 'c' || key === 'x') && nodes.length && !getSelection()?.toString()) {
@@ -482,6 +587,61 @@ export class CanvasEditor {
       this.duplicate(sel);
     }
   };
+
+  private onKeyUp = (e: KeyboardEvent) => {
+    if (e.key.startsWith('Arrow')) this.flushNudge();
+    if (e.key === 'Alt') this.endMeasure();
+  };
+
+  // Arrow keys move the selected absolute nodes: 1 px, Shift 10 px. The preview is written straight to the elements
+  // and the save is deferred, so a held key (key-repeat fires many keydowns) is ONE style action = one undo step.
+  // It is sent on key release; the timer is only a fallback for a lost keyup. Returns true when the key was ours.
+  private nudge(e: KeyboardEvent): boolean {
+    const { host } = this;
+    const sel = host.selected();
+    const els = sel.map((id) => (id.startsWith('A') ? null : host.findElement(id)));
+    if (els.some((el) => !el || !isAbs(el) || el.closest('[data-locked]'))) return false;
+    const step = e.shiftKey ? 10 : 1;
+    const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+    const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+    sel.forEach((id, i) => {
+      const el = els[i]!;
+      // Continue from the pending target, not from the element, so rounding never drifts during a burst.
+      const b = boxOf(el, host.zoom());
+      const cur = this.nudgePending.get(id) ?? { l: b.x, t: b.y };
+      const next = { l: cur.l + dx, t: cur.t + dy };
+      this.nudgePending.set(id, next);
+      el.style.left = `${next.l}px`; el.style.top = `${next.t}px`;
+    });
+    host.redraw();
+    window.clearTimeout(this.nudgeTimer);
+    this.nudgeTimer = window.setTimeout(() => this.flushNudge(), 700);
+    return true;
+  }
+
+  flushNudge() {
+    window.clearTimeout(this.nudgeTimer);
+    if (!this.nudgePending.size) return;
+    const perId: Record<string, Record<string, string>> = {};
+    for (const [id, p] of this.nudgePending) perId[id] = { left: `${Math.round(p.l)}px`, top: `${Math.round(p.t)}px` };
+    this.nudgePending.clear();
+    this.host.markUserEdit();
+    canvasAction(this.host.projectId, 'style', { ids: Object.keys(perId), perId }).catch((err) => fail(err, 'Could not move'));
+  }
+
+  // Alt + hover: distances from the selection to the hovered node (or its parent's edges when it contains the
+  // selection). `id` null clears. Only draws; nothing is changed.
+  measure(id: string | null) {
+    const { host } = this;
+    const els = host.selected().map((s) => host.findElement(s));
+    const target = id ? host.findElement(id) : null;
+    if (!target || els.some((el) => !el) || els.some((el) => el === target || el!.contains(target))) { this.endMeasure(); return; }
+    const a = unionOf(els.map((el) => this.rbox(el!)))!;
+    this.guides.show([], measureBoxes(a, this.rbox(target)));
+    this.measuring = true;
+  }
+
+  endMeasure() { if (this.measuring) { this.measuring = false; this.guides.clear(); } }
 
   // The actions below are shared by the keyboard shortcuts and the right-click menu. They take the whole set:
   // the server actions already accept `ids`, so a multi-selection is still one request and one undo step.

@@ -91,6 +91,16 @@
 .dc-ghost { position: absolute; z-index: 7; overflow: hidden; opacity: 0.7; pointer-events: none; border-radius: 2px; box-shadow: 0 0 0 1px var(--dc-accent); will-change: transform; }
 .dc-dropline { position: absolute; z-index: 8; background: var(--dc-accent); border-radius: 1px; pointer-events: none; }
 .dc-dropbox { position: absolute; z-index: 6; border: 1.5px solid var(--dc-accent); border-radius: 2px; pointer-events: none; box-sizing: border-box; }
+/* Smart guides (phase 3): red-pink lines, measured gaps with end ticks and a number pill. All in screen px. */
+.dc-guides { position: absolute; inset: 0; z-index: 9; pointer-events: none; --dc-guide: oklch(0.66 0.23 12); }
+.dc-guide { position: absolute; background: var(--dc-guide); }
+.dc-gap { position: absolute; border-top: 1px solid var(--dc-guide); }
+.dc-gap::before, .dc-gap::after { content: ''; position: absolute; top: -4px; height: 7px; border-left: 1px solid var(--dc-guide); }
+.dc-gap::before { left: 0; } .dc-gap::after { right: 0; }
+.dc-gap.v { border-top: 0; border-left: 1px solid var(--dc-guide); }
+.dc-gap.v::before, .dc-gap.v::after { top: auto; left: -4px; height: 0; width: 7px; border-left: 0; border-top: 1px solid var(--dc-guide); }
+.dc-gap.v::before { top: 0; } .dc-gap.v::after { bottom: 0; right: auto; }
+.dc-pill { position: absolute; transform: translate(-50%, -50%); padding: 0 5px; border-radius: 3px; background: var(--dc-guide); color: oklch(1 0 0); font: 600 10px/15px var(--font-sans, system-ui), sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dc-hover { position: absolute; border: 1px solid var(--dc-accent); background: color-mix(in oklch, var(--dc-accent) 8%, transparent); z-index: 4; }
 .dc-agent { position: absolute; inset: 0; z-index: 4; }
 .dc-agent i { --c: var(--dc-glow-a); position: absolute; border: 1.5px dashed var(--c); border-radius: 3px; background: color-mix(in oklch, var(--c) 10%, transparent); animation: dc-agent-in 200ms var(--ease-out); }
