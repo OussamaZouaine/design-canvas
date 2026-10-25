@@ -4,7 +4,7 @@ import { useCanvas } from '@/store/canvas';
 import { useAgents, type Claim, type CallEntry, type PendingCall, type AgentInfo } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { activateProject } from './projects';
-import type { Comment, DocData, ProjectMeta } from './types';
+import type { Comment, DocData, MemoryEntry, ProjectMeta } from './types';
 
 // Subscribes to one project's SSE stream and feeds the store. One EventSource per mounted project page;
 // EventSource reconnects by itself, and the server re-sends meta + doc + comments on every (re)connect.
@@ -25,6 +25,7 @@ export function useProjectEvents(projectId: string) {
     es.addEventListener('meta', (e) => useProject.getState().setMeta(parse<ProjectMeta>(e)));
     es.addEventListener('doc', (e) => useProject.getState().applyDocDelta(parse<DocData>(e)));
     es.addEventListener('comments', (e) => useProject.getState().setComments(parse<Comment[]>(e)));
+    es.addEventListener('memory', (e) => useProject.getState().setMemory(parse<MemoryEntry[]>(e)));
     es.addEventListener('agent', (e) => { const d = parse<{ ids: string[]; agent?: AgentInfo }>(e); useProject.getState().setAgentIds(d.ids, d.agent); });
     // MCP call log: finished calls and "started, still running" markers for slow ones (screenshots).
     es.addEventListener('call', (e) => useAgents.getState().addCall(parse<CallEntry>(e)));

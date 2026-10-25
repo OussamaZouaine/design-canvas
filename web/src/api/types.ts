@@ -60,6 +60,16 @@ export interface DocData {
   [key: string]: unknown;
 }
 
+// One design-memory entry (src/memory.mjs): a standing style rule or a dated decision.
+export interface MemoryEntry {
+  id: string;
+  kind: 'rule' | 'decision';
+  text: string;
+  at: number;
+  agent?: string;
+  targetId?: string;
+}
+
 export interface Comment {
   id: string;
   targetId: string;

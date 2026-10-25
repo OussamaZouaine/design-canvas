@@ -4,6 +4,7 @@ import { useJson } from '@/hooks/useJson';
 import { ago } from '@/lib/time';
 import { useNow } from '@/panels/AgentsPanel';
 import { EfficiencyPanel } from '@/panels/EfficiencyPanel';
+import { MemorySection } from '@/panels/MemorySection';
 import { useAgents } from '@/store/agents';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
@@ -46,11 +47,13 @@ function Swatches({ list }: { list: Swatch[] }) {
 export function TokensPanel({ projectId }: { projectId: string }) {
   const doc = useProject((s) => s.doc);
   const { data: t, failed } = useJson<TokenScan>(`/api/p/${projectId}/tokens`, doc);
-  if (!t) return <p className="p-3 text-muted-foreground">{failed ? 'Could not read tokens.' : 'Loading…'}</p>;
-  if (!t.summary.styledElements) return <p className="p-3 text-muted-foreground">No styled elements yet. Tokens appear once there is a design to scan.</p>;
+  // Memory is project data, not scan output, so it shows even while the scan is loading or empty.
+  if (!t) return <><MemorySection projectId={projectId} /><p className="p-3 text-muted-foreground">{failed ? 'Could not read tokens.' : 'Loading…'}</p></>;
+  if (!t.summary.styledElements) return <><MemorySection projectId={projectId} /><p className="p-3 text-muted-foreground">No styled elements yet. Tokens appear once there is a design to scan.</p></>;
   const maxSpace = Math.max(...t.spacing.map((s) => s.count), 1);
   return (
     <div className="p-3">
+      <MemorySection projectId={projectId} />
       <H>Colour · OKLCH ({t.colors.length})</H>
       <Swatches list={t.colors} />
       {t.overlays.length > 0 && <><H>Overlays</H><Swatches list={t.overlays} /></>}
