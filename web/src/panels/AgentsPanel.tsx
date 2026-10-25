@@ -88,7 +88,7 @@ export function AgentsPanel() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{a.name}</span>
                   <small className="block truncate text-muted-foreground">
-                    {isPaused ? 'Paused: writes are refused' : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? a.tool : 'Idle'}
+                    {isPaused ? 'Paused: writes are refused' : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? (a.status ?? a.tool) : 'Idle'}
                   </small>
                 </span>
                 <button

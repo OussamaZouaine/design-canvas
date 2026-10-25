@@ -4,7 +4,8 @@ import { create } from 'zustand';
 // GET /api/p/<id>/calls so a freshly opened tab sees recent history. Everything here is derived server-side
 // from calls the agent already makes, so showing it costs the model nothing.
 
-export interface AgentInfo { id: string; name: string; color: string }
+// `status` is the agent's own one-line "what I'm doing" (set via the optional status param, cleared by finish_working).
+export interface AgentInfo { id: string; name: string; color: string; status?: string }
 export interface CallEntry {
   id: string; t: number; ms: number; tool: string; project: string; ok: boolean; error?: string;
   tokens: number; args: Record<string, unknown>; agent?: AgentInfo;
@@ -85,6 +86,7 @@ export const useAgents = create<AgentsState>((set) => ({
 }));
 
 export interface Presence extends AgentInfo { lastT: number; tool: string; active: boolean; pending: boolean }
+// The latest call carries the agent's current status, so an agent that finished (status cleared) or went idle shows none.
 
 // One entry per agent seen on this project, newest first. `now` is passed in so callers can re-evaluate
 // "idle" on a timer without the store changing.
