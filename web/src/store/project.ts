@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AgentInfo } from '@/store/agents';
-import type { Artboard, Comment, DocData, ProjectMeta } from '@/api/types';
+import type { Artboard, Comment, DocData, MemoryEntry, ProjectMeta } from '@/api/types';
 
 export type Connection = 'connecting' | 'connected' | 'disconnected';
 
@@ -8,6 +8,8 @@ interface ProjectState {
   meta: ProjectMeta | null;
   doc: DocData | null;
   comments: Comment[];
+  // Design memory (rules + decisions), pushed by the server's `memory` event.
+  memory: MemoryEntry[];
   connection: Connection;
   // Ids Claude touched recently (the server's `agent` event); drives the "Claude is designing" pill.
   agentIds: string[];
@@ -21,12 +23,13 @@ interface ProjectState {
   // Takes the raw delta from the server and refills unchanged boards from the previous doc.
   applyDocDelta: (incoming: DocData) => void;
   setComments: (c: Comment[]) => void;
+  setMemory: (m: MemoryEntry[]) => void;
   setConnection: (c: Connection) => void;
   setAgentIds: (ids: string[], agent?: AgentInfo) => void;
   reset: () => void;
 }
 
-const empty = { meta: null, doc: null, comments: [], connection: 'connecting' as Connection, agentIds: [], agentInfo: null as AgentInfo | null, activityTick: 0 };
+const empty = { meta: null, doc: null, comments: [], memory: [], connection: 'connecting' as Connection, agentIds: [], agentInfo: null as AgentInfo | null, activityTick: 0 };
 
 export const useProject = create<ProjectState>((set, get) => ({
   ...empty,
@@ -42,6 +45,7 @@ export const useProject = create<ProjectState>((set, get) => ({
     set({ doc: { ...incoming, artboards } });
   },
   setComments: (comments) => set({ comments }),
+  setMemory: (memory) => set({ memory }),
   setConnection: (connection) => set({ connection }),
   setAgentIds: (agentIds, agent) => set((s) => ({ agentIds, agentInfo: agent ?? s.agentInfo })),
   bumpActivity: () => set((s) => ({ activityTick: s.activityTick + 1 })),
