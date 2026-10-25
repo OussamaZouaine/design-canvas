@@ -13,6 +13,7 @@ import { inEdgeBand, inferAxis, insertionIndex, insertionLine, resolveDrop, step
 import { isNodeEl } from '@/lib/htmlTree';
 import { annotate, measure as measureBoxes, resizeBox, scaleInto, snapMove, snapResize, unionOf, type Box } from './snap';
 import { Guides } from './guides';
+import { planUnwrap, planWrap, type FlowAxis, type Item } from './structure';
 
 export interface EditHost {
   viewport: HTMLElement;
@@ -30,6 +31,7 @@ export interface EditHost {
   boardEl: (id: string) => HTMLElement | undefined;
   findElement: (id: string) => HTMLElement | null;
   boardOf: (id: string) => string | undefined; // node id -> artboard id
+  selectNew: (ids: string[]) => void;         // select nodes that only exist once the doc event has redrawn (wrapper, freed children)
   redraw: () => void;                          // reposition selection / hover boxes
   markUserEdit: () => void;
   activePage: () => string | null;
@@ -359,7 +361,8 @@ export class CanvasEditor {
     let drop: Drop | null = null;
     let last = { x: sx, y: sy };
     const ghosts: HTMLElement[] = [];
-    const line = document.createElement('div'), outline = document.createElement('div');
+    const line = document.createElement('div'), outline = document.createElement('div'), hints = document.createElement('div');
+    hints.className = 'dc-hints';
     line.className = 'dc-dropline dc-hide'; outline.className = 'dc-dropbox dc-hide';
     const saved = moving.map((m) => m.style.opacity);
 
@@ -382,7 +385,7 @@ export class CanvasEditor {
         host.overlay.append(g);
         ghosts.push(g);
       });
-      host.overlay.append(line, outline);
+      host.overlay.append(hints, line, outline);
       moving.forEach((m) => { m.style.opacity = '0.35'; });
     };
 
@@ -429,6 +432,7 @@ export class CanvasEditor {
         Object.assign(b.style, { left: r.left - vp.left + 'px', top: r.top - vp.top + 'px', width: r.width + 'px', height: r.height + 'px' });
       place(line, insertionLine(rects, index, axis, box)); line.classList.remove('dc-hide');
       place(outline, box); outline.classList.toggle('dc-hide', cur.el === origin.el);
+      this.drawHints(hints, cur.el, kids.filter((kid) => !moving.includes(kid)), axis, vp);
     };
 
     const move = (ev: PointerEvent) => {
@@ -445,7 +449,7 @@ export class CanvasEditor {
       host.viewport.removeEventListener('pointerup', up);
       window.removeEventListener('keydown', onKey, true);
       host.viewport.classList.remove('panning');
-      ghosts.forEach((g) => g.remove()); line.remove(); outline.remove();
+      ghosts.forEach((g) => g.remove()); line.remove(); outline.remove(); hints.remove();
       moving.forEach((m, i) => { m.style.opacity = saved[i]; });
     };
     const up = (ev: PointerEvent) => {
@@ -471,6 +475,39 @@ export class CanvasEditor {
     host.viewport.addEventListener('pointermove', move);
     host.viewport.addEventListener('pointerup', up);
     window.addEventListener('keydown', onKey, true);
+  }
+
+  // Figma's auto-layout overlay while dragging in flow: the container's outline, a dashed outline on each sibling, and
+  // shaded padding and gaps so the user sees what the drop will respect. Rebuilt on every move (a handful of
+  // elements, capped at 40 siblings); screen px, like the rest of the overlay. Purely visual, never hit-tested.
+  private drawHints(layer: HTMLElement, container: HTMLElement, sibs: HTMLElement[], axis: Axis, vp: DOMRect) {
+    const k = this.host.zoom(), cs = getComputedStyle(container), r = container.getBoundingClientRect();
+    const add = (cls: string, x: number, y: number, w: number, h: number) => {
+      if (w <= 0 || h <= 0) return;
+      const i = document.createElement('i');
+      i.className = cls;
+      Object.assign(i.style, { left: x - vp.left + 'px', top: y - vp.top + 'px', width: w + 'px', height: h + 'px' });
+      layer.append(i);
+    };
+    layer.replaceChildren();
+    add('dc-hint-box', r.left, r.top, r.width, r.height);
+    // Padding = the frame between the outer box and the content box (a border is left out on purpose: it is not drawn as padding).
+    const pt = (parseFloat(cs.paddingTop) || 0) * k, pb = (parseFloat(cs.paddingBottom) || 0) * k;
+    const pl = (parseFloat(cs.paddingLeft) || 0) * k, pr = (parseFloat(cs.paddingRight) || 0) * k;
+    const innerH = r.height - pt - pb;
+    add('dc-hint-pad', r.left, r.top, r.width, pt);
+    add('dc-hint-pad', r.left, r.bottom - pb, r.width, pb);
+    add('dc-hint-pad', r.left, r.top + pt, pl, innerH);
+    add('dc-hint-pad', r.right - pr, r.top + pt, pr, innerH);
+    const rects = sibs.slice(0, 40).map((n) => n.getBoundingClientRect());
+    rects.forEach((q) => add('dc-hint-sib', q.left, q.top, q.width, q.height));
+    // Gaps between neighbours along the axis (a wrapping 'flow' layout has no single gap direction, so it shows none).
+    if (axis === 'flow') return;
+    for (let i = 1; i < rects.length; i++) {
+      const p = rects[i - 1], n = rects[i];
+      if (axis === 'y') add('dc-hint-gap', r.left + pl, p.bottom, r.width - pl - pr, n.top - p.bottom);
+      else add('dc-hint-gap', p.right, r.top + pt, n.left - p.right, innerH);
+    }
   }
 
   // Arrow keys reorder the selection along the parent's axis (left/up = earlier). Returns true when the key was ours.
@@ -582,6 +619,14 @@ export class CanvasEditor {
     } else if (mod && (key === 'c' || key === 'x') && nodes.length && !getSelection()?.toString()) {
       this.copy(nodes);
       if (key === 'x') this.remove(nodes);
+    } else if (mod && key === 'g' && nodes.length) {
+      // Ctrl+G groups, Ctrl+Shift+G / Ctrl+Alt+G ungroups (the browser's own Ctrl+Shift+G is find-previous).
+      e.preventDefault();
+      if (e.shiftKey || e.altKey) void this.unwrap(nodes);
+      else void this.wrap(nodes, 'group');
+    } else if (!mod && !e.altKey && e.shiftKey && key === 'a' && nodes.length) {
+      e.preventDefault();
+      void this.wrap(nodes, 'auto');
     } else if (mod && key === 'd' && sel.length) {
       e.preventDefault();
       this.duplicate(sel);
@@ -656,6 +701,54 @@ export class CanvasEditor {
     if (!ids.length) return;
     this.host.markUserEdit();
     canvasAction(this.host.projectId, 'duplicate', { ids }).catch((err) => fail(err, 'Could not duplicate'));
+  }
+
+  // ---- Group / ungroup / add auto layout -------------------------------------------------------
+  // The browser measures (boxes need real layout), structure.ts decides the styles, the server wraps in ONE undo step.
+  // Selects the new wrapper once it exists; resolves to its id, or undefined when nothing was done.
+  async wrap(ids: string[], mode: 'group' | 'auto'): Promise<string | undefined> {
+    const { host } = this;
+    const els = ids.map((id) => host.findElement(id));
+    if (!ids.length || els.some((el) => !el)) { toast('Zoom in to group: this board is only a picture right now'); return; }
+    const nodes = els as HTMLElement[];
+    if (nodes.some((n) => n.closest('[data-locked]'))) { toast('Locked layers cannot be grouped'); return; }
+    if (new Set(ids.map((i) => host.parentOf(i))).size > 1) { toast('Select layers with the same parent to group them'); return; }
+    // Document order, because the wrapper keeps the DOM order and the axis guess reads the boxes in that order.
+    nodes.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    const k = host.zoom();
+    const items: Item[] = nodes.map((n) => ({ id: n.dataset.pid!, box: boxOf(n, k), abs: isAbs(n) }));
+    const parent = nodes[0].parentElement;
+    const hint = parent && getComputedStyle(parent).flexDirection.startsWith('row') ? 'x' : 'y';
+    const axis: FlowAxis = inferAxis(items.map(({ box }) => ({ left: box.x, top: box.y, width: box.w, height: box.h })), hint);
+    const plan = planWrap(items, mode, axis);
+    if (!plan) { toast('Group flow and absolute layers separately'); return; }
+    host.markUserEdit();
+    try {
+      const r = await canvasAction(host.projectId, 'wrap', { ids: items.map((i) => i.id), styles: plan.styles, perId: plan.perId, name: mode === 'auto' ? 'Auto layout' : 'Group' });
+      const id = (r.result as { id?: string } | undefined)?.id;
+      if (id) host.selectNew([id]);
+      return id;
+    } catch (err) { fail(err, 'Could not group'); }
+  }
+
+  // Ungroup one node: its children take its place. Absolute children are re-based so they stay where they are.
+  async unwrap(ids: string[]): Promise<string[] | undefined> {
+    const { host } = this;
+    if (ids.length !== 1) { toast('Ungroup works on one layer at a time'); return; }
+    const el = host.findElement(ids[0]);
+    if (!el) { toast('Zoom in to ungroup: this board is only a picture right now'); return; }
+    const kids = host.childrenOf(ids[0]).map((c) => host.findElement(c)).filter((c): c is HTMLElement => !!c);
+    if (!kids.length) { toast('Nothing inside to ungroup'); return; }
+    if (el.closest('[data-locked]')) { toast('Locked layers cannot be ungrouped'); return; }
+    const k = host.zoom(), w = boxOf(el, k);
+    const perId = planUnwrap({ abs: isAbs(el), x: w.x, y: w.y }, kids.map((c) => { const b = boxOf(c, k); return { id: c.dataset.pid!, abs: isAbs(c), x: b.x, y: b.y }; }));
+    host.markUserEdit();
+    try {
+      const r = await canvasAction(host.projectId, 'unwrap', { id: ids[0], perId });
+      const freed = (r.result as { ids?: string[] } | undefined)?.ids;
+      if (freed?.length) host.selectNew(freed);
+      return freed;
+    } catch (err) { fail(err, 'Could not ungroup'); }
   }
 
   // Copy the nodes' HTML now, paste it later (even on another board or page). Several nodes are joined in the

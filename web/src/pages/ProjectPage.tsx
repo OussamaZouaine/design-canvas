@@ -4,6 +4,7 @@ import { useSearch } from '@tanstack/react-router';
 import { pageOfBoard } from '@/canvas/engine';
 import { CommentsLayer } from '@/panels/CommentsLayer';
 import { CanvasContextMenu } from '@/shell/ContextMenu';
+import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { Rulers } from '@/shell/Rulers';
 import { FloatingToolbar, LeftPanel, LivePill, RightPanel, TopBar } from '@/shell/Shell';
 import { useCanvas } from '@/store/canvas';
@@ -43,6 +44,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <LivePill />
           <FloatingToolbar />
           <CanvasContextMenu />
+          <ShortcutsDialog />
         </main>
         <RightPanel projectId={projectId} />
       </div>

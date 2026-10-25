@@ -288,6 +288,8 @@ const canvasActions = {
   // browser select the new wrapper / the freed children.
   wrap: (p, b) => ({ id: p.doc.wrapNodes(Array.isArray(b.ids) ? b.ids.map(String) : [], { styles: b.styles, perId: b.perId, name: b.name ? String(b.name) : undefined }) }),
   unwrap: (p, b) => ({ ids: p.doc.unwrapNode(String(b.id), { perId: b.perId }) }),
+  // The browser measured a fit board taller than its frame after a user edit: grow it (never shrinks, no undo step).
+  grow: (p, b) => { if (Number.isFinite(Number(b.contentHeight))) p.doc.growArtboard(String(b.id), Number(b.contentHeight)); },
   // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
   style: (p, b) => p.doc.updateStyles(b.ids, b.styles, b.perId),
   // Inspector fields for vectors: SVG attributes (fill, stroke...) go through the same allowlist as the set_attrs tool.
@@ -503,9 +505,9 @@ const server = http.createServer(async (req, res) => {
         const result = canvasActions[parts[3]](p, body);
         // What the user did by hand, so Claude's get_changes can report it.
         if (USER_EDITS.has(parts[3])) p.doc.record('user', parts[3], body.ids ?? [body.id].filter(Boolean));
-        // Only these need their result back: the browser switches to a new page, selects a new board (frame tool)
+        // Only these need their result back: the browser switches to a new page, selects a new board (frame tool), the new group wrapper
         // and opens a pasted / inserted node for typing (text tool).
-        return json(res, 200, { ok: true, result: ['page-create', 'reference', 'create', 'paste'].includes(parts[3]) ? result : undefined });
+        return json(res, 200, { ok: true, result: ['page-create', 'reference', 'create', 'paste', 'wrap', 'unwrap'].includes(parts[3]) ? result : undefined });
       }
       return json(res, 404, { error: 'Not found' });
     }

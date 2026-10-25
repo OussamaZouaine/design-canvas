@@ -90,6 +90,12 @@
 /* Drag in flow: translucent ghost of the moved node, 2 px insertion line, outline of the target container (all screen px). */
 .dc-ghost { position: absolute; z-index: 7; overflow: hidden; opacity: 0.7; pointer-events: none; border-radius: 2px; box-shadow: 0 0 0 1px var(--dc-accent); will-change: transform; }
 .dc-dropline { position: absolute; z-index: 8; background: var(--dc-accent); border-radius: 1px; pointer-events: none; }
+/* Drag hints: container outline, dashed sibling outlines, shaded padding and gaps (a light wash of the accent). */
+.dc-hints { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.dc-hints i { position: absolute; box-sizing: border-box; }
+.dc-hint-box { border: 1px solid color-mix(in oklch, var(--dc-accent) 45%, transparent); }
+.dc-hint-sib { border: 1px dashed color-mix(in oklch, var(--dc-accent) 55%, transparent); }
+.dc-hint-pad, .dc-hint-gap { background: color-mix(in oklch, var(--dc-accent) 14%, transparent); }
 .dc-dropbox { position: absolute; z-index: 6; border: 1.5px solid var(--dc-accent); border-radius: 2px; pointer-events: none; box-sizing: border-box; }
 /* Smart guides (phase 3): red-pink lines, measured gaps with end ticks and a number pill. All in screen px. */
 .dc-guides { position: absolute; inset: 0; z-index: 9; pointer-events: none; --dc-guide: oklch(0.66 0.23 12); }

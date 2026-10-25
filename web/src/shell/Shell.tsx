@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Activity, Bot, Braces, ChevronRight, Circle, Crosshair, Hand, History, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, Palette, PanelLeft, PanelRight, PenTool, Plug, Plus, RectangleHorizontal, Ruler, Slash, SlidersHorizontal, Square, Sun, Type } from 'lucide-react';
+import { Activity, Bot, Braces, ChevronRight, Circle, Crosshair, Hand, History, Keyboard, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, Palette, PanelLeft, PanelRight, PenTool, Plug, Plus, RectangleHorizontal, Ruler, Slash, SlidersHorizontal, Square, Sun, Type } from 'lucide-react';
 import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { pageOfBoard } from '@/canvas/engine';
 import { Button } from '@/components/ui/button';
@@ -141,6 +141,7 @@ export function TopBar({ projectId }: { projectId: string }) {
         <Divider />
         <ZoomControls />
         <Divider />
+        <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard /></Button>
         <Button variant="ghost" size="icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
         <Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" title="Inspector" onClick={togglePanel}><PanelRight /></Button>
       </div>

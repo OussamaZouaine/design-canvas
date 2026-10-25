@@ -65,6 +65,8 @@ interface Board {
   indexKey: string;         // html + theme the index was measured from; a mismatch means re-measure
   genTimer?: number;
   thumbTimer?: number;
+  growObs?: ResizeObserver; // watches the live root of a fit board so a user edit that adds height grows the frame
+  growTimer?: number;
 }
 
 export const pagesOf = (doc: DocData | null): Page[] => (doc?.pages?.length ? doc.pages : [{ id: 'P1', name: 'Page 1' }]);
@@ -154,6 +156,7 @@ export class CanvasEngine {
       boardEl: (id) => this.boards.get(id)?.el,
       findElement: (id) => this.findElement(id),
       boardOf: (id) => this.pidIndex.get(id),
+      selectNew: (ids) => this.selectWhenReady(ids[0], 40, ids),
       redraw: () => this.drawSelection(),
       markUserEdit: () => this.markUserEdit(),
       activePage: () => this.activePage,
@@ -255,6 +258,9 @@ export class CanvasEngine {
   // These act on the whole selection (the context menu and the shortcuts share them).
   duplicate() { this.editor.duplicate([...this.selected]); }
   remove() { this.editor.remove([...this.selected]); }
+  // Group / add auto layout / ungroup (the editor selects the result itself, see EditHost.selectNew).
+  group(mode: 'group' | 'auto' = 'group') { void this.editor.wrap(this.selected.filter((id) => !id.startsWith('A')), mode); }
+  ungroup() { void this.editor.unwrap([...this.selected]); }
   copy() { this.editor.copy(this.selected.filter((id) => !id.startsWith('A'))); }
   get selection(): readonly string[] { return this.selected; }
   paste() { this.editor.pasteNode(); }
@@ -673,10 +679,32 @@ export class CanvasEngine {
     b.shadow.innerHTML = `<style>:host{all:initial;display:block;font-family:system-ui,sans-serif}${BOARD_CSS}</style><style data-theme>:host{${this.themeDecls()}}</style>${boardRoot(b.ab.heightMode === 'fit', b.html ?? '')}`;
     b.shown = b.html;
     b.el.classList.remove('lod');
+    this.watchGrowth(b);
+  }
+
+  // A fit board's height is a minimum, and the server only grows it when Claude writes (it asks this tab to measure).
+  // A user edit (a move, a resize, a group, a typed line) bypasses that, so the live root is watched here: when it is
+  // taller than the frame shortly after the user's own edit, the measured height goes to the server (action `grow`,
+  // which never shrinks and is not an undo step). Gated on userEditUntil so Claude's writes keep the server's path.
+  private watchGrowth(b: Board) {
+    b.growObs?.disconnect();
+    const root = b.shadow.querySelector<HTMLElement>('[data-board-root]');
+    if (!root) return;
+    b.growObs = new ResizeObserver(() => {
+      if (b.ab.heightMode !== 'fit' || Date.now() > this.userEditUntil) return;
+      window.clearTimeout(b.growTimer);
+      // Debounced: a drag fires many resizes and only the settled height matters.
+      b.growTimer = window.setTimeout(() => {
+        const h = Math.ceil(root.scrollHeight);
+        if (root.isConnected && h > b.ab.height + 1) canvasAction(this.projectId, 'grow', { id: b.ab.id, contentHeight: h }).catch(() => { /* next edit retries */ });
+      }, 150);
+    });
+    b.growObs.observe(root);
   }
 
   private unmountFrame(b: Board) {
     if (b.shown == null) return;
+    b.growObs?.disconnect();
     b.shadow.replaceChildren();
     b.shown = null;
     b.el.classList.add('lod');
@@ -1290,10 +1318,10 @@ export class CanvasEngine {
     this.viewport.addEventListener('pointercancel', cancel);
   }
 
-  // A new board only exists after the doc event redraws; select it as soon as it does.
-  private selectWhenReady(id: string, tries = 40) {
-    if (this.findElement(id)) { this.select([id]); return; }
-    if (tries > 0) requestAnimationFrame(() => this.selectWhenReady(id, tries - 1));
+  // A new board or wrapper only exists after the doc event redraws; select it as soon as it does. A timer, not rAF: rAF is paused in a hidden tab and the selection would never land.
+  private selectWhenReady(id: string, tries = 40, all: string[] = [id]) {
+    if (this.pidIndex.has(id) || this.findElement(id)) { this.select(all); return; } // pidIndex is filled as soon as the doc arrives, before the board is remounted
+    if (tries > 0) window.setTimeout(() => this.selectWhenReady(id, tries - 1, all), 25);
   }
 
   // Right-click selects what a click would (keeping the set when the target is already in it, so the menu acts on all).
