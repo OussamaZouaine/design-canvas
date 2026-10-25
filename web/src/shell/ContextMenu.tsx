@@ -36,7 +36,9 @@ export function CanvasContextMenu() {
 
   if (!menu || !engine) return null;
   const { id } = menu;
-  const isBoard = !!id?.startsWith('A');
+  const sel = engine.selection;
+  const isBoard = sel.length > 0 && sel.every((s) => s.startsWith('A'));
+  const many = sel.length > 1;
   const fromLayers = !!menu.extra;
   const parent = id ? engine.parentOf(id) : null;
   const act = (fn: () => void) => () => { close(); fn(); };
@@ -47,14 +49,14 @@ export function CanvasContextMenu() {
       ...(fromLayers ? [] : [{ label: 'Add comment', run: () => useComments.getState().openNew(id, menu.x, menu.y) } as Item, 'sep' as const]),
       ...(menu.extra ?? []),
       ...(fromLayers && menu.extra?.length ? ['sep' as const] : []),
-      { label: 'Select parent', hint: 'Esc', run: () => engine.selectNode(parent), disabled: !parent } as Item,
-      { label: 'Copy', hint: 'Ctrl+C', run: () => engine.copy(id), disabled: isBoard } as Item,
+      { label: 'Select parent', hint: 'Shift+Enter', run: () => engine.selectNode(parent), disabled: !parent } as Item,
+      { label: 'Copy', hint: 'Ctrl+C', run: () => engine.copy(), disabled: isBoard } as Item,
     ] : []),
     { label: 'Paste', hint: 'Ctrl+V', run: () => engine.paste(), disabled: !engine.canPaste },
     ...(id ? [
-      { label: 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate(id) } as Item,
+      { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate() } as Item,
       'sep' as const,
-      { label: isBoard ? 'Delete artboard' : 'Delete', hint: 'Del', run: () => engine.remove(id), danger: true } as Item,
+      { label: many ? `Delete ${sel.length} layers` : isBoard ? 'Delete artboard' : 'Delete', hint: 'Del', run: () => engine.remove(), danger: true } as Item,
     ] : []),
     ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item]),
   ];

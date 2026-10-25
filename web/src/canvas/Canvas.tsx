@@ -40,7 +40,7 @@ export function Canvas({ projectId }: { projectId: string }) {
     return () => {
       e.destroy();
       c.setEngine(null);
-      c.setSelected(null);
+      c.setSelected([]);
       c.setLive(null);
     };
   }, [projectId]);

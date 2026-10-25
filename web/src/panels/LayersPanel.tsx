@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Diamond, Eye, EyeOff, Hexagon, Image as ImageIcon, Lock, Square, Type, Unlock, Frame } from 'lucide-react';
-import { useState, type DragEvent, type ReactNode } from 'react';
+import { useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { pageOfBoard } from '@/canvas/engine';
+import { rangeIds, toggleId } from '@/canvas/selection';
 import { Input } from '@/components/ui/input';
 import { ancestorsOf, kidsOf, kindOf, labelOf, sendEdit, snippetOf, treeOf, type Kind } from '@/lib/htmlTree';
 import { cn } from '@/lib/utils';
@@ -33,7 +34,9 @@ type Drop = 'before' | 'after' | 'inside';
 export function LayersPanel({ projectId }: { projectId: string }) {
   const doc = useProject((s) => s.doc);
   const page = useCanvas((s) => s.activePage);
-  const selected = useCanvas((s) => s.selected);
+  const selectedIds = useCanvas((s) => s.selected);
+  const selected = selectedIds.at(-1) ?? null; // primary: the one the tree scrolls to
+  const anchor = useRef<string | null>(null);  // row a Shift-click range starts from
   const engine = useCanvas((s) => s.engine);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -45,7 +48,7 @@ export function LayersPanel({ projectId }: { projectId: string }) {
   const [seenSel, setSeenSel] = useState<string | null>(null);
   if (selected !== seenSel) {
     setSeenSel(selected);
-    if (selected && doc) setExpanded(new Set([...expanded, ...ancestorsOf(doc, selected)]));
+    if (selected && doc) setExpanded(new Set([...expanded, ...selectedIds.flatMap((id) => ancestorsOf(doc, id))]));
   }
 
   if (!doc) return null;
@@ -125,11 +128,17 @@ export function LayersPanel({ projectId }: { projectId: string }) {
               if (moving && moving !== r.id) send('move-node', { id: moving, target: r.id, position: pos === 'inside' ? 'end' : pos });
             }}
             onMouseEnter={() => engine?.setHover(r.id)}
-            onClick={() => engine?.select(r.id)}
+            // Plain click selects the row, Ctrl/Cmd toggles it, Shift selects the range from the last clicked row.
+            onClick={(e) => {
+              if (!engine) return;
+              if (e.shiftKey && anchor.current) engine.selectIds(rangeIds(rows.map((x) => x.id), anchor.current, r.id));
+              else if (e.ctrlKey || e.metaKey) { engine.selectIds(toggleId(selectedIds, r.id)); anchor.current = r.id; }
+              else { engine.selectIds([r.id]); anchor.current = r.id; }
+            }}
             // Same menu as the canvas, plus the row-only actions. Selecting first so Copy/Duplicate/Delete hit this row.
             onContextMenu={(e) => {
               e.preventDefault();
-              engine?.select(r.id);
+              if (!selectedIds.includes(r.id)) engine?.selectIds([r.id]); // right-click on a member keeps the set
               useCanvas.getState().setMenu({
                 x: e.clientX, y: e.clientY, id: r.id,
                 extra: [
@@ -145,7 +154,7 @@ export function LayersPanel({ projectId }: { projectId: string }) {
             className={cn(
               // Rows are inset with rounded ends, so the selection reads as a soft pill instead of a full-bleed stripe.
               'group relative mx-1.5 flex h-7 cursor-default items-center gap-1 rounded-md pr-1.5 select-none',
-              selected === r.id ? 'bg-selection-soft' : 'pointer-hover:bg-muted',
+              selectedIds.includes(r.id) ? 'bg-selection-soft' : 'pointer-hover:bg-muted',
               drag?.over === r.id && drag.pos === 'inside' && 'outline outline-1 -outline-offset-1 outline-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'before' && 'before:absolute before:inset-x-1.5 before:top-0 before:h-0.5 before:bg-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'after' && 'after:absolute after:inset-x-1.5 after:bottom-0 after:h-0.5 after:bg-[var(--selection)]',
