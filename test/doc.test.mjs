@@ -171,3 +171,41 @@ test('moveNodes copy leaves the originals and mints new ids', () => {
   doc.undo();
   assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']);
 });
+
+// ---- wrapNodes / unwrapNode (group, add auto layout) ----
+test('wrapNodes wraps siblings in document order at the first one\'s place, as one undo step', () => {
+  const { doc, ab, a, b, c, d } = flowSetup();
+  const w = doc.wrapNodes([c, a], { styles: { display: 'flex', flexDirection: 'column', gap: '8px' } });
+  assert.deepEqual(flowNames(doc, ab.id), ['Group', 'A', 'C', 'B', 'D']); // wrapper first, then the untouched B and D
+  assert.equal(doc.parentOf(a), w);
+  assert.equal(doc.parentOf(c), w);
+  assert.equal(doc.parentOf(b), ab.id);
+  assert.match(doc.getArtboard(ab.id).html, /display:\s*flex/);
+  doc.undo();
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']);
+  assert.equal(doc.parentOf(a), ab.id);
+});
+
+test('wrapNodes refuses different parents, locked nodes and artboards, changing nothing', () => {
+  const { doc, ab, a, b } = flowSetup();
+  const [inner] = doc.writeHtml(a, '<p></p>');
+  assert.throws(() => doc.wrapNodes([inner, b]), /same parent/);
+  assert.throws(() => doc.wrapNodes([ab.id]), /artboard/);
+  doc.setFlags([b], { locked: true });
+  const steps = doc.undoStack.length;
+  assert.throws(() => doc.wrapNodes([a, b]), /locked/);
+  assert.equal(doc.undoStack.length, steps); // refused wraps leave no checkpoint
+});
+
+test('unwrapNode frees the children in place with their ids, restyles them, one undo step', () => {
+  const { doc, ab, a, b, c } = flowSetup();
+  const w = doc.wrapNodes([a, b]);
+  const freed = doc.unwrapNode(w, { perId: { [a]: { left: '5px' } } });
+  assert.deepEqual(freed, [a, b]);
+  assert.equal(doc.parentOf(a), ab.id);
+  assert.deepEqual(flowNames(doc, ab.id), ['A', 'B', 'C', 'D']);
+  assert.match(doc.getArtboard(ab.id).html, /left:\s*5px/);
+  doc.undo();
+  assert.equal(doc.parentOf(a), w);
+  assert.throws(() => doc.unwrapNode(c), /Nothing inside/);
+});
