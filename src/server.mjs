@@ -285,7 +285,7 @@ const canvasActions = {
   // Canvas drag in a flow parent: one or many nodes, optionally copied (Alt). One undo step.
   'move-nodes': (p, b) => p.doc.moveNodes(Array.isArray(b.ids) ? b.ids.map(String) : [], String(b.target), b.position, { copy: !!b.copy }),
   // Inspector and in-place editing: styles on nodes, text of a node, and browser undo / redo.
-  style: (p, b) => p.doc.updateStyles(b.ids, b.styles),
+  style: (p, b) => p.doc.updateStyles(b.ids, b.styles, b.perId),
   // Inspector fields for vectors: SVG attributes (fill, stroke...) go through the same allowlist as the set_attrs tool.
   attrs: (p, b) => p.doc.setAttrs(b.ids, b.attrs),
   // Path edit mode: d + viewBox + the svg's box in one undo step (see Doc.editVector).
