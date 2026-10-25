@@ -56,6 +56,9 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
   primary's parent; Figma-style picking (click = context child, dblclick enters, Ctrl = deepest, Shift toggles), marquee, keyboard nav. Details: `docs/notes/element-manipulation-plan.md`.
 - Drag in flow (`web/src/canvas/dragflow.ts` pure + `CanvasEditor.dragFlow` in `edit.ts`): dragging a non-absolute node reorders it among siblings or reparents it (ghost, insertion line,
   150 ms dwell, Alt = copy, Esc cancels, arrows reorder), one `move-nodes` canvas action -> `Doc.moveNodes` (one undo step). Tests `test/dragflow.test.mjs`; details in `docs/notes/element-manipulation-plan.md`.
+- Snapping / guides (`web/src/canvas/snap.ts` pure + `guides.ts` overlay drawer, tested by `test/snap.test.mjs`): `CanvasEditor.dragNode` / `dragBoard` / `beginResize` snap edges + centres to siblings and the parent (5 screen px, equal spacing),
+  Ctrl = no snap, Shift = axis lock (move) / aspect ratio (resize), Alt = from centre (resize) and Alt+hover = measure; arrows nudge absolute nodes (`nudge`, one undo step per key burst). Multi-node moves/resizes/nudges send ONE canvas `style`
+  action with `perId` (`Doc.updateStyles(ids, styles, perId)`). Details: `docs/notes/element-manipulation-plan.md`.
 - `src/find.mjs` `find_nodes` search; `nodeToReact` in `src/export.mjs` backs `export_code` format `jsx`; the `export` tool (PNG only, no PDF: the render round-trip yields bitmaps) writes to `data/exports/<id>/`.
 - `scripts/setup-mcp.mjs` (dry run by default, `--apply`) registers the endpoint in Claude Code (`claude mcp add`) and Claude Desktop (merges only the `design-canvas` key, writes a .bak); `scripts/mcp-stdio.mjs` is the stdio->HTTP shim Desktop launches; pure logic in `src/setup.mjs`.
 - `src/tokens.mjs` design-token extraction (OKLCH) with css/json/tailwind output.

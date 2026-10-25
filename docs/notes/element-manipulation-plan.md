@@ -1,6 +1,6 @@
 # Element manipulation plan (Figma / Paper-style selection, moving, Design tab)
 
-Written 2026-10-25. Status: phases 1 and 2 done, 3-5 not started. One phase per session, in order (phases 2-5 need phase 1).
+Written 2026-10-25. Status: phases 1-3 done, 4-5 not started. One phase per session, in order (phases 2-5 need phase 1).
 Update the "Status" line of each phase when it is done and collapse finished phases to 2-3 lines.
 
 ## Where we start (state on 2026-10-25)
@@ -65,32 +65,23 @@ Gotchas for later phases
 ---
 
 ## Phase 3: free move, snapping, smart guides, nudge, better resize
-Status: not started. Needs phase 1.
+Status: **done 2026-10-25** (browser-checked at 40%, 47% and 54% zoom with a scratch project, synthetic pointer / key events).
 
-Goal: precise placement of absolute nodes (and boards) the way Figma does it.
-
-Snapping
-- Candidates: edges and centres of the dragged box vs. siblings (same parent) and the parent's content box; for boards, other boards.
-- Threshold 5 screen px (divide by zoom for design px). Snap each axis independently to the nearest candidate.
-- Guides: 1 px red-pink lines across the matched edges + distance pills (e.g. "24") between the box and its neighbours.
-  Equal-spacing detection (Figma's pink "=" marks) when the gap to two neighbours matches.
-- Hold Ctrl while dragging to disable snapping. Pure maths in `web/src/canvas/snap.ts` (DOM-free, unit-tested).
-
-Move and nudge
-- Shift during drag locks to the dominant axis. Arrows nudge 1 px, Shift+arrow 10 px, applied to all selected absolute nodes
-  as one `style` action (coalesce held keys: send on keyup or after 300 ms idle so one burst = one undo step).
-- Multi-drag of several absolute nodes (one `style` action with per-id left/top, needs `style` to accept a per-id map:
-  add `styles: { [id]: {...} }` form to the canvas action, or a `batch-style` action).
-- Alt + hover while a node is selected: show distances from the selection to the hovered node / parent edges (measure mode).
-
-Resize
-- Shift keeps the aspect ratio, Alt resizes from the centre; snapping applies to the moving edges.
-- Multi-resize: scale every selected absolute node inside the union box (left/top/width/height), one undo step.
-- Live W x H pill under the box while resizing.
-- Flow nodes: keep e/s/se handles; dragging a handle of a node whose width is "Fill" switches it to Fixed (see phase 4).
-
-Done when
-- Dragging a shape snaps to sibling centres with visible guides and distances; nudges and multi-drags are single undo steps.
+Summary: pure maths in `web/src/canvas/snap.ts` (`snapMove`, `snapResize`, `annotate`, `gapPills`, `measure`, `resizeBox`, `scaleInto`, `unionOf`; tests `test/snap.test.mjs`)
+works in "client px / zoom" space so nodes and boards compare directly; `guides.ts` `Guides` draws red-pink lines, gap segments and number pills in the overlay
+(`.dc-guide/.dc-gap/.dc-pill`, one layer, rebuilt per move). `CanvasEditor.dragNode` moves the whole selection of absolute nodes (union box snaps to siblings + parent,
+equal spacing both between two neighbours and by extending an existing gap), `dragBoard` snaps to other boards, `beginResize` works on the union box for one or many nodes and boards.
+Ctrl = no snap, Shift = axis lock (move) / ratio (resize, snapping off), Alt = from centre (resize, snap mirrored), Alt+hover = measure (engine `onPointerMove` -> `editor.measure`).
+Arrows nudge absolute nodes 1 / Shift 10 px: live preview, saved on keyup (700 ms fallback timer, flushed before undo and on pointerdown) as one action. Server: `Doc.updateStyles(ids, styles, perId)`
+and canvas `style` accept `perId` (`{id: {prop: value}}`, merged over `styles`), one checkpoint, test in `test/doc.test.mjs`. The existing `.dc-size` pill is the live W x H.
+Gotchas for later phases
+- Shift+press on a node toggles selection (no drag), so Shift axis lock only works when Shift is pressed mid-drag.
+- Pills only appear once something lines up (a guide or equal marks), otherwise they flicker; Alt-measure draws them unconditionally.
+- Snapping with Shift-resize is skipped on purpose (the ratio wins); with Alt the dragged edge's snap gain is mirrored on the opposite edge.
+- Nodes using `right` / `bottom` instead of left / top are not handled (as before); flow nodes keep e/s/se handles (no Fill->Fixed switch yet, that is phase 4).
+- Multi-resize needs every member absolute and live; mixed or bitmap selections hide the handles. Resize reads `offsetWidth` (border box), so content-box nodes with padding will jump (pre-existing).
+- A 700 ms-pending nudge is invisible to other clients until it saves; synthetic key events in tests need a `keyup`.
+- Not exercised: real mouse / Alt key (Windows may focus the menu on a lone Alt press), snapping across boards for nodes (only same-parent siblings), touch.
 
 ---
 
