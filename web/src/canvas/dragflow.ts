@@ -100,3 +100,11 @@ export function stepDrop(containerId: string, childIds: readonly string[], movin
   while (index < childIds.length && seen < to) { if (!mv.has(childIds[index])) seen++; index++; }
   return resolveDrop(containerId, childIds, moving, index);
 }
+
+// Is the pointer in the outer band of a sibling, along the layout axis? Hovering the middle of a sibling container
+// means "drop into it"; its edges mean "next to it". Without this, reordering a row of cards would dive into every
+// card the pointer crosses.
+export function inEdgeBand(r: Rect, axis: Axis, px: number, py: number, frac = 0.28): boolean {
+  const x = (px - r.left) / (r.width || 1), y = (py - r.top) / (r.height || 1);
+  return axis === 'y' ? y < frac || y > 1 - frac : x < frac || x > 1 - frac;
+}
