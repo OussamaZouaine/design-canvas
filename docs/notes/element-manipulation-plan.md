@@ -30,6 +30,9 @@ Summary: engine `selected: string[]` (last = primary) + derived `context`; pure 
 Click = top-level child of context, double-click enters (or edits a text leaf), Ctrl/Cmd+click deepest, Shift toggles, marquee on empty
 space (boards when started outside any board), Enter / Shift+Enter or `\` / Tab / Ctrl+A / Esc, Delete / Ctrl+D / Ctrl+C / Ctrl+X on the set,
 union box + per-member outlines (`.dc-members`), Layers panel Shift range / Ctrl toggle, hover follows the pick rule, selection posted with all ids.
+Follow-up fixes 2026-10-26 (browser-checked on "Manipulation QA"; marquee on a wrapped board not exercised in the browser, only unit-tested):
+- **Picking rule:** a node that is the only element child of its parent (board root or context) is a transparent wrapper. Plain click, hover, double-click-enter (`pickInChain` / `enterTarget` with `isSole`), marquee, Ctrl+A and Enter (`soleDescent`) skip such wrappers and descend until a node has siblings or is the hit itself. The wrapper stays reachable via Ctrl+click on its padding, Layers, Shift+Enter / Esc (parent). Layers shows the full tree on purpose.
+- **Native text selection:** `engine.onMouseDown` cancels `mousedown` (pointerdown cannot) on the move tool except inside a contenteditable, blurs an active editor by hand, and `select()` clears stale ranges unless editing.
 Gotchas for later phases
 - Context is derived: it is the parent node of the primary (null for a top-level node), so `select(ids)` needs no context bookkeeping.
 - `RectEntry.parent` (rects.ts) lets snapshot boards build the same ancestor chain as live ones (`chainAt` vs `chainOf`); a zero-size parent breaks the walk.
