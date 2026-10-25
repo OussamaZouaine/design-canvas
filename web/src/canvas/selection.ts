@@ -9,14 +9,37 @@ export interface Box { left: number; top: number; width: number; height: number 
 // while the context is null). A node that is already selected and lies under the pointer stays the target, so a
 // selected inner node can be dragged without first re-picking its parent. Returns the new context too, because a
 // click outside the old context leaves it.
-export function pickInChain(chain: string[], context: string | null, selected: readonly string[]): string | null {
+//
+// Transparent wrappers: Claude's boards usually have ONE wrapper div under the board root, and a plain click would
+// always land on it. `isSole(id)` says "id is the only element child of its parent" (the parent being the board root
+// or the context); such a node is skipped and the pick descends to the next node down the chain, until a node
+// has siblings or is the hit itself (a leaf, or the wrapper's own padding). Ctrl+click, Layers and Shift+Enter still reach the wrapper.
+export function pickInChain(chain: string[], context: string | null, selected: readonly string[], isSole: (id: string) => boolean = () => false): string | null {
   if (!chain.length) return null;
   const sel = chain.find((id) => selected.includes(id));
   if (sel) return sel;
-  if (context == null) return chain[chain.length - 1];
-  const i = chain.indexOf(context);
-  if (i < 0) return chain[chain.length - 1]; // clicked outside the context: back to board level
-  return i === 0 ? context : chain[i - 1];   // the context itself when the click hit its own empty area
+  let i: number;
+  if (context == null) i = chain.length - 1;
+  else {
+    i = chain.indexOf(context);
+    if (i < 0) i = chain.length - 1;         // clicked outside the context: back to board level
+    else if (i === 0) return context;        // the context itself when the click hit its own empty area
+    else i -= 1;
+  }
+  while (i > 0 && isSole(chain[i])) i--;
+  return chain[i];
+}
+
+// Where a level really starts: from `start` (a node id or a board id) go down while it has exactly one child that
+// itself has children. Used by marquee / Ctrl+A / Enter so they see the same level a plain click does.
+export function soleDescent(start: string, childrenOf: (id: string) => string[]): string {
+  let p = start;
+  for (let guard = 0; guard < 50; guard++) {
+    const kids = childrenOf(p);
+    if (kids.length !== 1 || !childrenOf(kids[0]).length) break;
+    p = kids[0];
+  }
+  return p;
 }
 
 // Ctrl/Cmd+click: the deepest hit, except that a locked subtree is one unit (its outermost locked ancestor).
@@ -28,10 +51,13 @@ export function pickDeep(chain: string[], isLocked: (id: string) => boolean): st
 }
 
 // Double-click on a selected node: the child under the pointer, or null when the selected node is the deepest hit.
-export function enterTarget(chain: string[], primary: string | null): string | null {
+// Sole-child wrappers inside the selection are skipped like in pickInChain.
+export function enterTarget(chain: string[], primary: string | null, isSole: (id: string) => boolean = () => false): string | null {
   if (!primary) return null;
-  const i = chain.indexOf(primary);
-  return i > 0 ? chain[i - 1] : null;
+  let i = chain.indexOf(primary) - 1;
+  if (i < 0) return null;
+  while (i > 0 && isSole(chain[i])) i--;
+  return chain[i];
 }
 
 // Shift+click: add when absent, remove when present. The toggled id becomes the primary (last).

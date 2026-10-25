@@ -1,7 +1,7 @@
 // Selection maths lives in the web client (web/src/canvas/selection.ts) but has no DOM, so the root runner imports it directly.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickInChain, pickDeep, enterTarget, toggleId, normalize, unionBox, intersects, siblingStep, rangeIds } from '../web/src/canvas/selection.ts';
+import { pickInChain, pickDeep, enterTarget, toggleId, normalize, unionBox, intersects, siblingStep, rangeIds, soleDescent } from '../web/src/canvas/selection.ts';
 
 // board A1 > N1 (card) > N2 (row) > N3 (title)
 const chain = ['N3', 'N2', 'N1'];
@@ -37,6 +37,33 @@ test('double-click enters the selected node toward the pointer', () => {
   assert.equal(enterTarget(chain, 'N1'), 'N2');
   assert.equal(enterTarget(chain, 'N3'), null); // deepest: caller falls through to text edit
   assert.equal(enterTarget(chain, null), null);
+});
+
+// board A1 > W (sole wrapper) > L (sole layer) > C1, C2 (cards) > T (title)
+test('sole-child wrappers are skipped until a node has siblings or is the hit', () => {
+  const sole = (id) => id === 'W' || id === 'L';
+  const inCard = ['T', 'C1', 'L', 'W'];
+  assert.equal(pickInChain(inCard, null, [], sole), 'C1');
+  assert.equal(pickInChain(inCard, 'C1', [], sole), 'T');
+  assert.equal(pickInChain(inCard, 'L', [], sole), 'C1');       // context = wrapper: its child as before
+  assert.equal(pickInChain(['L', 'W'], null, [], sole), 'L');   // padding of the inner wrapper: it is the hit, stop
+  assert.equal(pickInChain(['W'], null, [], sole), 'W');        // padding of the outer wrapper
+  assert.equal(pickInChain(['X1', 'X0'], 'C1', [], () => false), 'X0');
+});
+
+test('sole wrappers inside a context are skipped too, and double-click enters past them', () => {
+  const sole = (id) => id === 'W2';
+  assert.equal(pickInChain(['T', 'W2', 'C1'], 'C1', [], sole), 'T');
+  assert.equal(enterTarget(['T', 'W2', 'C1'], 'C1', sole), 'T');
+  assert.equal(enterTarget(['T', 'W2', 'C1'], 'C1'), 'W2');
+});
+
+test('soleDescent finds the level a click works on', () => {
+  const kids = { A1: ['W'], W: ['L'], L: ['C1', 'C2'], C1: ['T'], C2: [], T: [] };
+  const childrenOf = (id) => kids[id] ?? [];
+  assert.equal(soleDescent('A1', childrenOf), 'L');
+  assert.equal(soleDescent('C1', childrenOf), 'C1'); // its only child is a leaf: stay
+  assert.equal(soleDescent('L', childrenOf), 'L');
 });
 
 test('toggle adds and removes, newest is last (primary)', () => {
