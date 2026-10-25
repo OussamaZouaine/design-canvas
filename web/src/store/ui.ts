@@ -33,6 +33,8 @@ interface UiState {
   panelOpen: boolean;
   theme: Theme;
   rulers: boolean;
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (open: boolean) => void;
   toggleRulers: () => void;
   setTool: (t: Tool) => void;
   setPanelTab: (t: PanelTab) => void;
@@ -51,6 +53,8 @@ export const useUi = create<UiState>((set, get) => ({
   panelOpen: true,
   theme: initialTheme,
   rulers: read('dc-rulers') === '1',
+  shortcutsOpen: false,
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   toggleRulers: () => {
     const rulers = !get().rulers;
     write('dc-rulers', rulers ? '1' : '0');

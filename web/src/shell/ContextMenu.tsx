@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useCanvas } from '@/store/canvas';
 import { useComments } from '@/store/comments';
+import { useUi } from '@/store/ui';
 
 interface Item { label: string; hint?: string; run: () => void; disabled?: boolean; danger?: boolean }
 
@@ -56,9 +57,14 @@ export function CanvasContextMenu() {
     ...(id ? [
       { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate() } as Item,
       'sep' as const,
+      // Structure: group / auto layout need real nodes (not boards); ungroup needs exactly one node.
+      { label: 'Group', hint: 'Ctrl+G', run: () => engine.group('group'), disabled: isBoard } as Item,
+      { label: 'Add auto layout', hint: 'Shift+A', run: () => engine.group('auto'), disabled: isBoard } as Item,
+      { label: 'Ungroup', hint: 'Ctrl+Shift+G', run: () => engine.ungroup(), disabled: isBoard || many } as Item,
+      'sep' as const,
       { label: many ? `Delete ${sel.length} layers` : isBoard ? 'Delete artboard' : 'Delete', hint: 'Del', run: () => engine.remove(), danger: true } as Item,
     ] : []),
-    ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item]),
+    ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item, { label: 'Keyboard shortcuts', hint: '?', run: () => useUi.getState().setShortcutsOpen(true) } as Item]),
   ];
 
   // Arrow keys hop between enabled items (roving focus).
@@ -70,9 +76,9 @@ export function CanvasContextMenu() {
     btns[(i + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length]?.focus();
   };
 
-  // Clamp so the menu never opens half off-screen (about 190 x 260 px).
+  // Clamp so the menu never opens half off-screen (about 190 x 370 px).
   const left = Math.min(menu.x, window.innerWidth - 200);
-  const top = Math.min(menu.y, window.innerHeight - 270);
+  const top = Math.min(menu.y, window.innerHeight - 380);
 
   return (
     <div
