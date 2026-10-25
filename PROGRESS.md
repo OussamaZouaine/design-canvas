@@ -138,9 +138,9 @@ Order is a suggestion; the user decides.
     priority block on tool results + optional agent `set_status`; (d) design memory (save decision, distilled style rules); (e) `search_icons` / `search_logos` /
     `search_images` tools; (f) optional CSS-pruned mode for `capture_url`. Suggested order a, b, c, d, e, f.
 11. Other ideas: more Sprig pages, keep comment ids stable across rebuilds, tests for store / sanitizer / tokens extraction.
-12. **Element manipulation (Figma/Paper-style), plan written 2026-10-25, phases 1 (selection model) and 2 (drag reorder / reparent, `Doc.moveNodes`, `dragflow.ts`) done 2026-10-25:** `docs/notes/element-manipulation-plan.md`. Phases, one session each:
+12. **Element manipulation (Figma/Paper-style), plan written 2026-10-25, phases 1 (selection model), 2 (drag reorder / reparent, `Doc.moveNodes`, `dragflow.ts`) and 3 (snapping, guides, nudge, resize, `snap.ts`) done 2026-10-25:** `docs/notes/element-manipulation-plan.md`. Phases, one session each:
     1 selection model (multi-select, context scoping, marquee, keyboard nav), 2 drag reorder/reparent in flow (`moveNodes`), 3 snapping + smart guides + nudge + better resize,
-    4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Next: phase 3.
+    4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Next: phase 4.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
