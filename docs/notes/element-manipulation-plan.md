@@ -1,6 +1,6 @@
 # Element manipulation plan (Figma / Paper-style selection, moving, Design tab)
 
-Written 2026-10-25. Status: **plan only, nothing built**. One phase per session, in order (phases 2-5 need phase 1).
+Written 2026-10-25. Status: phases 1 and 2 done, 3-5 not started. One phase per session, in order (phases 2-5 need phase 1).
 Update the "Status" line of each phase when it is done and collapse finished phases to 2-3 lines.
 
 ## Where we start (state on 2026-10-25)
@@ -43,44 +43,24 @@ Gotchas for later phases
 ---
 
 ## Phase 2: moving nodes in flow (reorder / reparent)
-Status: not started. Needs phase 1.
+Status: **done 2026-10-25** (browser-checked at 48%, 89%, 108% and 267% zoom with a scratch project, driven by synthetic pointer events).
 
-Goal: drag any flow node (child of block / flex / grid) to a new place among its siblings or into another container,
-like Figma auto layout.
-
-Behaviour
-- Drag threshold 3 screen px (as today). The dragged node gets a ghost (semi-transparent clone in the overlay, screen px) and the
-  original is dimmed in place; we do **not** live-reflow the DOM during the drag (cheap, no layout thrash, no undo noise).
-- Drop target = the deepest container under the pointer that is not the dragged node or inside it, not locked, and can hold
-  children (not an img / svg / text leaf). Default is the current parent; moving into another container requires the pointer to
-  be inside it (Figma also waits a short dwell, ~150 ms, before reparenting; do the same to avoid accidental jumps).
-- Insertion index: from the container's direction (`flex-direction` row/column, block = column, grid = reading order) compare the
-  pointer with the midpoints of the children. Draw a 2 px signal-blue insertion line between the two siblings and outline the target container.
-- Release: one `move-node` (`before`/`after` a sibling, or `start`/`end` of an empty container). No-op when the index did not change.
-- Multi-selection: all selected nodes move together, keeping their order. Needs a server change (below).
-- Alt while dropping = copy instead of move (duplicate + move, one undo step).
-- Esc during drag cancels.
-- Keyboard: in a flow parent, arrows reorder along the parent's axis (left/up = earlier). Absolute nodes keep nudge (phase 3).
-- Absolute nodes keep today's free drag; dragging an absolute node onto another container does not reparent (Figma: Ctrl-drag reparents; later).
-
-Server
-- `Doc.moveNodes(ids, targetId, position)`: one `_checkpoint('move_nodes')`, moves in document order so relative order is kept,
-  same checks as `moveNode` (locked, own descendant, board target needs start/end). Canvas action `move-nodes`; keep `move-node`
-  for the Layers panel (or make it call `moveNodes([id])`). Add to `USER_EDITS`. Tests in `test/doc.test.mjs`.
-
-Code
-- New `web/src/canvas/dragflow.ts` (pure: given child rects + axis + pointer -> index; unit test like `test/path.test.mjs`,
-  DOM-free and import-free) and the pointer handling in `edit.ts` (`dragNode` falls through to `dragFlow` for flow nodes).
-
-Done when
-- Reorder cards in a flex row and items in a column list, move a button into another card, multi-move three items: each is one undo step.
-- Ghost and insertion line are correct at zoom 0.5, 1 and 3, and on a board scrolled far away. `pnpm test` green.
-
-Gotchas
-- `display: contents` / wrappers without a box: skip them when computing child rects.
-- Grid with explicit `grid-column` placement: reorder still changes DOM order only; warn in a toast if placement is explicit.
-- Moving between boards works server-side (`moveNode` is cross-artboard); allow it only when the pointer is over another board.
-- `markUserEdit()` before sending, so the canvas does not play the "Claude is designing" reveal.
+Summary: pressing a flow node (not absolute, not locked) and dragging > 3 px runs `CanvasEditor.dragFlow` (`edit.ts`): original dims to 0.35,
+ghost clone(s) follow in the overlay (`.dc-ghost`, max 6), blue 2 px `.dc-dropline` between siblings, `.dc-dropbox` outlines a target container other than
+the original parent. Release sends ONE `move-nodes` (`{ids, target, position, copy}`, Alt = copy); no-op drops send nothing; Esc cancels (capture-phase
+listener). Arrow keys reorder the selection along the parent's axis (`arrowReorder`). The whole selection moves when the pressed node is in it.
+Pure maths in `web/src/canvas/dragflow.ts` (`inferAxis`, `insertionIndex`, `insertionLine`, `resolveDrop`, `stepDrop`, `inEdgeBand`; tests
+`test/dragflow.test.mjs`). Server: `Doc.moveNodes(ids, target, position, {copy})` (one checkpoint, all checks before any change, document order kept,
+`moveNode` now calls it), canvas action `move-nodes` in `USER_EDITS`; tests in `test/doc.test.mjs`.
+Gotchas for later phases
+- Axis is inferred from the children's boxes, not CSS (so block, flex and grid share one rule); `row-reverse` / `column-reverse` come out as 'flow' and are not handled specially.
+- Dropping into a sibling container needs the pointer in its middle (outer 28% along the axis = "next to it", `inEdgeBand`) plus a 150 ms dwell, otherwise reordering a row of cards would dive into each card. Dwell re-checks on a timer because a still pointer sends no events.
+- The drop target comes from `engine.nodesAt` (`shadow.elementsFromPoint`); only live (mounted) boards accept drops, bitmap boards (zoomed out) fall through to pan. Reference boards refuse.
+- `canHold` rejects img / svg / controls / button / text-bearing nodes / display:contents / inline; the board's `[data-board-root]` is the container for top-level nodes (target = board id).
+- Grid items with explicit grid-column / row / area only change DOM order; a toast says so.
+- Alt copy mints fresh ids server-side and does not change the selection (the copies are not selected).
+- Arrow keys skip absolute nodes on purpose: phase 3 owns their nudge. The arrow handler returns true on a key across the axis only when it acted, so other arrow uses stay free.
+- Not exercised: drag across two boards, real mouse drags (only synthetic pointer events were available in the browser tool), touch.
 
 ---
 
