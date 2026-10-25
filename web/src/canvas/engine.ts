@@ -182,6 +182,7 @@ export class CanvasEngine {
     for (const type of ['pointerdown', 'wheel']) viewport.addEventListener(type, () => { this.lastTouch = Date.now(); }, { capture: true, passive: true, ...sig });
     viewport.addEventListener('wheel', this.onWheel, { passive: false, ...sig });
     viewport.addEventListener('pointerdown', this.onPointerDown, sig);
+    viewport.addEventListener('mousedown', this.onMouseDown, sig);
     viewport.addEventListener('pointermove', this.onPointerMove, { passive: true, ...sig });
     viewport.addEventListener('contextmenu', this.onContextMenu, sig);
     viewport.addEventListener('dblclick', this.onDblClick, sig);
@@ -402,6 +403,9 @@ export class CanvasEngine {
   // newer one wins). The context follows the primary's parent unless the caller names one.
   select(ids: string[], context?: string | null) {
     this.selected = normalize(ids, (id) => this.parentId(id));
+    // A stale native range (e.g. from reading text earlier) would show next to the new selection and hijack Ctrl+C.
+    const active = this.deepActive();
+    if (!(active instanceof HTMLElement && active.isContentEditable)) getSelection()?.removeAllRanges();
     const p = this.primary();
     if (context !== undefined) this.context = context;
     else {
@@ -1095,6 +1099,29 @@ export class CanvasEngine {
       this.view.y -= e.deltaY;
     }
     this.applyView();
+  };
+
+  // The element that has focus, looking through shadow roots (boards are shadow DOM, so document.activeElement is only the host).
+  private deepActive(): Element | null {
+    let a: Element | null = document.activeElement;
+    while (a?.shadowRoot?.activeElement) a = a.shadowRoot.activeElement;
+    return a;
+  }
+
+  // Canvas selection and the browser's text selection must not mix: a Shift+click or a drag over board text would
+  // otherwise paint a blue native highlight under our own outlines. The native selection starts on `mousedown`
+  // (cancelling `pointerdown` does not stop it), so it is cancelled here. Text being edited is left alone (caret,
+  // word select, drag-select all need the default); when the press lands elsewhere the editor is blurred by hand,
+  // because cancelling mousedown also cancels the blur that would normally end the edit.
+  private onMouseDown = (e: MouseEvent) => {
+    if (e.button !== 0 || this.tool !== 'move' || this.commentMode) return;
+    const path = e.composedPath();
+    const hit = path.find(isNodeEl);
+    if (hit?.isContentEditable || path.some((n) => n instanceof HTMLInputElement || n instanceof HTMLTextAreaElement)) return;
+    const active = this.deepActive();
+    if (active instanceof HTMLElement && active.isContentEditable) active.blur();
+    e.preventDefault();
+    getSelection()?.removeAllRanges();
   };
 
   private onPointerDown = (e: PointerEvent) => {
