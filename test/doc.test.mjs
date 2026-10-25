@@ -60,6 +60,18 @@ test('updateStyles keeps edits to two nodes in the same artboard', () => {
   assert.equal([...doc.getArtboard(ab.id).html.matchAll(/color: blue/g)].length, 2);
 });
 
+test('updateStyles per-id form gives each node its own values in one undo step', () => {
+  const { doc, ab } = setup();
+  const [a, b] = doc.writeHtml(ab.id, '<div style="position:absolute">1</div><div style="position:absolute">2</div>');
+  const before = doc.getArtboard(ab.id).html;
+  doc.updateStyles(null, { width: '10px' }, { [a]: { left: '5px' }, [b]: { left: '9px', width: '20px' } });
+  const html = doc.getArtboard(ab.id).html;
+  assert.match(html, /left: 5px/); assert.match(html, /left: 9px/);
+  assert.equal([...html.matchAll(/width: 10px/g)].length, 1, 'per-id value overrides the shared one');
+  assert.equal(doc.undo().length, 1);
+  assert.equal(doc.getArtboard(ab.id).html, before);
+});
+
 test('journal records changes by actor', () => {
   const { doc } = setup();
   doc.record('user', 'move', ['A1']);

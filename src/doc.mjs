@@ -724,7 +724,11 @@ export class Doc {
     return root.childNodes.filter((c) => c instanceof HTMLElement).map((c) => c.getAttribute('data-pid'));
   }
 
-  updateStyles(ids, styles) {
+  // `perId` ({ id: { prop: value } }) is the per-node form used by multi-drag / multi-resize / nudge: each node gets its
+  // own left/top/width/height in the SAME checkpoint, so the whole gesture is one undo step. It is merged over `styles`.
+  updateStyles(ids, styles, perId = null) {
+    if (perId) ids = [...new Set([...(ids || []), ...Object.keys(perId)])];
+    styles = styles || {};
     // Validate every id first so a bad id can't leave the batch half-applied.
     for (const id of ids) {
       const hit = this._find(id);
@@ -737,7 +741,7 @@ export class Doc {
     for (const id of ids) {
       const hit = this._find(id);
       const map = parseStyle(hit.el.getAttribute('style'));
-      for (const [k, v] of Object.entries(styles)) {
+      for (const [k, v] of Object.entries({ ...styles, ...(perId?.[id] || {}) })) {
         // null/'' removes a property; accept camelCase like Paper does.
         if (v === null || v === '') map.delete(kebab(k));
         else map.set(kebab(k), String(v));
