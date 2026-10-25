@@ -693,23 +693,30 @@ export class Doc {
   //   append / prepend: inside the target, last / first   replace: swap the target's children
   //   before / after:   next to the target (nodes only, an artboard has no siblings)
   // `opts.normalize` overrides the project setting for this write (capture_url keeps a copied page as it is).
+  // `opts.drop` (node ids) removes the previous version of a streamed run in the SAME undo step as the new write,
+  // so each streamed call is one step and never leaves the board without the section being built.
   writeHtml(targetId, html, mode = 'append', opts = {}) {
     const ab = this.getArtboard(targetId);
     if (ab) {
       if (mode === 'before' || mode === 'after') throw new Error('before/after need a node id, not an artboard id');
       const prepared = this._prepare(html, opts.normalize);
       this._checkpoint('write_html');
+      if (opts.drop?.length) this._dropQuietly(opts.drop);
       const out = prepared.toString();
       ab.html = mode === 'replace' ? out : mode === 'prepend' ? out + ab.html : ab.html + out;
       this._commit();
       return this._topLevelIds(prepared);
     }
-    const hit = this._find(targetId);
+    let hit = this._find(targetId);
     if (!hit) throw new Error(`Target ${targetId} is neither an artboard nor a node`);
     // Inserting beside a locked node is fine; changing what is inside one is not.
     if (mode !== 'before' && mode !== 'after') this._assertUnlocked(hit.el, targetId);
     const prepared = this._prepare(html, opts.normalize);
     this._checkpoint('write_html');
+    if (opts.drop?.length) {
+      this._dropQuietly(opts.drop);
+      hit = this._find(targetId); // the artboard html changed under the old parse
+    }
     if (mode === 'replace') hit.el.set_content(prepared.toString());
     else {
       const where = { append: 'beforeend', prepend: 'afterbegin', before: 'beforebegin', after: 'afterend' }[mode];
@@ -718,6 +725,17 @@ export class Doc {
     this._save(hit.ab, hit.root);
     this._commit();
     return this._topLevelIds(prepared);
+  }
+
+  // Remove nodes without a checkpoint of their own (the caller already took one). Ids that are already gone
+  // (the user deleted them mid-stream) are skipped rather than failing the run.
+  _dropQuietly(ids) {
+    for (const id of ids) {
+      const hit = this._find(id);
+      if (!hit) continue;
+      hit.el.remove();
+      this._save(hit.ab, hit.root);
+    }
   }
 
   _topLevelIds(root) {
