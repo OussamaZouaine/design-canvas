@@ -1,6 +1,6 @@
 # Element manipulation plan (Figma / Paper-style selection, moving, Design tab)
 
-Written 2026-10-25. Status: phases 1-3 done, 4-5 not started. One phase per session, in order (phases 2-5 need phase 1).
+Written 2026-10-25. Status: phases 1-4 done, 5 not started. One phase per session, in order (phases 2-5 need phase 1).
 Update the "Status" line of each phase when it is done and collapse finished phases to 2-3 lines.
 
 ## Where we start (state on 2026-10-25)
@@ -86,42 +86,21 @@ Gotchas for later phases
 ---
 
 ## Phase 4: Design tab redesign
-Status: not started. Needs phase 1 (multi-select values); phase 2 makes the auto-layout controls more useful.
+Status: **done 2026-10-25** (browser-checked in dark theme with a scratch project; light theme and real mouse scrubs not exercised).
 
-Goal: replace the CSS-property list with Figma-like sections that map to CSS. Raw CSS stays reachable under "Other styles".
-
-Sections (top to bottom)
-1. **Align bar**: align left / centre / right / top / middle / bottom and distribute (for 2+ absolute nodes: computes left/top;
-   for flow children: sets the parent's `align-items` / `justify-content` or the child's `align-self`).
-2. **Position**: X, Y (absolute only; for flow nodes greyed with an "Absolute position" toggle that sets `position:absolute`
-   with the node's current offset, like Figma's "Ignore auto layout"), rotation (`rotate`), and constraints later.
-3. **Size**: W and H each with a mode menu **Fixed / Hug / Fill**:
-   Fixed = `width:Npx`; Hug = `width:fit-content` (or remove width); Fill = `flex:1 1 0` in the parent's main axis,
-   `align-self:stretch` on the cross axis, `width:100%` in a block parent. Min / max width/height in a "+" menu.
-   The mode is derived from the computed style + parent display (put that logic in a pure helper, unit-tested).
-4. **Auto layout**: on/off (display flex vs block), direction toggle (row / column / wrap), a 3x3 alignment grid that sets
-   `justify-content` + `align-items` together, a "space between" toggle, gap, padding as horizontal / vertical with an
-   expand-to-four-sides button (reuse the existing per-side padding control).
-5. **Appearance**: opacity, radius (with per-corner expand), overflow "Clip content" checkbox.
-6. **Fill**: list of fills (background colour / gradient), OKLCH colour picker popover (L, C, H sliders + alpha + token list),
-   eye toggle per fill. **Stroke**: colour, width, style, inside/outside (border vs outline). **Effects**: shadow list.
-7. **Typography**: font (existing `FontField`), size, weight, line height, tracking, alignment as icon buttons, colour.
-8. **Other styles**: unchanged.
-
-Field behaviour
-- **Scrub labels**: drag the field label left/right to change a number (Shift = x10, Alt = /10), sends on release (one undo step),
-  previews live by writing to the element like resize does.
-- Arrow up/down in a number field steps by 1 (Shift 10). Expressions allowed (`16*2`).
-- **Multi-select**: show a value when all selected nodes share it, else "Mixed"; editing sets it on all (one `style` with `ids`).
-- Token suggestions stay (`var(--token)`), shown as a token chip in the field.
-
-Code
-- Split `InspectorPanel.tsx` into `panels/inspector/*` (one file per section) once it grows; shared fields live in `web/src/ui/`.
-- Follow `docs/notes/ui-system.md` (graphite surfaces, `bg-field`, signal blue = selection only) and the motion rules.
-
-Done when
-- A card can be switched to Hug/Fill, its children aligned with the 3x3 grid, its padding scrubbed, all with undo working,
-  and editing two selected buttons at once works. Browser-checked; `pnpm test` green.
+Summary: `InspectorPanel.tsx` now only routes; sections live in `panels/inspector/` (see CLAUDE.md "Inspector"). Selection of many nodes is edited together (`Model.get` -> shared value or "Mixed",
+one `style` action, per-node values via `perId`). Sections: align bar (absolute nodes get left/top deltas from measured boxes, flow children get `align-self` / parent `justify-content`, distribute =
+even gaps for 3+ absolute or `space-between` in a flex parent), Position (X/Y/rotation, "Absolute" toggle keeps the offset, makes the parent `position:relative`), Size (Fixed/Hug/Fill per axis via
+`sizeMode`/`sizeCss`, min/max under "+"), Auto layout (on/off, direction, wrap, 3x3 grid, space-between, gap, padding H/V -> 4 sides), Appearance (opacity %, radius -> 4 corners, clip), Fill / Stroke / Effects,
+Typography (icon text-align), Other styles (single selection only). `NumberField`: scrub label (Shift x10, Alt /10, live preview, one undo on release), arrow bursts = one undo step, arithmetic (`evalExpr`).
+`ColorField` opens an OKLCH popover (L, C, H, alpha sliders, colour tokens): sliders preview live, commit on release.
+Gotchas
+- Size mode is derived from INLINE styles of the node and its parent (generated designs are inline), with the board root treated as a flex column (`BOARD_PARENT`). Absent width in a block parent reads as Fill, absent height as Hug.
+- Live preview writes inline style on the live element and remembers originals; a real edit just forgets them (the doc render replaces the node), a cancel restores. Bitmap (zoomed-out) boards have no live element: previews are skipped and `measure` returns null (align / absolute toggle then toast "zoom in").
+- `ColorRow` keys must not include the value, or a commit remounts the field and closes the popover.
+- A hidden fill is stored as `--dc-hidden-fill` (CSS has no per-fill visibility). Per-side borders and gradients stay as raw text / Other styles; only one fill and one stroke are modelled.
+- Top-level nodes cannot align on the board's main (vertical) axis through flex (their parent is the board wrapper, not a layer): toast says so; use Absolute.
+- Not done: constraints, multi-fill lists, per-axis min/max scrub (plain text), Other styles for multi-selection.
 
 ---
 
