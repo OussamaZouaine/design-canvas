@@ -218,6 +218,16 @@ body {
 /* A call still waiting on the browser (screenshot...): opacity pulse only, and only while it is pending. */
 .agent-pulse { animation: sk-pulse 1.1s var(--ease-in-out) infinite; }
 
+
+/* Colour picker sliders: a native range with its own track (the gradient is set inline, it depends on the colour)
+   and a ring thumb. Keeps keyboard support and pointer capture for free. */
+.dc-range { appearance: none; height: 12px; border-radius: 6px; outline: 1px solid color-mix(in oklch, var(--foreground) 12%, transparent); outline-offset: -1px; cursor: pointer; }
+.dc-range::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: transparent; border: 2px solid white; box-shadow: 0 0 0 1px oklch(0 0 0 / 0.35), inset 0 0 0 1px oklch(0 0 0 / 0.25); }
+.dc-range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 2px solid white; box-shadow: 0 0 0 1px oklch(0 0 0 / 0.35); }
+.dc-range:focus-visible { outline: 2px solid var(--selection); }
+/* Checkerboard behind translucent colours (swatches and the alpha track). */
+.dc-checker { background-image: repeating-conic-gradient(oklch(0.8 0 0) 0% 25%, oklch(1 0 0) 0% 50%); background-size: 8px 8px; }
+
 @media (prefers-reduced-motion: reduce) {
   .ctx-menu, .sk, .agent-pulse { animation: none; }
 }

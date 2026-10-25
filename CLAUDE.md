@@ -106,8 +106,12 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   "+" creates a page (canvas action `page-create`) and starts inline rename (`page-update`), double-click renames. There is no header select any more.
 - **Token sync:** `meta.repo` is the linked code folder; `src/tokensync.mjs` only reads files inside it (path check) and maps
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
-- **Inspector:** `web/src/panels/InspectorPanel.tsx` (Design tab) reads the selected node's inline style from the parsed HTML and sends
-  `style` actions (one property each, one undo step). Fields suggest `var(--token)` values from the theme.
+- **Inspector (Design tab):** `web/src/panels/InspectorPanel.tsx` picks the page / artboard / node view; the node view is `panels/inspector/*`: `model.ts` (`useModel`: the whole selection,
+  `get` = shared value or `MIXED`, `patch` / `patchEach` = ONE `style` action with `ids` / `perId`, `preview` = live write to the element without a server write, `measure`),
+  `LayoutSections.tsx` (align bar, Position, Size Fixed/Hug/Fill, Auto layout with 3x3 grid, Appearance), `PaintSections.tsx` (Fill, Stroke, Effects), `TypographySection.tsx`,
+  `VectorSection.tsx` (single svg, `attrs` action), shared bits in `controls.tsx`. Pure logic (size modes, grid, align / distribute, expressions, shorthand, stroke / shadow parsing)
+  is `web/src/lib/inspect.ts`, tested by `test/inspect.test.mjs`. Fields: `ui/NumberField.tsx` (scrub label, arrows, expressions, Mixed, `onPreview`), `ui/ColorField.tsx` (OKLCH popover).
+  Fill / Stroke / Effects read `background`, `border` (inside) / `outline` (outside), `box-shadow`; a hidden fill is parked in `--dc-hidden-fill`.
 - **Font picker:** the Typography Font row is `web/src/ui/FontField.tsx` (menu of project fonts from `meta.fonts` plus system fonts, each name drawn
   in its own face because the project-fonts style tag lives in the same document as the panels) over a raw "Stack" text field. The shown family is
   the node's own `font-family`, else the nearest ancestor's (inherited, dimmed), with `var(--token)` resolved via the theme (`effectiveFamily` in InspectorPanel).

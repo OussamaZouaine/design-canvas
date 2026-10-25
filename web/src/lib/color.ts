@@ -1,3 +1,22 @@
+// ---- OKLCH value <-> parts, for the colour picker's sliders -------------------------------------------------
+
+export interface Oklch { l: number; c: number; h: number; a: number }
+
+// Reads `oklch(L C H / A)` (L as 0..1 or a percentage, alpha as number or percentage). Anything else is null; the
+// picker then falls back to hexToOklch / a neutral default.
+export function parseOklch(css: string): Oklch | null {
+  const m = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)(?:deg)?\s*(?:\/\s*([\d.]+)(%?))?\s*\)$/i.exec(css.trim());
+  if (!m) return null;
+  const a = m[5] === undefined ? 1 : parseFloat(m[5]) / (m[6] ? 100 : 1);
+  return { l: parseFloat(m[1]) / (m[2] ? 100 : 1), c: parseFloat(m[3]), h: parseFloat(m[4]), a };
+}
+
+// Canonical text, trimmed to the precision a slider can actually express so the CSS stays readable.
+export function formatOklch({ l, c, h, a }: Oklch): string {
+  const base = `${+l.toFixed(3)} ${+c.toFixed(3)} ${+(((h % 360) + 360) % 360).toFixed(1)}`;
+  return a >= 1 ? `oklch(${base})` : `oklch(${base} / ${+a.toFixed(2)})`;
+}
+
 // sRGB hex <-> OKLCH. The project rule is OKLCH everywhere, but the browser's native colour picker only speaks hex,
 // so picked colours are converted on the way in. Matrices are Bjorn Ottosson's OKLab reference.
 
