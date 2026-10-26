@@ -11,6 +11,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { findBrowser } from './headless.mjs';
+import { PRUNE_SCRIPT, PRUNE_LIMITS, formatReport } from './cssreport.mjs';
 
 export const LIMITS = { maxNodes: 3000, maxHtmlBytes: 1_500_000, maxHeight: 12_000, navTimeoutMs: 25_000 };
 
@@ -267,7 +268,7 @@ let busy = false; // one capture at a time: each one is a whole browser process
 
 // Load `rawUrl` at `width` px and return { title, finalUrl, width, height, html, nodes, truncated, screenshot: Buffer, mime }.
 // Every request the page makes (including redirects and images) is checked against the same public-host rule.
-export async function captureUrl(rawUrl, { width = 1280, allowPrivate = false, browser = findBrowser(), timeoutMs = LIMITS.navTimeoutMs, lookup } = {}) {
+export async function captureUrl(rawUrl, { width = 1280, allowPrivate = false, browser = findBrowser(), timeoutMs = LIMITS.navTimeoutMs, lookup, pruneCss = false } = {}) {
   if (process.env.DC_HEADLESS === '0') throw new Error('Headless browser is disabled (DC_HEADLESS=0)');
   if (!browser) throw new Error('No Chrome or Edge found (set DC_BROWSER to its path)');
   const target = await checkTarget(rawUrl, { allowPrivate, lookup });
@@ -319,6 +320,16 @@ export async function captureUrl(rawUrl, { width = 1280, allowPrivate = false, b
     // Re-check where we ended up: a redirect to a private host would have been blocked above, but say so clearly.
     if (!allowPrivate) await assertPublicHost(new URL(result.finalUrl).hostname, lookup);
 
+    // Optional CSS report (never touches the markup). The in-page scan has its own 5 s deadline; the race is a
+    // second guard for a page that hangs the evaluate itself. Any failure just skips the report.
+    let cssReport;
+    if (pruneCss) {
+      try {
+        const raw = await Promise.race([evalJs(PRUNE_SCRIPT()), sleep(PRUNE_LIMITS.serverMs).then(() => { throw new Error('timed out'); })]);
+        cssReport = formatReport(raw);
+      } catch (e) { cssReport = { skipped: `CSS scan failed: ${e.message}` }; }
+    }
+
     const shot = async (format) => {
       const clip = { x: 0, y: 0, width: result.width, height: result.height, scale: 1 };
       const { data } = await cdp.send('Page.captureScreenshot', { format, ...(format === 'jpeg' ? { quality: 85 } : {}), captureBeyondViewport: true, clip });
@@ -326,7 +337,7 @@ export async function captureUrl(rawUrl, { width = 1280, allowPrivate = false, b
     };
     let screenshot = await shot('png'), mime = 'image/png';
     if (screenshot.length > 8_000_000) { screenshot = await shot('jpeg'); mime = 'image/jpeg'; } // addReference caps images at 10 MB
-    return { ...result, screenshot, mime };
+    return { ...result, screenshot, mime, ...(cssReport && { cssReport }) };
   } finally {
     cdp?.close();
     if (proc) stopBrowser(proc);
