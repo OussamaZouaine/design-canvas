@@ -17,5 +17,7 @@ Formats checked against vendor docs on 2026-10-26:
 | Gemini CLI | `gemini mcp add --transport http <name> <url>` (project scope by default) | `~/.gemini/settings.json` `mcpServers.x.httpUrl` | geminicli.com/docs/tools/mcp-server |
 | Antigravity | none | `~/.gemini/config/mcp_config.json` `mcpServers.x.serverUrl` | antigravity.google/docs/mcp |
 
+Icons: brand SVGs from svgl.app (api.svgl.app?search=<name>) in `web/src/assets/agents`, wired in `ConnectAgentsDialog.tsx` (`ICONS`; dark file swapped via the dark variant).
+
 Not doc-confirmed (extrapolated from the stdio example, flagged for a real-world check): the `code --add-mcp` HTTP JSON form.
 GitHub Copilot has no separate entry: Copilot in VS Code uses the VS Code config; Copilot CLI was not verified, so it is left out.
