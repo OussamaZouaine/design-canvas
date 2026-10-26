@@ -8,8 +8,8 @@ use the proxy port 5173), `location.origin` otherwise.
 Formats checked against vendor docs on 2026-10-26:
 | Agent | Command | File / format | Source |
 |---|---|---|---|
-| Claude Code | `claude mcp add --transport http --scope user` | `.mcp.json` `type: http` | existing `src/setup.mjs` |
-| Claude Desktop | `node scripts/setup-mcp.mjs --apply --target desktop` | stdio shim in `claude_desktop_config.json` | `scripts/setup-mcp.mjs` |
+| Claude (Code + Desktop, one entry) | `claude mcp add --transport http --scope user` | `.mcp.json` `type: http` | existing `src/setup.mjs` |
+| | `node scripts/setup-mcp.mjs --apply --target desktop` | stdio shim in `claude_desktop_config.json` | `scripts/setup-mcp.mjs` |
 | Codex | `codex mcp add <name> --url <url>` | `~/.codex/config.toml` `[mcp_servers.x] url` | learn.chatgpt.com/docs/extend/mcp (old developers.openai.com/codex/mcp redirects) |
 | Cursor | deeplink `cursor://anysphere.cursor-deeplink/mcp/install?name=&config=<base64 of {url}>` | `~/.cursor/mcp.json` `mcpServers.x.url` | cursor.com/docs/context/mcp (+ /install-links) |
 | OpenCode | none | `opencode.json` `mcp.x {type: remote, url, enabled}` | opencode.ai/docs/mcp-servers |
