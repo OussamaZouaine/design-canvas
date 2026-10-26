@@ -52,6 +52,7 @@ theme-switch transition suppression, and fixes for press/hover motion that never
 
 ## Connect agents dialog (2026-10-26)
 Paper-style "Connect your agent" dialog: left agent list, steps (start / connect with copy or deeplink / first prompt), "Or, install manually". Buttons: canvas header (Plug icon) and home sidebar. All configs doc-verified, see `docs/notes/connect-agents.md`. Checked in the browser at desktop and 375px. Not tried with the real agents; Copilot CLI left out (unverified).
+README (2026-10-26): added "Connect your agent" (per-agent snippets copied from `web/src/lib/agents.ts`; when that file changes, update the README section too), feature overview, first prompts and an MCP tools table.
 
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
