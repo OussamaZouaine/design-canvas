@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, ChevronRight, Copy, ExternalLink } from 'lucide-react';
+import { ChevronRight, Copy, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { agentList, EXAMPLE_PROMPTS, type Snippet } from '@/lib/agents';
@@ -29,12 +29,11 @@ function CopyLine({ text, what, className }: { text: string; what: string; class
   );
 }
 
-// Numbered step with the Paper-style check: all three are "done" in the sense that the page you are looking at is
-// proof step 1 happened, and the others are instructions, so the check marks the step as ready to follow.
-function Step({ title, children }: { title: string; children: React.ReactNode }) {
+// Numbered step. Not a check mark: a check would claim the agent is already connected, which the canvas cannot know yet.
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <section className="grid grid-cols-[1.25rem_1fr] gap-x-3">
-      <span aria-hidden className="mt-0.5 grid size-5 place-items-center rounded-full bg-selection text-white"><Check className="size-3" strokeWidth={3} /></span>
+      <span aria-hidden className="tnum mt-0.5 grid size-5 place-items-center rounded-full bg-field text-[11px] font-semibold">{n}</span>
       <h3 className="text-[13px] font-semibold">{title}</h3>
       <div className="col-start-2 mt-2 grid gap-2">{children}</div>
     </section>
@@ -80,11 +79,11 @@ export function ConnectAgentsDialog() {
           </div>
 
           <div role="tabpanel" className="grid content-start gap-5 overflow-y-auto p-5">
-            <Step title="Start the canvas">
+            <Step n={1} title="Start the canvas">
               <p className="text-muted-foreground">You are looking at it, so this one is done. If it ever stops, run <code className="rounded bg-field px-1">pnpm start</code> in the design-canvas folder.</p>
             </Step>
 
-            <Step title={`Connect to ${agent.label}`}>
+            <Step n={2} title={`Connect to ${agent.label}`}>
               {agent.link && (
                 <a
                   href={agent.link.href}
@@ -113,7 +112,7 @@ export function ConnectAgentsDialog() {
               </ul>
             </Step>
 
-            <Step title="Run your first prompt">
+            <Step n={3} title="Run your first prompt">
               <p className="text-muted-foreground">Paste one of these into {agent.label} to test the connection:</p>
               {EXAMPLE_PROMPTS.map((p) => (
                 <button
