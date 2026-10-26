@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Clock, MessageSquare, Moon, Search, Sun, Trash2, Upload } from 'lucide-react';
+import { Clock, MessageSquare, Moon, Plug, Search, Sun, Trash2, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Connection } from '@/hooks/useLiveReload';
 import { ConnectionPill } from '@/ui/AppHeader';
@@ -16,6 +16,7 @@ interface Props {
   openComments: number;
   connection: Connection;
   onImport: () => void;
+  onConnect: () => void;
 }
 
 // Shared look for every nav row. Hover colour is gated to real pointers so touch screens do not keep it stuck.
@@ -33,7 +34,7 @@ function NavRow({ icon, active, count, children, ...rest }: { icon: ReactNode; a
 
 // Paper-style left rail: workspace row, search, navigation, and a footer for the small status controls. The
 // project-list filters (search, Recents vs Trash) live here; the page body only shows the result.
-export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, trashCount, openComments, connection, onImport }: Props) {
+export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, trashCount, openComments, connection, onImport, onConnect }: Props) {
   const { theme, toggleTheme } = useUi();
   return (
     <aside className="flex shrink-0 flex-col border-b bg-background md:h-full md:w-60 md:border-r md:border-b-0">
@@ -66,6 +67,7 @@ export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, tra
           {openComments > 0 && <span className="tnum rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{openComments}</span>}
         </Link>
         <NavRow icon={<Upload />} title="Import a .dcproject.json file" onClick={onImport}>Import project</NavRow>
+        <NavRow icon={<Plug />} title="Connect Claude, Codex, Cursor and other agents" onClick={onConnect}>Connect agents</NavRow>
       </nav>
 
       <div className="mt-auto hidden items-center gap-2 px-4 py-3 md:flex">

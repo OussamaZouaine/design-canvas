@@ -141,6 +141,7 @@ export function TopBar({ projectId }: { projectId: string }) {
         <Divider />
         <ZoomControls />
         <Divider />
+        <Button variant="ghost" size="icon" aria-label="Connect agents" title="Connect agents" onClick={() => useUi.getState().setConnectOpen(true)}><Plug /></Button>
         <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard /></Button>
         <Button variant="ghost" size="icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
         <Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" title="Inspector" onClick={togglePanel}><PanelRight /></Button>
