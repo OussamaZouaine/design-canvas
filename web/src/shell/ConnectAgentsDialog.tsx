@@ -1,15 +1,46 @@
 import { useState } from 'react';
-import { ChevronRight, Copy, ExternalLink } from 'lucide-react';
+import { ChevronRight, Copy, ExternalLink, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { agentList, EXAMPLE_PROMPTS, type Snippet } from '@/lib/agents';
 import { cn } from '@/lib/utils';
+import claude from '@/assets/agents/claude.svg';
+import codex from '@/assets/agents/codex.svg';
+import codexDark from '@/assets/agents/codex-dark.svg';
+import cursor from '@/assets/agents/cursor.svg';
+import cursorDark from '@/assets/agents/cursor-dark.svg';
+import opencode from '@/assets/agents/opencode.svg';
+import opencodeDark from '@/assets/agents/opencode-dark.svg';
+import vscode from '@/assets/agents/vscode.svg';
+import gemini from '@/assets/agents/gemini.svg';
+import antigravity from '@/assets/agents/antigravity.svg';
 import { toast } from '@/store/toast';
 import { useUi } from '@/store/ui';
 
 // The address an agent must use. In Vite dev the page is on 5173 (which proxies /mcp), but an agent outside the
 // browser has to talk to the real server on 3777; in production the page and the server share one origin.
 const serverOrigin = () => (import.meta.env.DEV ? 'http://localhost:3777' : location.origin);
+
+// Brand marks from svgl.app (files in src/assets/agents). Marks that are monochrome ship a light and a dark file; the
+// app's dark theme is a class on the root element, so the dark file is swapped in with the dark: variant.
+const ICONS: Record<string, { light: string; dark?: string }> = {
+  'claude-code': { light: claude }, 'claude-desktop': { light: claude },
+  codex: { light: codex, dark: codexDark }, cursor: { light: cursor, dark: cursorDark },
+  opencode: { light: opencode, dark: opencodeDark }, vscode: { light: vscode },
+  'gemini-cli': { light: gemini }, antigravity: { light: antigravity },
+};
+
+// Decorative (the label sits next to it). "Other agents" has no brand, so it gets a generic plug.
+function AgentIcon({ id }: { id: string }) {
+  const i = ICONS[id];
+  if (!i) return <Plug aria-hidden className="size-4 shrink-0" />;
+  return (
+    <>
+      <img src={i.light} alt="" className={cn('size-4 shrink-0', i.dark && 'dark:hidden')} />
+      {i.dark && <img src={i.dark} alt="" className="hidden size-4 shrink-0 dark:block" />}
+    </>
+  );
+}
 
 // Clipboard can be blocked (permissions, insecure context), so failure tells the user to select the text instead.
 async function copy(text: string, what: string) {
@@ -71,10 +102,10 @@ export function ConnectAgentsDialog() {
                 key={a.id} type="button" role="tab" aria-selected={a.id === agent.id}
                 onClick={() => { setId(a.id); setManualOpen(false); }}
                 className={cn(
-                  'h-8 shrink-0 rounded-md px-2.5 text-left text-[13px] whitespace-nowrap text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:bg-foreground/6 pointer-hover:text-foreground',
+                  'flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] whitespace-nowrap text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:bg-foreground/6 pointer-hover:text-foreground',
                   a.id === agent.id && 'bg-field text-foreground',
                 )}
-              >{a.label}</button>
+              ><AgentIcon id={a.id} />{a.label}</button>
             ))}
           </div>
 
