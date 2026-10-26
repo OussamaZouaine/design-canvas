@@ -31,6 +31,7 @@ import { clampStatus,pendingFeedback, formatFeedback, markDelivered, STATUS_MAX 
 // Optional on the hot tools (no new tool): shown beside the agent's name in the Agents tab, cleared by finish_working.
 const STATUS_FIELD = z.string().max(STATUS_MAX * 2).optional().describe(`One present-tense line (max ${STATUS_MAX} chars) on what you are doing now, e.g. "Building the pricing section". Once per phase, not per call.`);
 import { extractSvg, MAX_SVG_BYTES } from './svg.mjs';
+import { formatResults, splitId } from './assets.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -59,7 +60,7 @@ const safe = (fn) => async (args) => {
 const pid = { project_id: z.string().optional().describe('Default: the project this session opened') };
 const KEEP_PID = new Set(['project']);
 
-export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims() }) {
+export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims() }) {
   const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
   // clientInfo arrives once, on `initialize`: that is where the agent's name comes from.
   server.server.oninitialized = () => session.setClient(server.server.getClientVersion());
@@ -872,6 +873,33 @@ export function createMcpServer({ store, ui, fonts, requestScreenshot, requestMe
     description: 'Check an artboard or node (var(--token) values are resolved; mode checks a token mode) for undefined tokens, text contrast below WCAG AA, text under 12px, spacing off the grid (4px by default, grid 2 for designs that use half-steps), fixed widths wider than the artboard, off-artboard absolute offsets, images without alt and lorem ipsum. Returns one line per issue, or "clean". Cheap: run it before get_screenshot. It reads inline styles only: for overflow and clipping use check_layout.',
     inputSchema: { ...pid, id: z.string().describe('Artboard id (A#) or node id (N#)'), grid: z.union([z.literal(2), z.literal(4)]).optional().describe('Spacing grid in px (default 4).'), mode: z.string().optional().describe('Token mode to check, e.g. dark (default: base tokens).') },
   }, safe(({ project_id, id, grid, mode }) => text(formatIssues(target(project_id).doc.lint(id, { grid, mode })))));
+
+  // ---- assets (icons + brand logos from Iconify) --------------------------------------
+  // One action tool: searches return ready-to-paste inline <svg> for the top few hits; insert places one via the
+  // import_svg path so it gets ids and a fit-height board grows around it. Stock photos are out of scope (API keys).
+  server.registerTool('assets', {
+    description: 'Real icons and brand logos instead of placeholder boxes. action icons (query, set default lucide; others: tabler, phosphor, heroicons...): UI icons. action logos (query = brand name or domain, e.g. "stripe" or "github.com"): brand marks from simple-icons (mono) and logos (full colour). Both return ids ("lucide:arrow-right") plus inline <svg> for the first few (size px, color oklch / currentColor / var(--x); hex is converted). action insert (id, target_id, optional size, color, mode, name): place one on the board as an editable node. Needs internet the first time; results are cached on disk. No stock photos.',
+    inputSchema: {
+      ...pid,
+      action: z.enum(['icons', 'logos', 'insert']),
+      query: z.string().optional(), set: z.string().optional(), limit: z.number().int().min(1).max(24).optional(),
+      size: z.number().int().min(8).max(512).optional(), color: z.string().optional(),
+      id: z.string().optional().describe('prefix:name, e.g. lucide:home (insert)'), target_id: z.string().optional(),
+      mode: z.enum(['replace', 'append', 'prepend', 'before', 'after']).optional(), name: z.string().optional(),
+    },
+  }, safe(async ({ project_id, action, query, set, limit, size, color, id, target_id, mode, name }) => {
+    if (!assets) throw new Error('assets: not available on this server');
+    if (action === 'insert') {
+      need('assets', action, { id, target_id }, 'id', 'target_id');
+      const { prefix, name: icon } = splitId(id);
+      const svg = await assets.getSvg(prefix, icon, { size, color });
+      return text(await edits.import_svg({ project_id, target_id, svg, mode, name: name ?? icon }));
+    }
+    need('assets', action, { query }, 'query');
+    const found = action === 'icons' ? await assets.searchIcons(query, { set, limit, size, color }) : await assets.searchLogos(query, { limit, size, color });
+    if (!found.length) return text(`No ${action} found for "${query}". Try a simpler or more generic word.`);
+    return text({ results: formatResults(found), note: 'Paste svg as is (colours follow CSS color via currentColor; logos keep brand colours). Use insert for ids without svg.' });
+  }));
 
   // ---- fonts -------------------------------------------------------------
   server.registerTool('list_fonts', {
