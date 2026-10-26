@@ -133,8 +133,12 @@ Or edit `claude_desktop_config.json` (Settings > Developer > Edit config) by han
   "mcpServers": {
     "design-canvas": {
       "command": "node",
-      "args": ["<design-canvas folder>/scripts/mcp-stdio.mjs"],
-      "env": { "DESIGN_CANVAS_URL": "http://localhost:3777/mcp?agent=claude" }
+      "args": [
+        "<design-canvas folder>/scripts/mcp-stdio.mjs"
+      ],
+      "env": {
+        "DESIGN_CANVAS_URL": "http://localhost:3777/mcp?agent=claude"
+      }
     }
   }
 }
@@ -238,12 +242,19 @@ A client that can only launch commands (stdio) uses the bundled shim:
   "mcpServers": {
     "design-canvas": {
       "command": "node",
-      "args": ["<design-canvas folder>/scripts/mcp-stdio.mjs"],
-      "env": { "DESIGN_CANVAS_URL": "http://localhost:3777/mcp?agent=other" }
+      "args": [
+        "<design-canvas folder>/scripts/mcp-stdio.mjs"
+      ],
+      "env": {
+        "DESIGN_CANVAS_URL": "http://localhost:3777/mcp?agent=other"
+      }
     }
   }
 }
 ```
+
+### Claude Code plugin
+The repo is also a Claude Code plugin (`.claude-plugin/`, `skills/design-canvas/`, `.mcp.json`): it adds a short skill that points the agent at `get_guide` and registers the same endpoint (without `?agent=`). The server must still be running.
 
 ### If the connection fails
 | Symptom | Check |

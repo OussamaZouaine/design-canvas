@@ -56,3 +56,14 @@ test('cursor deeplink round-trips to {url}; vscode link to the full entry', () =
 });
 
 test('three example prompts', () => assert.equal(EXAMPLE_PROMPTS.length, 3));
+
+// The README's "Connect your agent" section repeats the dialog's commands and snippets. Fail here when one side
+// changes so the docs cannot drift from web/src/lib/agents.ts (the source of truth).
+test('README contains every command and manual snippet from agentList', async () => {
+  const { readFileSync } = await import('node:fs');
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  for (const a of agentList(BASE)) {
+    for (const c of a.commands ?? []) assert.ok(readme.includes(c.text), `${a.id}: command missing from README`);
+    for (const s of a.manual) assert.ok(readme.includes(s.text), `${a.id}: "${s.file}" snippet missing from README`);
+  }
+});
