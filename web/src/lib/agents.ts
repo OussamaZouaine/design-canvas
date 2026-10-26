@@ -16,8 +16,8 @@ export type Snippet = {
 export type AgentConfig = {
   id: string;
   label: string;
-  /** One-line command that registers the server (the "one-click" step in the dialog). */
-  command?: { text: string; hint?: string };
+  /** One-line commands that register the server (the "one-click" step in the dialog); several when one brand has several apps. */
+  commands?: { label?: string; text: string; hint?: string }[];
   /** A deeplink the OS hands to the app (Cursor, VS Code); rendered as a button. */
   link?: { label: string; href: string };
   /** The "Or, install manually" part. */
@@ -75,29 +75,24 @@ export function agentList(base: string): AgentConfig[] {
 
   return [
     {
-      id: 'claude-code',
-      label: 'Claude Code',
-      command: { text: `claude mcp add --transport http --scope user ${SERVER_NAME} ${u('claude-code')}` },
-      manual: [
-        { file: 'Run in a terminal (same as above, project scope instead of user scope)', lang: 'text', text: `claude mcp add --transport http --scope project ${SERVER_NAME} ${u('claude-code')}` },
-        { file: '.mcp.json (project root)', lang: 'json', text: json({ mcpServers: { [SERVER_NAME]: { type: 'http', url: u('claude-code') } } }) },
+      id: 'claude',
+      label: 'Claude',
+      // One entry for both apps (like Paper): Code speaks HTTP directly, Desktop only launches stdio servers,
+      // so its command registers our stdio shim (scripts/mcp-stdio.mjs).
+      commands: [
+        { label: 'Claude Code', text: `claude mcp add --transport http --scope user ${SERVER_NAME} ${u('claude')}` },
+        { label: 'Claude Desktop', text: `node scripts/setup-mcp.mjs --apply --target desktop${port === '3777' ? '' : ` --port ${port}`}`, hint: 'Run it inside the design-canvas folder, then quit and reopen Claude Desktop.' },
       ],
-      notes: [RESTART],
-    },
-    {
-      id: 'claude-desktop',
-      label: 'Claude Desktop',
-      // Desktop only launches stdio servers, so the script registers our stdio shim (scripts/mcp-stdio.mjs).
-      command: { text: `node scripts/setup-mcp.mjs --apply --target desktop${port === '3777' ? '' : ` --port ${port}`}`, hint: 'Run it inside the design-canvas folder.' },
       manual: [
-        { file: 'claude_desktop_config.json (Settings > Developer > Edit config)', lang: 'json', text: json({ mcpServers: { [SERVER_NAME]: shimEntry(u('claude-desktop')) } }) },
+        { file: 'Claude Code: .mcp.json (project root)', lang: 'json', text: json({ mcpServers: { [SERVER_NAME]: { type: 'http', url: u('claude') } } }) },
+        { file: 'Claude Desktop: claude_desktop_config.json (Settings > Developer > Edit config)', lang: 'json', text: json({ mcpServers: { [SERVER_NAME]: shimEntry(u('claude')) } }) },
       ],
-      notes: ['Claude Desktop cannot call an HTTP server directly, so it runs a small stdio shim that forwards to the canvas.', 'Quit Claude Desktop completely and reopen it.'],
+      notes: ['Claude Desktop cannot call an HTTP server directly, so it runs a small stdio shim that forwards to the canvas.', RESTART],
     },
     {
       id: 'codex',
       label: 'Codex',
-      command: { text: `codex mcp add ${SERVER_NAME} --url ${u('codex')}` },
+      commands: [{ text: `codex mcp add ${SERVER_NAME} --url ${u('codex')}` }],
       manual: [
         { file: '~/.codex/config.toml (or .codex/config.toml in a trusted project)', lang: 'toml', text: `[mcp_servers.${SERVER_NAME}]\nurl = "${u('codex')}"` },
       ],
@@ -124,7 +119,7 @@ export function agentList(base: string): AgentConfig[] {
       id: 'vscode',
       label: 'VS Code / Copilot',
       link: { label: 'Install in VS Code', href: vscodeInstallLink(u('vscode')) },
-      command: { text: `code --add-mcp '${JSON.stringify({ name: SERVER_NAME, type: 'http', url: u('vscode') })}'`, hint: 'Bash / zsh quoting; adds it to your user profile.' },
+      commands: [{ text: `code --add-mcp '${JSON.stringify({ name: SERVER_NAME, type: 'http', url: u('vscode') })}'`, hint: 'Bash / zsh quoting; adds it to your user profile.' }],
       manual: [
         { file: '.vscode/mcp.json (workspace) or your user-profile mcp.json', lang: 'json', text: json({ servers: { [SERVER_NAME]: { type: 'http', url: u('vscode') } } }) },
       ],
@@ -133,7 +128,7 @@ export function agentList(base: string): AgentConfig[] {
     {
       id: 'gemini-cli',
       label: 'Gemini CLI',
-      command: { text: `gemini mcp add --transport http ${SERVER_NAME} ${u('gemini-cli')}`, hint: 'Saved for the current project; use the file below for all projects.' },
+      commands: [{ text: `gemini mcp add --transport http ${SERVER_NAME} ${u('gemini-cli')}`, hint: 'Saved for the current project; use the file below for all projects.' }],
       manual: [
         { file: '~/.gemini/settings.json (all projects) or .gemini/settings.json', lang: 'json', text: json({ mcpServers: { [SERVER_NAME]: { httpUrl: u('gemini-cli') } } }) },
       ],

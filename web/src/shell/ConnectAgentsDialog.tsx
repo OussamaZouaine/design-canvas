@@ -24,7 +24,7 @@ const serverOrigin = () => (import.meta.env.DEV ? 'http://localhost:3777' : loca
 // Brand marks from svgl.app (files in src/assets/agents). Marks that are monochrome ship a light and a dark file; the
 // app's dark theme is a class on the root element, so the dark file is swapped in with the dark: variant.
 const ICONS: Record<string, { light: string; dark?: string }> = {
-  'claude-code': { light: claude }, 'claude-desktop': { light: claude },
+  claude: { light: claude },
   codex: { light: codex, dark: codexDark }, cursor: { light: cursor, dark: cursorDark },
   opencode: { light: opencode, dark: opencodeDark }, vscode: { light: vscode },
   'gemini-cli': { light: gemini }, antigravity: { light: antigravity },
@@ -85,7 +85,7 @@ function SnippetBlock({ s }: { s: Snippet }) {
 export function ConnectAgentsDialog() {
   const open = useUi((s) => s.connectOpen);
   const set = useUi((s) => s.setConnectOpen);
-  const [id, setId] = useState('claude-code');
+  const [id, setId] = useState('claude');
   const [manualOpen, setManualOpen] = useState(false);
   const agents = agentList(serverOrigin());
   const agent = agents.find((a) => a.id === id) ?? agents[0];
@@ -121,12 +121,13 @@ export function ConnectAgentsDialog() {
                   className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg bg-selection px-3 text-[13px] font-medium text-white outline-none transition-[opacity,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:opacity-90"
                 ><ExternalLink className="size-3.5" />{agent.link.label}</a>
               )}
-              {agent.command && (
-                <div className="grid gap-1">
-                  <CopyLine text={agent.command.text} what="command" />
-                  {agent.command.hint && <span className="text-[11px] text-muted-foreground">{agent.command.hint}</span>}
+              {agent.commands?.map((c) => (
+                <div key={c.text} className="grid gap-1">
+                  {c.label && <span className="text-[11px] font-medium text-muted-foreground">{c.label}</span>}
+                  <CopyLine text={c.text} what="command" />
+                  {c.hint && <span className="text-[11px] text-muted-foreground">{c.hint}</span>}
                 </div>
-              )}
+              ))}
               <div className="rounded-lg border">
                 <button
                   type="button" aria-expanded={manualOpen} onClick={() => setManualOpen(!manualOpen)}

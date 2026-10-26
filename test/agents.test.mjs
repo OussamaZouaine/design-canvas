@@ -28,19 +28,19 @@ test('JSON snippets parse and use each vendor key', () => {
   assert.equal(parse('opencode').mcp['design-canvas'].type, 'remote');
   assert.equal(parse('gemini-cli').mcpServers['design-canvas'].httpUrl, `${BASE}/mcp?agent=gemini-cli`);
   assert.equal(parse('antigravity').mcpServers['design-canvas'].serverUrl, `${BASE}/mcp?agent=antigravity`);
-  assert.equal(parse('claude-desktop').mcpServers['design-canvas'].env.DESIGN_CANVAS_URL, `${BASE}/mcp?agent=claude-desktop`);
+  assert.equal(parse('claude', 1).mcpServers['design-canvas'].env.DESIGN_CANVAS_URL, `${BASE}/mcp?agent=claude`);
 });
 
 test('codex toml and commands', () => {
   const codex = agentList(BASE).find((a) => a.id === 'codex');
   assert.match(codex.manual[0].text, /^\[mcp_servers\.design-canvas\]\nurl = "http:\/\/localhost:3777\/mcp\?agent=codex"$/);
-  assert.equal(codex.command.text, `codex mcp add design-canvas --url ${BASE}/mcp?agent=codex`);
-  const cc = agentList(BASE).find((a) => a.id === 'claude-code');
-  assert.match(cc.command.text, /^claude mcp add --transport http --scope user design-canvas /);
+  assert.equal(codex.commands[0].text, `codex mcp add design-canvas --url ${BASE}/mcp?agent=codex`);
+  const cc = agentList(BASE).find((a) => a.id === 'claude');
+  assert.match(cc.commands[0].text, /^claude mcp add --transport http --scope user design-canvas /);
 });
 
 test('desktop command carries a non-default port', () => {
-  const d = (b) => agentList(b).find((a) => a.id === 'claude-desktop').command.text;
+  const d = (b) => agentList(b).find((a) => a.id === 'claude').commands[1].text;
   assert.equal(d(BASE), 'node scripts/setup-mcp.mjs --apply --target desktop');
   assert.match(d('http://localhost:4000'), /--port 4000$/);
 });
