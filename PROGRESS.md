@@ -50,6 +50,9 @@ takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet 
 Graphite tinted tokens, translucent grouped toolbar, one-row icon tabs, grouped top bar, filled fields, inset list rows,
 theme-switch transition suppression, and fixes for press/hover motion that never animated (v4 `scale`/`translate`). Details: `docs/notes/ui-system.md`.
 
+## Connect agents dialog (2026-10-26)
+Paper-style "Connect your agent" dialog: left agent list, steps (start / connect with copy or deeplink / first prompt), "Or, install manually". Buttons: canvas header (Plug icon) and home sidebar. All configs doc-verified, see `docs/notes/connect-agents.md`. Checked in the browser at desktop and 375px. Not tried with the real agents; Copilot CLI left out (unverified).
+
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not

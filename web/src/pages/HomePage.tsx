@@ -9,6 +9,8 @@ import { createProject, importProject, listAllComments, listProjects, projectAct
 import { useLiveReload } from '@/hooks/useLiveReload';
 import { toast } from '@/store/toast';
 import { cn } from '@/lib/utils';
+import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
+import { useUi } from '@/store/ui';
 import { HomeSidebar } from './home/HomeSidebar';
 import { ProjectCard, type CardActions, type View } from './home/ProjectCard';
 
@@ -104,6 +106,7 @@ export function HomePage() {
         openComments={openComments}
         connection={connection}
         onImport={() => fileRef.current?.click()}
+        onConnect={() => useUi.getState().setConnectOpen(true)}
       />
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
 
@@ -145,6 +148,7 @@ export function HomePage() {
         </div>
       </main>
 
+      <ConnectAgentsDialog />
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
     </div>
   );
