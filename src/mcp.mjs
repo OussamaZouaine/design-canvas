@@ -786,17 +786,18 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       name: z.string().max(80).optional().describe('Artboard name (default: the page title).'),
       page_id: z.string().optional(),
       allow_private: z.boolean().optional().describe('Allow localhost / private network addresses. Only when the user clearly means a local page.'),
+      prune_css: z.boolean().optional().describe('Also return css_report: the page\'s own CSS reduced to rules that match its DOM (breakpoints, hover / focus rules, custom properties, used fonts, keyframes). A reference to read; the board markup does not change. Default false.'),
     },
-  }, safe(async ({ project_id, url: pageUrl, width, name, page_id, allow_private }) => {
+  }, safe(async ({ project_id, url: pageUrl, width, name, page_id, allow_private, prune_css }) => {
     const { meta, doc } = target(project_id);
-    const cap = await captureUrl(pageUrl, { width, allowPrivate: allow_private });
+    const cap = await captureUrl(pageUrl, { width, allowPrivate: allow_private, pruneCss: prune_css });
     const page = page_id ?? ui.currentPage.get(meta.id);
     const ab = doc.createArtboard({ name: (name || cap.title || 'Captured page').slice(0, 80), width: cap.width, height: Math.max(40, cap.height), heightMode: 'fit', page });
     // normalize:false -> the copy is written as captured; the sanitizer still runs on it.
     doc.writeHtml(ab.id, cap.html, 'replace', { normalize: false });
     const { ref, board } = store.addReference(meta.id, { name: `${ab.name} (screenshot)`.slice(0, 80), buffer: cap.screenshot, page });
     log(meta, doc, 'capture_url', ab.id, cap.finalUrl);
-    return text({ artboard_id: ab.id, reference_id: ref.id, reference_artboard_id: board.id, width: cap.width, height: cap.height, nodes: cap.nodes, url: cap.finalUrl, ...(cap.truncated && { warning: 'The page was larger than the capture limits, so the copy is cut off.' }) });
+    return text({ artboard_id: ab.id, reference_id: ref.id, reference_artboard_id: board.id, width: cap.width, height: cap.height, nodes: cap.nodes, url: cap.finalUrl, ...(cap.cssReport && { css_report: cap.cssReport }), ...(cap.truncated && { warning: 'The page was larger than the capture limits, so the copy is cut off.' }) });
   }));
 
   server.registerTool('compare_to_reference', {
