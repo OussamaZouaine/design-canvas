@@ -88,7 +88,9 @@ export function AgentsPanel() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{a.name}</span>
                   <small className="block truncate text-muted-foreground">
-                    {isPaused ? 'Paused: writes are refused' : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? (a.status ?? a.tool) : 'Idle'}
+                    {/* The agent's own status line wins over the claim line: a board claim lasts 60 s after every
+                        write, so ranking it first would hide the status for exactly the time it is most useful. */}
+                    {isPaused ? 'Paused: writes are refused' : a.active && a.status ? a.status : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? a.tool : 'Idle'}
                   </small>
                 </span>
                 <button
