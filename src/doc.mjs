@@ -727,6 +727,75 @@ export class Doc {
     return this._topLevelIds(prepared);
   }
 
+  // ---- Paste (clipboard) -----------------------------------------------------
+  // Every id (artboard and node) already in use, so pasted ids that were kept after a cut cannot collide.
+  _usedIds() {
+    const used = new Set(this.data.artboards.map((a) => a.id));
+    for (const a of this.data.artboards) for (const m of a.html.matchAll(/ data-pid="([^"]*)"/g)) used.add(m[1]);
+    return used;
+  }
+
+  // ids are `<letter><counter>`: after keeping foreign ones the counter must pass them or a later _newId would repeat one.
+  _bumpCounter(htmls, ids = []) {
+    const nums = [...ids, ...htmls.flatMap((h) => [...h.matchAll(/ data-pid="[A-Za-z]*(\d+)"/g)].map((m) => `x${m[1]}`))].map((id) => Number(String(id).replace(/^\D*/, '')) || 0);
+    this.data.counter = Math.max(this.data.counter, ...nums);
+  }
+
+  // True when none of the clip's ids exist here yet: a cut can then keep them (comments stay attached).
+  canKeepIds(items) {
+    const used = this._usedIds();
+    return items.every((i) => !(i.id && used.has(i.id)) && [...i.html.matchAll(/ data-pid="([^"]*)"/g)].every((m) => !used.has(m[1])));
+  }
+
+  // Add what a pasted design needs from its source project (see pastedeps.mjs). No checkpoint of its own: it runs right
+  // after the paste, whose snapshot already holds the old theme and components, so one undo reverts both.
+  adopt({ tokens = {}, modeTokens = {}, masters = {} } = {}) {
+    const next = structuredClone(this.data.theme ?? emptyTheme());
+    applyTokens(next, tokens);
+    for (const [mode, vals] of Object.entries(modeTokens)) applyTokens(next, vals, mode);
+    this.data.theme = next;
+    if (Object.keys(masters).length) this.data.components = { ...this.components, ...structuredClone(masters) };
+    this._refreshFoundations();
+    this._commit();
+  }
+
+  // Layers from the clipboard, as siblings of / children of `targetId`. With keepIds (a cut whose ids are free here)
+  // the original data-pid attributes stay, otherwise they are stripped so the copies get fresh ones.
+  pasteNodes(targetId, items, position, keepIds) {
+    const strip = (h) => (keepIds ? h : h.replace(/ data-pid="[^"]*"/g, ''));
+    const html = items.map((i) => strip(i.html)).join('');
+    if (keepIds) this._bumpCounter([html]);
+    return this.writeHtml(targetId, html, position === 'after' ? 'after' : 'append');
+  }
+
+  // Whole frames from the clipboard, one undo step. Each item carries its x/y (the client already resolved the spot).
+  // Returns the new artboard ids.
+  pasteBoards(items, { page, keepIds = false } = {}) {
+    const pageId = this._pageId(page); // validate before the checkpoint so a bad page leaves no undo entry
+    const prepared = items.map((i) => this._prepare(keepIds ? i.html : i.html.replace(/ data-pid="[^"]*"/g, '')));
+    this._checkpoint('paste_boards');
+    if (keepIds) this._bumpCounter(prepared.map(String), items.map((i) => i.id).filter(Boolean));
+    const out = [];
+    items.forEach((it, n) => {
+      const clash = this.data.artboards.some((a) => this.pageOf(a) === pageId && a.name === it.name);
+      const ab = {
+        id: keepIds && it.id ? it.id : this._newId('A'),
+        name: (it.name || 'Artboard') + (clash && !keepIds ? ' copy' : ''),
+        x: it.x ?? 0,
+        y: it.y ?? 0,
+        width: it.width,
+        height: it.height,
+        html: prepared[n].toString(),
+        ...(it.heightMode === 'fit' ? { heightMode: 'fit' } : {}),
+        ...(this.data.pages?.length ? { page: pageId } : {}),
+      };
+      this.data.artboards.push(ab);
+      out.push(ab.id);
+    });
+    this._commit();
+    return out;
+  }
+
   // Remove nodes without a checkpoint of their own (the caller already took one). Ids that are already gone
   // (the user deleted them mid-stream) are skipped rather than failing the run.
   _dropQuietly(ids) {

@@ -54,6 +54,9 @@ theme-switch transition suppression, and fixes for press/hover motion that never
 Paper-style "Connect your agent" dialog: left agent list, steps (start / connect with copy or deeplink / first prompt), "Or, install manually". Buttons: canvas header (Plug icon) and home sidebar. All configs doc-verified, see `docs/notes/connect-agents.md`. Checked in the browser at desktop and 375px. Not tried with the real agents; Copilot CLI left out (unverified).
 README (2026-10-26): added "Connect your agent" (per-agent snippets copied from `web/src/lib/agents.ts`; when that file changes, update the README section too), feature overview, first prompts and an MCP tools table.
 
+## Clipboard: frames, cut, cross page/project paste (2026-10-28, branch feat/clipboard)
+Copy / cut / paste now work for frames as well as layers, across pages, projects and tabs (see CLAUDE.md "Clipboard"). Cut keeps ids so comments stay attached on a move within a project. Cross-project paste brings missing tokens, fonts and component masters. Context menu has Cut and Paste in place; hints show the Mac keys. Checked in the browser: frame copy to another project, cut to another page. Not done: reference images used by a pasted layer still point at the source project, no MCP tool for cross-project copy, comments do not move across projects, paste in place and the multi-tab sync were only unit-tested.
+
 ## Known issues / caveats
 - Rebuilding Sprig sheets recreates artboards with new ids, which orphans comments pinned to them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not

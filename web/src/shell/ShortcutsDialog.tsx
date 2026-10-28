@@ -17,7 +17,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   ] },
   { title: 'Structure', rows: [
     ['Ctrl+G', 'Group the selection'], ['Ctrl+Shift+G or Ctrl+Alt+G', 'Ungroup'], ['Shift+A', 'Add auto layout (wrap in a flex container)'],
-    ['Ctrl+D', 'Duplicate'], ['Ctrl+C / Ctrl+X / Ctrl+V', 'Copy / cut / paste'], ['Delete', 'Delete'], ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / redo'],
+    ['Ctrl+D', 'Duplicate'], ['Ctrl+C / Ctrl+X / Ctrl+V', 'Copy / cut / paste layers or frames (also across pages and projects)'], ['Ctrl+Shift+V', 'Paste in place'], ['Cmd on Mac', 'Use Cmd wherever Ctrl is listed'], ['Delete', 'Delete'], ['Ctrl+Z / Ctrl+Shift+Z', 'Undo / redo'],
   ] },
   { title: 'Tools and view', rows: [
     ['V H F R O L P T I C', 'Move, Hand, Frame, Rectangle, Ellipse, Line, Pen, Text, Image, Comment'], ['Space+drag', 'Pan'], ['Shift+R', 'Rulers'], ['?', 'This list'],

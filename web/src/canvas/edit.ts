@@ -6,6 +6,9 @@
 import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
 import { toast } from '@/store/toast';
+import { useClipboard } from '@/store/clipboard';
+import { modLabel } from '@/lib/platform';
+import { buildPayload, pasteTarget, placeBoards, type ClipItem } from './clipboard';
 import type { PathModel } from './path';
 import { pathHtml, shapeHtml, type ShapeBox, type ShapeKind } from './shapes';
 import { siblingStep, soleDescent } from './selection';
@@ -35,6 +38,7 @@ export interface EditHost {
   redraw: () => void;                          // reposition selection / hover boxes
   markUserEdit: () => void;
   activePage: () => string | null;
+  centerBoard: () => string | null;            // the board under the viewport centre (else the nearest one on this page): where a paste with no selection lands
   selBox: HTMLElement;
   overlay: HTMLElement;                        // screen-px layer for the drag ghost and insertion line
   // Live nodes under a screen point, deepest first, plus the board there and its root wrapper (null over bare canvas
@@ -58,8 +62,9 @@ const fail = (err: unknown, fallback: string) => toast((err as Error)?.message |
 
 export class CanvasEditor {
   private handles = new Map<Dir, HTMLElement>();
-  private nodeClip: string | null = null; // HTML of the node last copied with Ctrl+C
   private pasteSeen = false;
+  private pasteInPlace = false;                // Ctrl+Shift+V: keep absolute positions and frame x/y
+  private clipText = '';                       // what copy() wrote to the system clipboard, to tell our paste from a foreign one
   private guides: Guides;                      // smart guides + distance pills drawn in the overlay
   private measuring = false;                   // Alt-hover measure is showing, so it must be cleared later
   private nudgePending = new Map<string, { l: number; t: number }>(); // absolute target left/top of a nudge burst
@@ -578,7 +583,7 @@ export class CanvasEditor {
     const sel = host.selected(), primary = host.primary();
     const mod = e.metaKey || e.ctrlKey;
     const key = e.key.toLowerCase();
-    const nodes = sel.filter((id) => !id.startsWith('A')); // boards cannot be copied as nodes
+    const nodes = sel.filter((id) => !id.startsWith('A'));
     if ((e.key === 'Delete' || e.key === 'Backspace') && sel.length) {
       this.remove(sel);
     } else if (e.key.startsWith('Arrow') && !mod && !e.altKey && sel.length && (this.nudge(e) || this.arrowReorder(e))) {
@@ -617,9 +622,8 @@ export class CanvasEditor {
       this.flushNudge(); // an unsaved nudge must land before the undo, or it would undo the wrong step
       host.markUserEdit();
       canvasAction(host.projectId, key === 'y' || e.shiftKey ? 'redo' : 'undo').catch((err) => fail(err, 'Nothing to do'));
-    } else if (mod && (key === 'c' || key === 'x') && nodes.length && !getSelection()?.toString()) {
-      this.copy(nodes);
-      if (key === 'x') this.remove(nodes);
+    } else if (mod && !e.shiftKey && !e.altKey && (key === 'c' || key === 'x') && sel.length && !getSelection()?.toString()) {
+      this.copy(sel, key === 'x');
     } else if (mod && key === 'g' && nodes.length) {
       // Ctrl+G groups, Ctrl+Shift+G / Ctrl+Alt+G ungroups (the browser's own Ctrl+Shift+G is find-previous).
       e.preventDefault();
@@ -752,14 +756,44 @@ export class CanvasEditor {
     } catch (err) { fail(err, 'Could not ungroup'); }
   }
 
-  // Copy the nodes' HTML now, paste it later (even on another board or page). Several nodes are joined in the
-  // order they were selected; the server's paste writes them as siblings.
-  copy(ids: string[]) {
-    const html = ids.map((id) => this.nodeHtml(id)).filter(Boolean).join('');
-    if (html) { this.nodeClip = html; toast(ids.length > 1 ? `Copied ${ids.length} layers. Paste with Ctrl+V.` : 'Copied. Paste with Ctrl+V.'); }
+  // Copy now, paste later: on another board, page, project or tab (see store/clipboard.ts). Frames and layers are
+  // never mixed: with both selected only the frames are taken. Several items keep the order they were selected in.
+  // A cut removes the source right away (one undo step) and the payload remembers it so paste can keep the ids.
+  copy(ids: string[], cut = false) {
+    const { host } = this;
+    const boardIds = ids.filter((id) => id.startsWith('A'));
+    const asBoards = boardIds.length > 0;
+    const mixed = asBoards && boardIds.length < ids.length;
+    const picked = asBoards ? boardIds : ids;
+    const items: ClipItem[] = [];
+    for (const id of picked) {
+      if (asBoards) {
+        const b = host.board(id);
+        if (b && !b.generated && b.html) items.push({ html: b.html, id: b.id, name: b.name, x: b.x, y: b.y, width: b.width, height: b.height, heightMode: b.heightMode });
+      } else {
+        const html = this.nodeHtml(id);
+        if (html) items.push({ html, id });
+      }
+    }
+    const payload = buildPayload(asBoards ? 'boards' : 'nodes', items, { project: host.projectId, page: host.activePage() }, cut);
+    if (!payload) { toast(asBoards ? 'Nothing to copy: reference boards and empty frames are skipped' : 'Nothing to copy'); return; }
+    useClipboard.getState().set(payload);
+    this.writeSystemClipboard(payload.items.map((i) => i.html).join('\n'));
+    const n = payload.items.length, what = asBoards ? (n > 1 ? `${n} frames` : 'Frame') : (n > 1 ? `${n} layers` : 'Layer');
+    toast(`${cut ? 'Cut' : 'Copied'} ${what}${mixed ? ' (only the frames)' : ''}. ${cut ? 'Paste anywhere with' : 'Paste with'} ${modLabel()}V`);
+    if (cut) this.remove(picked);
   }
 
-  get canPaste() { return !!this.nodeClip; }
+  // The markup also goes to the system clipboard so it pastes as text elsewhere. Best effort: it needs a user gesture
+  // and permission, and the app clipboard works without it. The text is remembered so onPaste can recognise our own.
+  private writeSystemClipboard(html: string) {
+    this.clipText = html;
+    try {
+      void navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]).catch(() => {});
+    } catch { /* no clipboard API here */ }
+  }
+
+  get canPaste() { return !!useClipboard.getState().payload; }
 
   // Outer HTML of a node, read from its board's HTML text so it works for unmounted boards and never
   // includes transient attributes such as contenteditable.
@@ -772,24 +806,44 @@ export class CanvasEditor {
     return tpl.content.querySelector(`[data-pid="${id}"]`)?.outerHTML ?? null;
   }
 
-  // ---- Paste: a copied node, or a picture from the system clipboard ----------------------------
-  // Pasting into an artboard appends; pasting with a node selected puts the copy right after it.
-  pasteNode() {
+  // ---- Paste: copied layers or frames, or a picture from the system clipboard -----------------------
+  // Layers: a selected frame or container receives them, a selected leaf gets them right after it, no selection
+  // means the frame under the viewport centre. Frames land on the active page (see placeBoards for where).
+  pasteNode(inPlace = false) {
     const { host } = this;
-    const sel = host.primary();
-    const target = sel ?? host.boardsHere()[0]?.id;
-    if (!this.nodeClip || !target) return;
+    const clip = useClipboard.getState().payload;
+    if (!clip) return;
     host.markUserEdit();
-    canvasAction(host.projectId, 'paste', { html: this.nodeClip, target, position: sel && !sel.startsWith('A') ? 'after' : 'append' })
-      .catch((err) => fail(err, 'Could not paste'));
+    if (clip.kind === 'boards') {
+      const spots = placeBoards(clip.items, host.boardsHere().map((a) => ({ x: a.x, y: a.y, width: a.width, height: a.height })), inPlace);
+      const items = clip.items.map((it, i) => ({ ...it, x: spots[i].x, y: spots[i].y }));
+      this.sendPaste({ clip: { ...clip, items }, page: host.activePage() }, (ids) => host.selectNew(ids));
+      return;
+    }
+    const prim = host.primary();
+    const hasChildren = !!prim && host.childrenOf(prim).length > 0;
+    const to = pasteTarget(prim ? { id: prim, isBoard: prim.startsWith('A'), hasChildren } : null, host.centerBoard());
+    if (!to) { toast('Open a frame to paste into'); return; }
+    this.sendPaste({ clip, page: host.activePage(), inPlace, ...to }, (ids) => host.selectNew(ids));
+  }
+
+  private sendPaste(body: Record<string, unknown>, done: (ids: string[]) => void) {
+    canvasAction(this.host.projectId, 'paste', body).then((r) => {
+      const res = r.result as { ids?: string[]; brought?: string } | undefined;
+      if (res?.ids?.length) done(res.ids);
+      if (res?.brought) toast(`Pasted. Also brought ${res.brought}`);
+      // The ids of a cut are spent once they landed: a second paste must mint fresh ones.
+      useClipboard.getState().spendCut();
+    }).catch((err) => fail(err, 'Could not paste'));
   }
 
   // Some environments (automation, a few embedded browsers) send Ctrl+V as plain key events without ever
   // firing a paste event. If none arrives shortly after the keystroke, paste the copied node anyway.
   private onPasteKey = (e: KeyboardEvent) => {
-    if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') || !this.nodeClip || typing(e.target)) return;
+    if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') || !this.canPaste || typing(e.target)) return;
     this.pasteSeen = false;
-    setTimeout(() => { if (!this.pasteSeen) this.pasteNode(); }, 150);
+    this.pasteInPlace = e.shiftKey;
+    setTimeout(() => { if (!this.pasteSeen) this.pasteNode(this.pasteInPlace); }, 150);
   };
 
   private onPaste = (e: ClipboardEvent) => {
@@ -797,8 +851,9 @@ export class CanvasEditor {
     if (typing(e.target)) return; // pasting text into a field is not ours
     const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith('image/'));
     if (file) { e.preventDefault(); void this.addReferenceFile(file); return; }
-    const text = e.clipboardData?.getData('text');
-    if (this.nodeClip && !text?.trim()) { e.preventDefault(); this.pasteNode(); }
+    // Ours when the system clipboard is empty or still holds what copy() put there; text copied elsewhere since wins.
+    const text = e.clipboardData?.getData('text')?.trim();
+    if (this.canPaste && (!text || text === this.clipText.trim())) { e.preventDefault(); this.pasteNode(this.pasteInPlace); }
   };
 
   // A screenshot to rebuild from: the server stores the file and adds a locked board that shows it, so
