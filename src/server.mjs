@@ -24,6 +24,7 @@ import { HeadlessWorker } from './headless.mjs';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { Session, SessionMap } from './sessions.mjs';
 import { Claims } from './claims.mjs';
+import { planAdopt } from './pastedeps.mjs';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -268,11 +269,27 @@ function pasteClip(p, b) {
   if (!items.length || items.some((i) => typeof i?.html !== 'string')) throw new Error('Nothing to paste');
   if (items.reduce((n, i) => n + i.html.length, 0) > 2_000_000) throw new Error('Too much to paste at once');
   const keepIds = !!clip.cut && p.doc.canKeepIds(items);
+  let ids;
   if (clip.kind === 'boards') {
     for (const i of items) if (!Number.isFinite(i.width) || !Number.isFinite(i.height)) throw new Error('A pasted frame has no size');
-    return { ids: p.doc.pasteBoards(items, { page: b.page ?? undefined, keepIds }) };
+    ids = p.doc.pasteBoards(items, { page: b.page ?? undefined, keepIds });
+  } else {
+    ids = p.doc.pasteNodes(String(b.target), items, b.position, keepIds);
   }
-  return { ids: p.doc.pasteNodes(String(b.target), items, b.position, keepIds) };
+  return { ids, brought: bringDeps(p, clip.from?.project, items) };
+}
+
+// Another project's tokens, fonts and component masters that the pasted markup uses and this one lacks. Best effort:
+// a source that is gone (deleted project) just means a plain paste.
+function bringDeps(p, fromId, items) {
+  if (typeof fromId !== 'string' || !ID_RE.test(fromId) || fromId === p.meta.id) return undefined;
+  const src = store.get(fromId);
+  if (!src) return undefined;
+  const plan = planAdopt(items.map((i) => i.html), { theme: src.doc.theme, components: src.doc.components, fonts: src.meta.fonts }, { theme: p.doc.theme, components: p.doc.components, fonts: p.meta.fonts });
+  if (plan.empty) return undefined;
+  p.doc.adopt(plan);
+  for (const f of plan.fonts) store.addFont(p.meta.id, f);
+  return plan.summary;
 }
 
 const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'wrap', 'unwrap', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves

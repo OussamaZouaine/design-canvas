@@ -747,6 +747,18 @@ export class Doc {
     return items.every((i) => !(i.id && used.has(i.id)) && [...i.html.matchAll(/ data-pid="([^"]*)"/g)].every((m) => !used.has(m[1])));
   }
 
+  // Add what a pasted design needs from its source project (see pastedeps.mjs). No checkpoint of its own: it runs right
+  // after the paste, whose snapshot already holds the old theme and components, so one undo reverts both.
+  adopt({ tokens = {}, modeTokens = {}, masters = {} } = {}) {
+    const next = structuredClone(this.data.theme ?? emptyTheme());
+    applyTokens(next, tokens);
+    for (const [mode, vals] of Object.entries(modeTokens)) applyTokens(next, vals, mode);
+    this.data.theme = next;
+    if (Object.keys(masters).length) this.data.components = { ...this.components, ...structuredClone(masters) };
+    this._refreshFoundations();
+    this._commit();
+  }
+
   // Layers from the clipboard, as siblings of / children of `targetId`. With keepIds (a cut whose ids are free here)
   // the original data-pid attributes stay, otherwise they are stripped so the copies get fresh ones.
   pasteNodes(targetId, items, position, keepIds) {
