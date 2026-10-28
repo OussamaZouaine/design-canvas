@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useCanvas } from '@/store/canvas';
 import { useComments } from '@/store/comments';
 import { useUi } from '@/store/ui';
+import { modLabel, shiftLabel } from '@/lib/platform';
 
 interface Item { label: string; hint?: string; run: () => void; disabled?: boolean; danger?: boolean }
 
@@ -51,9 +52,11 @@ export function CanvasContextMenu() {
       ...(menu.extra ?? []),
       ...(fromLayers && menu.extra?.length ? ['sep' as const] : []),
       { label: 'Select parent', hint: 'Shift+Enter', run: () => engine.selectNode(parent), disabled: !parent } as Item,
-      { label: 'Copy', hint: 'Ctrl+C', run: () => engine.copy(), disabled: isBoard } as Item,
+      { label: 'Cut', hint: `${modLabel()}X`, run: () => engine.cut() } as Item,
+      { label: 'Copy', hint: `${modLabel()}C`, run: () => engine.copy() } as Item,
     ] : []),
-    { label: 'Paste', hint: 'Ctrl+V', run: () => engine.paste(), disabled: !engine.canPaste },
+    { label: 'Paste', hint: `${modLabel()}V`, run: () => engine.paste(), disabled: !engine.canPaste },
+    { label: 'Paste in place', hint: `${modLabel()}${shiftLabel()}V`, run: () => engine.paste(true), disabled: !engine.canPaste },
     ...(id ? [
       { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate() } as Item,
       'sep' as const,
