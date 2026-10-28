@@ -160,6 +160,7 @@ export class CanvasEngine {
       redraw: () => this.drawSelection(),
       markUserEdit: () => this.markUserEdit(),
       activePage: () => this.activePage,
+      centerBoard: () => this.centerBoard(),
     }, this.abort.signal);
     this.paths = new PathTools({
       viewport,
@@ -262,9 +263,10 @@ export class CanvasEngine {
   // Group / add auto layout / ungroup (the editor selects the result itself, see EditHost.selectNew).
   group(mode: 'group' | 'auto' = 'group') { void this.editor.wrap(this.selected.filter((id) => !id.startsWith('A')), mode); }
   ungroup() { void this.editor.unwrap([...this.selected]); }
-  copy() { this.editor.copy(this.selected.filter((id) => !id.startsWith('A'))); }
+  copy() { this.editor.copy([...this.selected]); }
+  cut() { this.editor.copy([...this.selected], true); }
   get selection(): readonly string[] { return this.selected; }
-  paste() { this.editor.pasteNode(); }
+  paste(inPlace = false) { this.editor.pasteNode(inPlace); }
   get canPaste() { return this.editor.canPaste; }
   addImageFile(file: File) { return this.editor.addReferenceFile(file); }
   selectNode(id: string | null) { this.select(id ? [id] : []); }
@@ -544,6 +546,20 @@ export class CanvasEngine {
   }
 
   // ---- Document -------------------------------------------------------------------
+  // The board a paste with no selection goes to: the one under the viewport centre, else the closest on this page.
+  private centerBoard(): string | null {
+    const r = this.viewport.getBoundingClientRect();
+    const wx = (r.width / 2 - this.view.x) / this.view.k, wy = (r.height / 2 - this.view.y) / this.view.k;
+    let best: string | null = null, bestD = Infinity;
+    for (const a of this.boardsHere()) {
+      if (a.generated === 'reference') continue; // locked picture, nothing to paste into
+      const dx = Math.max(a.x - wx, 0, wx - (a.x + a.width)), dy = Math.max(a.y - wy, 0, wy - (a.y + a.height));
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) { best = a.id; bestD = d; }
+    }
+    return best;
+  }
+
   private boardsHere() { return this.doc.artboards.filter((a) => this.inPage(a)); }
   private inPage(ab: Artboard) { return pageOfBoard(this.doc, ab) === this.activePage; }
 
