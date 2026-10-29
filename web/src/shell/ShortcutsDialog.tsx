@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Kbd } from '@/components/ui/kbd';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { GESTURES, shortcutRows } from '@/lib/actions';
 import { isMac } from '@/lib/platform';
@@ -31,11 +32,12 @@ export function ShortcutsDialog() {
           {groups.map((g) => (
             <section key={g.title} aria-label={g.title}>
               <h3 className="mb-1 text-[11px] font-semibold text-muted-foreground">{g.title}</h3>
-              <dl className="grid grid-cols-[minmax(0,13rem)_1fr] gap-x-3 gap-y-1">
+              {/* Description left, key chip right-aligned; rows are 32px like the menus. */}
+              <dl>
                 {g.rows.map(([k, d]) => (
-                  <div key={k} className="contents">
-                    <dt><kbd className="rounded border bg-field px-1.5 py-0.5 text-[11px]">{k}</kbd></dt>
-                    <dd className="py-0.5 text-muted-foreground">{d}</dd>
+                  <div key={k} className="flex h-8 items-center justify-between gap-4 text-[13px]">
+                    <dd className="order-1 min-w-0 truncate">{d}</dd>
+                    <dt className="order-2 shrink-0"><Kbd className="h-5 px-1.5 text-[11px]">{k}</Kbd></dt>
                   </div>
                 ))}
               </dl>

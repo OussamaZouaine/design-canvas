@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, Copy, ExternalLink, Plug } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { agentList, EXAMPLE_PROMPTS, type Snippet } from '@/lib/agents';
 import { cn } from '@/lib/utils';
@@ -94,7 +94,7 @@ export function ConnectAgentsDialog() {
   return (
     <Dialog open={open} onOpenChange={set}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="border-b px-5 py-4"><DialogTitle className="text-sm font-semibold">Connect your agent</DialogTitle></DialogHeader>
+        <DialogHeader className="border-b px-5 py-4 pr-12"><DialogTitle>Connect your agent</DialogTitle></DialogHeader>
         <div className="grid min-h-0 grid-rows-[auto_1fr] overflow-hidden md:h-[26rem] md:grid-cols-[11rem_1fr] md:grid-rows-1">
           {/* Agent list: a vertical rail on desktop, a scrollable chip row on a phone. */}
           <div role="tablist" aria-label="Agents" aria-orientation="vertical" className="flex gap-1 overflow-x-auto border-b p-2 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0">
@@ -119,7 +119,7 @@ export function ConnectAgentsDialog() {
               {agent.link && (
                 <a
                   href={agent.link.href}
-                  className="inline-flex h-8 w-fit items-center gap-1.5 rounded-lg bg-selection px-3 text-[13px] font-medium text-white outline-none transition-[opacity,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:opacity-90"
+                  className={cn(buttonVariants({ variant: 'outline', size: '32' }), 'w-fit')}
                 ><ExternalLink className="size-3.5" />{agent.link.label}</a>
               )}
               {agent.commands?.map((c) => (
@@ -158,7 +158,7 @@ export function ConnectAgentsDialog() {
         </div>
         <DialogFooter className="items-center border-t px-5 py-3 sm:justify-between">
           <span className="text-[12px] text-muted-foreground">Restart the agent after adding it.</span>
-          <Button onClick={() => set(false)}>Done</Button>
+          <Button variant="brand" onClick={() => set(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
