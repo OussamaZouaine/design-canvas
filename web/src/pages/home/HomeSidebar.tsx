@@ -39,7 +39,7 @@ export function HomeSidebar({ query, onQuery, inTrash, onSection, liveCount, tra
   return (
     <aside className="flex shrink-0 flex-col border-b bg-background md:h-full md:w-60 md:border-r md:border-b-0">
       <div className="flex h-14 items-center gap-2.5 px-4">
-        <span aria-hidden className="grid size-6 place-items-center rounded-full bg-[color-mix(in_oklch,var(--selection)_30%,transparent)] text-xs font-semibold">D</span>
+        <span aria-hidden className="grid size-7 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink">D</span>
         <Link to="/" className="truncate text-sm font-semibold" title="All projects">Design Canvas</Link>
       </div>
 
