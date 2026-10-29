@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 
 export type Tool = 'move' | 'frame' | 'rect' | 'ellipse' | 'line' | 'pen' | 'text' | 'image' | 'comment' | 'hand';
-export type PanelTab = 'design' | 'comment' | 'activity' | 'versions' | 'theme' | 'tokens' | 'agents' | 'mcp';
+// Three top-level tabs; the rest are secondary views that replace a tab's content (see `panelView`).
+export type PanelTab = 'design' | 'comment' | 'agents';
+// History (activity + versions) opens from Agents and the main menu; Styles (theme + tokens + memory) from the page view of Design.
+export type PanelView = 'history' | 'styles' | null;
 export type Theme = 'dark' | 'light';
 
 // localStorage can throw (private mode, blocked site data), so every access is guarded.
@@ -29,6 +32,7 @@ export const applyTheme = (theme: Theme, instant = true) => {
 interface UiState {
   tool: Tool;
   panelTab: PanelTab;
+  panelView: PanelView;
   layersOpen: boolean;
   panelOpen: boolean;
   theme: Theme;
@@ -40,6 +44,8 @@ interface UiState {
   toggleRulers: () => void;
   setTool: (t: Tool) => void;
   setPanelTab: (t: PanelTab) => void;
+  openView: (v: Exclude<PanelView, null>) => void;
+  closeView: () => void;
   toggleLayers: () => void;
   togglePanel: () => void;
   toggleTheme: () => void;
@@ -51,6 +57,7 @@ applyTheme(initialTheme, false);
 export const useUi = create<UiState>((set, get) => ({
   tool: 'move',
   panelTab: 'design',
+  panelView: null,
   layersOpen: true,
   panelOpen: true,
   theme: initialTheme,
@@ -65,7 +72,10 @@ export const useUi = create<UiState>((set, get) => ({
     set({ rulers });
   },
   setTool: (tool) => set({ tool }),
-  setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
+  // Picking a tab always leaves any secondary view, so a tab click never looks ignored.
+  setPanelTab: (panelTab) => set({ panelTab, panelView: null, panelOpen: true }),
+  openView: (panelView) => set({ panelView, panelTab: panelView === 'history' ? 'agents' : 'design', panelOpen: true }),
+  closeView: () => set({ panelView: null }),
   toggleLayers: () => set((s) => ({ layersOpen: !s.layersOpen })),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
   toggleTheme: () => {
