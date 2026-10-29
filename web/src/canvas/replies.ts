@@ -3,6 +3,8 @@
 // a request event and waits for our POST. Plain module, no React; the engine supplies the board data.
 import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
+import type { ExportRow } from '@/lib/exportspec';
+import { buildExport } from './exporter';
 import { rasterizeCanvas, type Crop } from './raster';
 import { measureLayout } from './rects';
 import { fontsReady } from './fonts';
@@ -39,10 +41,21 @@ export function cropOf(host: ReplyHost, ab: Artboard, nodeId: string): Crop {
 export async function screenshot(
   host: ReplyHost,
   artboardId: string,
-  { nodeId, scale = 1, maxWidth = 800, maxHeight, format = 'jpeg' }: { nodeId?: string; scale?: number; maxWidth?: number; maxHeight?: number; format?: string } = {},
+  { nodeId, scale = 1, maxWidth = 800, maxHeight, format = 'jpeg', exportRow }: { nodeId?: string; scale?: number; maxWidth?: number; maxHeight?: number; format?: string; exportRow?: ExportRow } = {},
 ) {
   const ab = host.findBoard(artboardId);
   if (!ab) throw new Error('Artboard not found');
+  // The MCP export tool goes through the same exporter as the Export button (PNG / JPG / SVG / PDF, a layer isolated).
+  if (exportRow) {
+    const res = await buildExport(host, [{ id: nodeId ?? artboardId, name: 'export' }], [exportRow]);
+    if (!res) throw new Error('Nothing to export');
+    return new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(new Error('Could not read the exported file'));
+      r.readAsDataURL(res.blob);
+    });
+  }
   let crop = nodeId ? cropOf(host, ab, nodeId) : undefined;
   const w = crop?.w ?? ab.width;
   const eff = Math.min(scale, maxWidth / w); // never exceed maxWidth, whatever scale was asked
