@@ -100,6 +100,7 @@ Copy / cut / paste now work for frames as well as layers, across pages, projects
 
 ## Next work, split into sessions (start a fresh session per area; each one reads CLAUDE.md + this file)
 Order is a suggestion; the user decides.
+- **Luxury UI redesign (PLAN 2026-10-29; Phase 0 mock approved, Phase 1 tokens + primitives DONE 2026-10-29, Phase 2 next):** `docs/notes/luxury-redesign-plan.md`. Phases 0-6, one per session, in order.
 0. **Generation quality (Phases A, B, C, D, F built 2026-10-21; F baseline runs still to do via `examples/evals/run.mjs`; Phase E fonts built 2026-10-21; turn-cutting change made, eval re-run `turns-cut` pending):** follow `docs/PAPER-QUALITY-PLAN.md`
    (stop frame clipping with fit-height boards + measured overflow report, taste guide served by the MCP, skill rewrite, evals).
    Decisions answered 2026-10-21 (section 5): auto-grow boards by default, soft brief reminder, system + Google Fonts
