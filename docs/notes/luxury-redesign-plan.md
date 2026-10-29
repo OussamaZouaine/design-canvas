@@ -92,7 +92,7 @@ All restyling is tokens + each component's own file: overlay elevation, 14px rad
 3. **Inspector + left panel polish.** Section component across `panels/inspector/*`, Pages/Layers rows, empty states. ~1.5 h.
 4. **Command palette + action registry.** shadcn `command` for the UI; new `web/src/lib/actions.ts` (pure, tested) feeding palette, menus, ShortcutsDialog. ~2 h.
 5. **Home, dialogs, comments page.** Serif + cards + Connect agents dialog restyle. ~1.5 h.
-6. **Verify + document.** Both themes, reduced motion / transparency, contrast, keyboard-only pass, screenshots; rewrite `docs/notes/ui-system.md`. ~1 h.
+6. **Verify + document.** Also (left out of Phase 3): bring the Agents, Theme and Tokens panels onto the shared `Section` style and check light theme on the Agents / History / Styles views. Both themes, reduced motion / transparency, contrast, keyboard-only pass, screenshots; rewrite `docs/notes/ui-system.md`. ~1 h.
 
 ## Open decisions (defaults used unless the user says otherwise)
 - Accent: champagne (default) vs no accent (pure monochrome luxury).
