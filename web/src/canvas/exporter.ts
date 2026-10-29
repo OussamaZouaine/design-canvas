@@ -6,6 +6,7 @@ import { fileNames, outputSize, safeName, type ExportFormat, type ExportRow } fr
 import { makePdf } from '@/lib/pdf';
 import { makeZip, type ZipEntry } from '@/lib/zip';
 import { boardSvg, rasterizeCanvas, type Crop } from './raster';
+import { useToast } from '@/store/toast';
 import { cropOf, type ReplyHost } from './replies';
 
 export interface ExportItem { id: string; name: string }
@@ -18,7 +19,9 @@ function target(host: ReplyHost, id: string): { ab: Artboard; crop: Crop; isNode
   const ab = host.findBoard(host.boardIdOf(id) ?? '');
   if (!ab) throw new Error('Artboard not found');
   if (id.startsWith('A')) return { ab, crop: { x: 0, y: 0, w: ab.width, h: ab.height }, isNode: false };
-  return { ab, crop: cropOf(host, ab, id), isNode: true };
+  const crop = cropOf(host, ab, id);
+  if (crop.w < 1 || crop.h < 1) throw new Error('That layer has no size (is it hidden?)');
+  return { ab, crop, isNode: true };
 }
 
 export function boxOf(host: ReplyHost, id: string) {
@@ -44,6 +47,10 @@ async function svgFor(host: ReplyHost, id: string, scale: string): Promise<Blob>
   // A vector layer is already an <svg>: hand it over as is (real vector, no HTML inside).
   if (el && el.tagName.toLowerCase() === 'svg') {
     const clone = el.cloneNode(true) as SVGElement;
+    // Canvas bookkeeping (ids, names) and the layer's placement on the board do not belong in a standalone file.
+    for (const n of [clone, ...clone.querySelectorAll('*')]) for (const a of [...n.attributes]) if (a.name.startsWith('data-')) n.removeAttribute(a.name);
+    const style = (clone.getAttribute('style') ?? '').split(';').filter((d) => d.trim() && !/^\s*(position|left|top|right|bottom|margin[\w-]*|translate|rotate)\s*:/i.test(d)).join(';');
+    if (style) clone.setAttribute('style', style); else clone.removeAttribute('style');
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('width', String(w));
     clone.setAttribute('height', String(h));
@@ -118,4 +125,20 @@ export async function copyPng(host: ReplyHost, id: string) {
   const { canvas } = await renderCanvas(host, id, '2x', true);
   const blob = await toBlob(canvas, 'image/png');
   await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+}
+
+// Build, then save. One place so the Export button, the shortcut and the context menu behave the same
+// (toast on failure and when a huge size had to be scaled down).
+export async function exportAndDownload(host: ReplyHost, items: ExportItem[], rows: ExportRow[], onProgress?: (done: number, total: number) => void): Promise<boolean> {
+  const toast = useToast.getState().show;
+  try {
+    const res = await buildExport(host, items, rows, onProgress);
+    if (!res) return false;
+    download(res.blob, res.name);
+    if (res.clamped) toast('A very large size was scaled down to fit the browser limit');
+    return true;
+  } catch (e) {
+    toast((e as Error).message || 'Export failed');
+    return false;
+  }
 }

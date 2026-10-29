@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { DEFAULT_ROW, type ExportRow } from '@/lib/exportspec';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { pagesOf } from '@/canvas/engine';
 import { sendEdit } from '@/lib/htmlTree';
@@ -10,6 +11,7 @@ import { NumberField } from '@/ui/NumberField';
 import { rowLabel, Section, SelectField, TextField, tokenName } from './inspector/controls';
 import { AlignBar, AppearanceSection, AutoLayoutSection, PositionSection, SizeSection } from './inspector/LayoutSections';
 import { tokensFor, useModel } from './inspector/model';
+import { ExportSection, useSavedRows } from './inspector/ExportSection';
 import { colorTokens, EffectsSection, FillSection, StrokeSection } from './inspector/PaintSections';
 import { TypographySection } from './inspector/TypographySection';
 import { VectorSection } from './inspector/VectorSection';
@@ -52,7 +54,7 @@ export function InspectorPanel({ projectId }: { projectId: string }) {
   const primary = ids.at(-1) ?? null;
   if (!primary) return <PageInspector projectId={projectId} doc={doc} pageId={page} lists={lists} tokens={tokens} />;
   const board = doc.artboards.find((a) => a.id === primary);
-  if (board) return <ArtboardInspector projectId={projectId} doc={doc} ab={board} />;
+  if (board) return <ArtboardInspector projectId={projectId} doc={doc} ab={board} ids={ids} />;
   return <NodeInspector projectId={projectId} doc={doc} ids={ids} lists={lists} tokens={tokens} />;
 }
 
@@ -66,6 +68,8 @@ function NodeInspector({ projectId, doc, ids, lists, tokens }: { projectId: stri
   const off = m.locked;
   const other = single ? Object.entries(primary.style).filter(([k]) => !HANDLED.has(k)) : [];
   const set = (prop: string, value: string) => m.patch({ [prop]: value.trim() || null });
+  const items = entries.map((e) => ({ id: e.id, name: e.el.dataset.name || e.el.tagName.toLowerCase() }));
+  const [exportRows, setExportRows] = useSavedRows(projectId, doc, items);
 
   return (
     <div>
@@ -92,6 +96,7 @@ function NodeInspector({ projectId, doc, ids, lists, tokens }: { projectId: stri
             <TypographySection m={m} />
           </>
         )}
+        <ExportSection projectId={projectId} items={items} rows={exportRows} setRows={setExportRows} />
         {/* CSS the inspector has no dedicated control for (added by Claude or by hand): editable as raw rows. */}
         {other.length > 0 && (
           <Section title="Other styles">
@@ -108,7 +113,9 @@ function NodeInspector({ projectId, doc, ids, lists, tokens }: { projectId: stri
   );
 }
 
-function ArtboardInspector({ projectId, doc, ab }: { projectId: string; doc: DocData; ab: Artboard }) {
+function ArtboardInspector({ projectId, doc, ab, ids }: { projectId: string; doc: DocData; ab: Artboard; ids: string[] }) {
+  const items = doc.artboards.filter((a) => ids.includes(a.id)).map((a) => ({ id: a.id, name: a.name }));
+  const [rows, setRows] = useSavedRows(projectId, doc, items);
   const pages = pagesOf(doc);
   const send = (action: string, body: unknown) => sendEdit(projectId, action, body);
   const geo = (key: 'x' | 'y' | 'width' | 'height', label: string, min?: number) => (
@@ -130,6 +137,7 @@ function ArtboardInspector({ projectId, doc, ab }: { projectId: string; doc: Doc
         <div className="grid grid-cols-2 gap-1.5">{geo('width', 'W', 1)}{geo('height', 'H', 1)}</div>
         <div className="grid grid-cols-2 gap-1.5">{geo('x', 'X')}{geo('y', 'Y')}</div>
       </Section>
+      <ExportSection projectId={projectId} items={items} rows={rows} setRows={setRows} />
     </div>
   );
 }
@@ -141,6 +149,9 @@ function PageInspector({ projectId, doc, pageId, lists, tokens }: { projectId: s
   const send = (body: Record<string, unknown>) => sendEdit(projectId, 'page-update', { id: page.id, ...body });
   const bg = page.background ?? '';
   const bgToken = tokenName(bg);
+  // Page export is a one-off (all frames on the page): the rows are not saved anywhere.
+  const [exportRows, setExportRows] = useState<ExportRow[]>([DEFAULT_ROW]);
+  const boards = doc.artboards.filter((a) => (a.page ?? pages[0].id) === page.id).map((a) => ({ id: a.id, name: a.name }));
   return (
     <div>
       {lists}
@@ -151,6 +162,7 @@ function PageInspector({ projectId, doc, pageId, lists, tokens }: { projectId: s
           <ColorField key={`${page.id}:${bg}`} className="flex-1" label="Page background" value={bg} preview={bgToken && bgToken in tokens ? tokens[bgToken] : bg} list="dl-color" tokens={colorTokens(tokens)} onChange={(v) => send({ background: v })} />
         </div>
       </Section>
+      {boards.length > 0 && <ExportSection projectId={projectId} items={boards} rows={exportRows} setRows={setExportRows} />}
       <p className="px-3 py-2 text-muted-foreground">Select a layer on the canvas or in the Layers panel to edit its styles.</p>
     </div>
   );
