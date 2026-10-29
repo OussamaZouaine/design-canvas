@@ -19,8 +19,9 @@ Warm obsidian (dark, flagship) / bone paper (light) chrome that recedes so the c
 ## Patterns
 - `pointer-hover:` custom variant = hover only on a fine pointer (project motion rule). Use it instead of the long media-query arbitrary variant.
 - List rows (Pages, Layers) are inset (`mx-1.5 rounded-md`) so selection reads as a pill.
-- Right panel tabs are one row of icon tabs (label in a `Tip` and `aria-label`); top bar groups: breadcrumb | agents + status | view controls | theme + panel.
-- Floating toolbar: tools grouped navigate / draw / content / review with hairlines; active tool is solid `bg-selection`.
+- Top bar (Phase 2) is a 3-column grid: left = champagne logo mark (main menu: Projects, Connect agents, History, Rulers, Theme, Keyboard shortcuts; no Settings screen exists yet) + layers toggle + breadcrumb; centre = agent chips + status; right = zoom `ButtonGroup`, Follow, the ONE brand `Export` button (`openExport`, works with or without a selection), panel toggle.
+- Right panel = shadcn `Tabs` as a segmented control: Design, Comments, Agents. `useUi.panelView` (`history` | `styles`, `openView` / `closeView`) swaps in a secondary view from `shell/PanelViews.tsx`: History (Activity + Versions) from the Agents tab and the main menu; Styles (Theme + Tokens and memory) from the button in the Design page view. MCP is a collapsed section at the bottom of Agents. `setPanelTab` always clears the view.
+- Floating toolbar = 6 slots: Move/Hand and Shapes (Rectangle, Ellipse, Line, Pen) are split buttons (`SplitSlot`: main button = last used, chevron opens a dropdown-menu list with keys), then Frame, Text, Image, Comment. Single-letter shortcuts unchanged; active tool is solid `bg-selection`.
 - Concentric radii: outer = inner + padding (toolbar 8px buttons + 4px pad = 12px; project card 8px cover + 4px = 12px).
 - Images/covers/swatches get a pure black/white 10% outline (`outline-black/10 dark:outline-white/10`), never a tinted one.
 
