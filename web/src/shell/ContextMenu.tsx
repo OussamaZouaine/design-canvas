@@ -3,7 +3,9 @@ import { useCanvas } from '@/store/canvas';
 import { useComments } from '@/store/comments';
 import { useUi } from '@/store/ui';
 import { copyAsPng, openExport } from '@/lib/exportActions';
-import { modLabel, shiftLabel } from '@/lib/platform';
+import { formatKeys } from '@/lib/actions';
+import { isMac } from '@/lib/platform';
+import { useActions } from '@/shell/useActions';
 
 interface Item { label: string; hint?: string; run: () => void; disabled?: boolean; danger?: boolean }
 
@@ -15,6 +17,9 @@ export function CanvasContextMenu() {
   const menu = useCanvas((s) => s.menu);
   const engine = useCanvas((s) => s.engine);
   const close = () => useCanvas.getState().setMenu(null);
+  const actions = useActions();
+  // Hints come from the registry so the menu shows the same keys as the palette and the shortcuts dialog.
+  const key = (id: string) => { const k = actions.find((a) => a.id === id)?.keys?.[0]; return k ? formatKeys(k, isMac) : undefined; };
   const ref = useRef<HTMLDivElement>(null);
 
   // Focus the first enabled item when it opens so the keyboard can drive it straight away.
@@ -53,25 +58,25 @@ export function CanvasContextMenu() {
       ...(menu.extra ?? []),
       ...(fromLayers && menu.extra?.length ? ['sep' as const] : []),
       { label: 'Select parent', hint: 'Shift+Enter', run: () => engine.selectNode(parent), disabled: !parent } as Item,
-      { label: 'Cut', hint: `${modLabel()}X`, run: () => engine.cut() } as Item,
-      { label: 'Copy', hint: `${modLabel()}C`, run: () => engine.copy() } as Item,
+      { label: 'Cut', hint: key('edit.cut'), run: () => engine.cut() } as Item,
+      { label: 'Copy', hint: key('edit.copy'), run: () => engine.copy() } as Item,
     ] : []),
-    { label: 'Paste', hint: `${modLabel()}V`, run: () => engine.paste(), disabled: !engine.canPaste },
-    { label: 'Paste in place', hint: `${modLabel()}${shiftLabel()}V`, run: () => engine.paste(true), disabled: !engine.canPaste },
+    { label: 'Paste', hint: key('edit.paste'), run: () => engine.paste(), disabled: !engine.canPaste },
+    { label: 'Paste in place', hint: key('edit.pasteInPlace'), run: () => engine.paste(true), disabled: !engine.canPaste },
     ...(id ? [
-      { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate() } as Item,
+      { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: key('edit.duplicate'), run: () => engine.duplicate() } as Item,
       'sep' as const,
-      { label: 'Export…', hint: `${modLabel()}${shiftLabel()}E`, run: () => void openExport(engine) } as Item,
+      { label: 'Export…', hint: key('export.open'), run: () => void openExport(engine) } as Item,
       { label: 'Copy as PNG', run: () => void copyAsPng(engine) } as Item,
       'sep' as const,
       // Structure: group / auto layout need real nodes (not boards); ungroup needs exactly one node.
-      { label: 'Group', hint: 'Ctrl+G', run: () => engine.group('group'), disabled: isBoard } as Item,
-      { label: 'Add auto layout', hint: 'Shift+A', run: () => engine.group('auto'), disabled: isBoard } as Item,
-      { label: 'Ungroup', hint: 'Ctrl+Shift+G', run: () => engine.ungroup(), disabled: isBoard || many } as Item,
+      { label: 'Group', hint: key('structure.group'), run: () => engine.group('group'), disabled: isBoard } as Item,
+      { label: 'Add auto layout', hint: key('structure.autoLayout'), run: () => engine.group('auto'), disabled: isBoard } as Item,
+      { label: 'Ungroup', hint: key('structure.ungroup'), run: () => engine.ungroup(), disabled: isBoard || many } as Item,
       'sep' as const,
-      { label: many ? `Delete ${sel.length} layers` : isBoard ? 'Delete artboard' : 'Delete', hint: 'Del', run: () => engine.remove(), danger: true } as Item,
+      { label: many ? `Delete ${sel.length} layers` : isBoard ? 'Delete artboard' : 'Delete', hint: key('edit.delete'), run: () => engine.remove(), danger: true } as Item,
     ] : []),
-    ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item, { label: 'Keyboard shortcuts', hint: '?', run: () => useUi.getState().setShortcutsOpen(true) } as Item]),
+    ...(fromLayers ? [] : ['sep' as const, { label: 'Fit all artboards', run: () => engine.fit() } as Item, { label: 'Keyboard shortcuts', hint: key('help.shortcuts'), run: () => useUi.getState().setShortcutsOpen(true) } as Item]),
   ];
 
   // Arrow keys hop between enabled items (roving focus).

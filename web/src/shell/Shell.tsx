@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, PenTool, Plug, Plus, Ruler, Slash, Square, Type } from 'lucide-react';
+import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
@@ -13,8 +13,10 @@ import { AgentsPanel, toolLabel, usePresence } from '@/panels/AgentsPanel';
 import { LayersPanel } from '@/panels/LayersPanel';
 import { PagesPanel } from '@/panels/PagesPanel';
 import { HistoryView, StylesView } from '@/shell/PanelViews';
+import { formatKeys, TOOL_DEFS } from '@/lib/actions';
 import { openExport } from '@/lib/exportActions';
-import { modLabel, shiftLabel } from '@/lib/platform';
+import { isMac, modLabel, shiftLabel } from '@/lib/platform';
+import { useActions } from '@/shell/useActions';
 import { cn } from '@/lib/utils';
 import { useAgents } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
@@ -73,7 +75,7 @@ function ZoomControls() {
       <Tip label="Zoom out" keys="−" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button></Tip>
       <ButtonGroupText className="tnum w-12 justify-center px-0 text-[11px] font-medium">{Math.round(zoom * 100)}%</ButtonGroupText>
       <Tip label="Zoom in" keys="+" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button></Tip>
-      <Tip label="Fit all" keys="Shift+1" side="bottom"><Button variant="outline" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
+      <Tip label="Fit all" side="bottom"><Button variant="outline" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
     </ButtonGroup>
   );
 }
@@ -93,17 +95,25 @@ function FollowButton() {
 // Main menu behind the champagne logo mark: everything that left the bar because it is used rarely.
 // (There is no Settings screen yet, so the menu has no Settings item.)
 function MainMenu() {
-  const { theme, rulers, toggleRulers } = useUi();
+  const { theme, rulers } = useUi();
+  const actions = useActions();
   const setTheme = (t: string) => { if (t !== useUi.getState().theme) useUi.getState().toggleTheme(); };
+  // Labels and shortcuts come from the registry (lib/actions.ts), so this menu cannot drift from the palette or the dialog.
+  const act = (id: string) => actions.find((a) => a.id === id)!;
+  const item = (id: string, icon: ReactNode) => { const a = act(id); return (
+    <DropdownMenuItem onClick={a.run}>{icon}{a.label}{a.keys && <DropdownMenuShortcut>{formatKeys(a.keys[0], isMac)}</DropdownMenuShortcut>}</DropdownMenuItem>
+  ); };
+  const rulersAction = act('view.rulers');
   return (
     <DropdownMenu>
       <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="grid size-7 shrink-0 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink outline-none transition-[scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50" />}>D</DropdownMenuTrigger></Tip>
       <DropdownMenuContent align="start" className="w-56">
-        <DropdownMenuItem render={<Link to="/" />}><FolderOpen />Projects</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => useUi.getState().setConnectOpen(true)}><Plug />Connect agents</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => useUi.getState().openView('history')}><History />History</DropdownMenuItem>
+        <DropdownMenuItem render={<Link to="/" />}><FolderOpen />{act('project.home').label}</DropdownMenuItem>
+        {item('help.palette', <Search />)}
+        {item('project.connect', <Plug />)}
+        {item('panel.history', <History />)}
         <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem checked={rulers} onCheckedChange={toggleRulers}><Ruler />Rulers<DropdownMenuShortcut>{shiftLabel()}R</DropdownMenuShortcut></DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={rulers} onCheckedChange={rulersAction.run}><Ruler />{rulersAction.label}<DropdownMenuShortcut>{formatKeys(rulersAction.keys![0], isMac)}</DropdownMenuShortcut></DropdownMenuCheckboxItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><Moon />Theme</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
@@ -114,7 +124,7 @@ function MainMenu() {
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard />Keyboard shortcuts<DropdownMenuShortcut>?</DropdownMenuShortcut></DropdownMenuItem>
+        {item('help.shortcuts', <Keyboard />)}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -183,18 +193,12 @@ export function TopBar({ projectId: _projectId }: { projectId: string }) {
   );
 }
 
-const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string }[] = [
-  { id: 'move', icon: <MousePointer2 />, label: 'Move', key: 'V' },
-  { id: 'hand', icon: <Hand />, label: 'Hand', key: 'H' },
-  { id: 'frame', icon: <Frame />, label: 'Frame', key: 'F' },
-  { id: 'rect', icon: <Square />, label: 'Rectangle', key: 'R' },
-  { id: 'ellipse', icon: <Circle />, label: 'Ellipse', key: 'O' },
-  { id: 'line', icon: <Slash />, label: 'Line', key: 'L' },
-  { id: 'pen', icon: <PenTool />, label: 'Pen', key: 'P' },
-  { id: 'text', icon: <Type />, label: 'Text', key: 'T' },
-  { id: 'image', icon: <Image />, label: 'Image', key: 'I' },
-  { id: 'comment', icon: <MessageSquare />, label: 'Comment', key: 'C' },
-];
+// Ids, labels and keys come from the registry (TOOL_DEFS); only the icons live here.
+const TOOL_ICONS: Record<Tool, ReactNode> = {
+  move: <MousePointer2 />, hand: <Hand />, frame: <Frame />, rect: <Square />, ellipse: <Circle />, line: <Slash />,
+  pen: <PenTool />, text: <Type />, image: <Image />, comment: <MessageSquare />,
+};
+const TOOLS = TOOL_DEFS.map((t) => ({ ...t, icon: TOOL_ICONS[t.id] }));
 const toolOf = (id: Tool) => TOOLS.find((t) => t.id === id)!;
 // The two split slots: Move/Hand and the four shape tools. Six toolbar slots in all.
 const POINTER_GROUP: Tool[] = ['move', 'hand'];

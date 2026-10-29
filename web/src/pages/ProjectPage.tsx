@@ -5,6 +5,7 @@ import { pageOfBoard } from '@/canvas/engine';
 import { CommentsLayer } from '@/panels/CommentsLayer';
 import { CanvasContextMenu } from '@/shell/ContextMenu';
 import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
+import { CommandPalette } from '@/shell/CommandPalette';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { Rulers } from '@/shell/Rulers';
 import { FloatingToolbar, LeftPanel, LivePill, RightPanel, TopBar } from '@/shell/Shell';
@@ -46,6 +47,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <FloatingToolbar />
           <CanvasContextMenu />
           <ShortcutsDialog />
+          <CommandPalette />
           <ConnectAgentsDialog />
         </main>
         <RightPanel projectId={projectId} />

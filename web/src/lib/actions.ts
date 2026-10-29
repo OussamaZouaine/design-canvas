@@ -51,7 +51,7 @@ export interface ActionCtx {
     tab: (id: 'design' | 'comment' | 'agents') => void;
     view: (id: 'history' | 'styles') => void;
     openExport: () => void; copyPng: () => void;
-    projects: () => void; connect: () => void; shortcuts: () => void;
+    projects: () => void; connect: () => void; shortcuts: () => void; palette: () => void;
     page: (id: string) => void; board: (id: string) => void;
   };
 }
@@ -79,7 +79,7 @@ export function buildActions(c: ActionCtx): Action[] {
     { id: 'view.zoomOut', label: 'Zoom out', group: 'View', run: c.do.zoomOut },
     { id: 'view.fit', label: 'Fit all artboards', group: 'View', keywords: ['zoom'], run: c.do.fit },
     { id: 'view.follow', label: 'Follow Claude\'s camera', group: 'View', keywords: ['agent'], run: c.do.toggleFollow },
-    { id: 'view.rulers', label: 'Toggle rulers', group: 'View', keys: ['shift+r'], run: c.do.toggleRulers },
+    { id: 'view.rulers', label: 'Rulers', group: 'View', keys: ['shift+r'], run: c.do.toggleRulers },
     { id: 'view.theme', label: 'Toggle light or dark theme', group: 'View', keywords: ['dark', 'light', 'appearance'], run: c.do.toggleTheme },
 
     { id: 'panel.layers', label: 'Toggle pages and layers', group: 'Panels', run: c.do.toggleLayers },
@@ -96,6 +96,7 @@ export function buildActions(c: ActionCtx): Action[] {
     { id: 'project.home', label: 'Go to projects', group: 'Project', keywords: ['home'], run: c.do.projects },
     { id: 'project.connect', label: 'Connect agents', group: 'Project', keywords: ['mcp', 'claude', 'codex', 'cursor'], run: c.do.connect },
 
+    { id: 'help.palette', label: 'Command palette', group: 'Help', keys: ['mod+k'], keywords: ['search', 'find', 'actions'], run: c.do.palette },
     { id: 'help.shortcuts', label: 'Keyboard shortcuts', group: 'Help', keys: ['?'], run: c.do.shortcuts },
   ];
   for (const p of c.pages) list.push({ id: `page.${p.id}`, label: p.name, group: 'Pages', keywords: ['page'], run: () => c.do.page(p.id) });

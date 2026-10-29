@@ -473,7 +473,7 @@ export class CanvasEngine {
 
   // Ctrl+A: everything at the current level. In a context that is its children; at board level the top-level
   // nodes of the primary's board, or every board when nothing is selected.
-  private selectAll() {
+  selectAll() {
     const p = this.primary();
     if (this.context) { const l = soleDescent(this.context, (id) => this.childrenOf(id)); this.select(this.childrenOf(l), l); return; }
     const board = p ? (p.startsWith('A') ? null : this.pidIndex.get(p) ?? null) : null;
