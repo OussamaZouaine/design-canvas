@@ -1,4 +1,6 @@
+import { MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { elementLabel, focusComment, numberOf } from '@/lib/comments';
 import { ago } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -18,9 +20,13 @@ export function CommentsPanel() {
         <Button size="sm" variant={showResolved ? 'secondary' : 'ghost'} aria-pressed={showResolved} onClick={() => setShowResolved(true)}>All</Button>
       </div>
       {list.length === 0 && (
-        <p className="text-muted-foreground">
-          {showResolved ? 'No comments yet.' : 'No open comments. Press C, then click an element to leave one. Claude reads them and replies.'}
-        </p>
+        <Empty className="p-4">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><MessageSquare /></EmptyMedia>
+            <EmptyTitle className="font-display">{showResolved ? 'No comments yet' : 'No open comments'}</EmptyTitle>
+            <EmptyDescription>Press C, then click an element to leave one. Claude reads them and replies.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
       {list.map((c) => (
         // data-comment-ui: clicking a row must not count as an "outside click" that closes the popover it opens.
@@ -32,8 +38,8 @@ export function CommentsPanel() {
           <span className="min-w-0">
             <span className="line-clamp-3 break-words">{c.text}</span>
             <small className="block text-muted-foreground">
-              {c.author === 'claude' ? 'Claude' : 'You'} · {ago(c.createdAt)} · {elementLabel(doc, c.targetId)}
-              {c.replies.length ? ` · ${c.replies.length} repl${c.replies.length === 1 ? 'y' : 'ies'}` : ''}{c.resolved ? ' · resolved' : ''}
+              {c.author === 'claude' ? 'Claude' : 'You'}, {ago(c.createdAt)} on {elementLabel(doc, c.targetId)}
+              {c.replies.length ? `. ${c.replies.length} repl${c.replies.length === 1 ? 'y' : 'ies'}` : ''}{c.resolved ? '. Resolved' : ''}
             </small>
           </span>
         </button>
