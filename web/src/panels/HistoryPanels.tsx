@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
 import type { CallEntry } from '@/store/agents';
+import { Tip } from '@/ui/Tip';
 
 // What the server's grouped activity looks like (src/store.mjs listActivity). Every string here is untrusted
 // (prompts, agent and board names, markup snippets): it is only ever rendered as React text.
@@ -118,7 +119,7 @@ function StepRow({ projectId, step }: { projectId: string; step: Step }) {
           {TOOL_LABEL[step.tool] || step.tool}{step.artboard ? ` · ${step.artboard}` : ''}
         </span>
         <small className="shrink-0 text-muted-foreground">{step.reverted ? 'Reverted' : ago(step.t)}</small>
-        {step.canRevert && <Button size="sm" variant="outline" className="h-5 px-1.5 text-[10px]" disabled={busy} onClick={revert} title="Undo just this step and keep the rest">Revert</Button>}
+        {step.canRevert && <Tip label="Undo just this step and keep the rest"><Button size="sm" variant="outline" className="h-5 px-1.5 text-[10px]" disabled={busy} onClick={revert}>Revert</Button></Tip>}
       </div>
       {step.diff && (
         <details className="text-xs">
@@ -177,8 +178,8 @@ function RunCard({ projectId, run: r }: { projectId: string; run: Run }) {
           </div>
         </div>
         {r.restorable && r.snapshotId && (
-          <Button size="sm" variant="outline" title="Restore the project to how it was before this request"
-            onClick={() => restore(projectId, r.snapshotId!, 'Undid this request. Redo it from the Versions tab.')}>Undo</Button>
+          <Tip label="Restore the project to how it was before this request"><Button size="sm" variant="outline"
+            onClick={() => restore(projectId, r.snapshotId!, 'Undid this request. Redo it from the Versions tab.')}>Undo</Button></Tip>
         )}
       </div>
       {r.steps.length > 0 && (

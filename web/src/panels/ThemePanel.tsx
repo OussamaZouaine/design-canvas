@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { sendEdit } from '@/lib/htmlTree';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
+import { Tip } from '@/ui/Tip';
 
 // Theme tab: edit the project's design tokens (CSS variables every board can share). Each edit is one server write
 // and one undo step, visible to Claude through get_design_system, and comes back in the doc, which restyles the boards.
@@ -55,7 +56,7 @@ export function ThemePanel({ projectId }: { projectId: string }) {
         {['base', ...modes].map((m) => (
           <Button key={m} size="sm" variant={m === mode ? 'secondary' : 'ghost'} aria-pressed={m === mode} onClick={() => setView(m)}>{m === 'base' ? 'Base' : m}</Button>
         ))}
-        {!modes.includes('dark') && <Button size="sm" variant="ghost" title="Add a dark mode that overrides the colour tokens" onClick={addMode}>+ dark</Button>}
+        {!modes.includes('dark') && <Tip label="Add a dark mode that overrides the colour tokens"><Button size="sm" variant="ghost" onClick={addMode}>+ dark</Button></Tip>}
       </div>
       {mode !== 'base' && <p className="mb-2 text-[11px] text-muted-foreground">Only tokens you fill in are overridden in this mode; empty ones inherit the base value.</p>}
       {[...families].map(([f, names]) => (
@@ -109,7 +110,7 @@ function TokenRow({ name, base, mode, override, onCommit, onDelete }: {
         onChange={(e) => setDraft(e.target.value)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
       />
-      {mode === 'base' && <Button variant="ghost" size="icon" aria-label={`Delete ${name}`} title="Delete token" onClick={onDelete}>×</Button>}
+      {mode === 'base' && <Tip label="Delete token"><Button variant="ghost" size="icon" aria-label={`Delete ${name}`} onClick={onDelete}>×</Button></Tip>}
     </div>
   );
 }

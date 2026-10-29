@@ -15,6 +15,7 @@ import { ExportSection, useSavedRows } from './inspector/ExportSection';
 import { colorTokens, EffectsSection, FillSection, StrokeSection } from './inspector/PaintSections';
 import { TypographySection } from './inspector/TypographySection';
 import { VectorSection } from './inspector/VectorSection';
+import { Tip } from '@/ui/Tip';
 
 // The Design tab. Sections are Figma-style groups (Align, Position, Size, Auto layout, Appearance, Fill, Stroke,
 // Effects, Typography) that each map onto inline CSS; anything they do not cover is still editable under "Other
@@ -103,7 +104,7 @@ function NodeInspector({ projectId, doc, ids, lists, tokens }: { projectId: stri
             {other.map(([prop, value]) => (
               <div key={prop} className="flex items-center gap-1">
                 <div className="min-w-0 flex-1"><TextField key={`${prop}:${value}`} label={prop.length > 8 ? prop.slice(0, 7) + '…' : prop} title={prop} value={value} onCommit={(v) => set(prop, v)} /></div>
-                <button aria-label={`Remove ${prop}`} title={`Remove ${prop}`} onClick={() => set(prop, '')} className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"><X className="size-3" /></button>
+                <Tip label={`Remove ${prop}`}><button aria-label={`Remove ${prop}`} onClick={() => set(prop, '')} className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"><X className="size-3" /></button></Tip>
               </div>
             ))}
           </Section>
