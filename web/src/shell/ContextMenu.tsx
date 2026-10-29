@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useCanvas } from '@/store/canvas';
 import { useComments } from '@/store/comments';
 import { useUi } from '@/store/ui';
+import { copyAsPng, openExport } from '@/lib/exportActions';
 import { modLabel, shiftLabel } from '@/lib/platform';
 
 interface Item { label: string; hint?: string; run: () => void; disabled?: boolean; danger?: boolean }
@@ -60,6 +61,9 @@ export function CanvasContextMenu() {
     ...(id ? [
       { label: many ? `Duplicate ${sel.length} layers` : 'Duplicate', hint: 'Ctrl+D', run: () => engine.duplicate() } as Item,
       'sep' as const,
+      { label: 'Export…', hint: `${modLabel()}${shiftLabel()}E`, run: () => void openExport(engine) } as Item,
+      { label: 'Copy as PNG', run: () => void copyAsPng(engine) } as Item,
+      'sep' as const,
       // Structure: group / auto layout need real nodes (not boards); ungroup needs exactly one node.
       { label: 'Group', hint: 'Ctrl+G', run: () => engine.group('group'), disabled: isBoard } as Item,
       { label: 'Add auto layout', hint: 'Shift+A', run: () => engine.group('auto'), disabled: isBoard } as Item,
@@ -79,9 +83,9 @@ export function CanvasContextMenu() {
     btns[(i + (e.key === 'ArrowDown' ? 1 : -1) + btns.length) % btns.length]?.focus();
   };
 
-  // Clamp so the menu never opens half off-screen (about 190 x 370 px).
+  // Clamp so the menu never opens half off-screen (about 190 x 430 px).
   const left = Math.min(menu.x, window.innerWidth - 200);
-  const top = Math.min(menu.y, window.innerHeight - 380);
+  const top = Math.min(menu.y, window.innerHeight - 440);
 
   return (
     <div
