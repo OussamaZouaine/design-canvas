@@ -48,7 +48,7 @@ export function PagesPanel({ projectId }: { projectId: string }) {
         <button
           aria-expanded={open}
           onClick={() => setOpen(!open)}
-          className="flex flex-1 items-center gap-1 rounded-sm px-1 text-left text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 items-center gap-1 rounded-sm px-1 text-left text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {open ? <ChevronDown className="size-3 text-muted-foreground" /> : <ChevronRight className="size-3 text-muted-foreground" />}
           Pages
@@ -73,13 +73,13 @@ export function PagesPanel({ projectId }: { projectId: string }) {
                   onDoubleClick={() => setRenaming(p.id)}
                   className={cn(
                     // Same inset pill rows as the Layers list below, so the sidebar reads as one list style.
-                    'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] items-center gap-2 rounded-md px-1.5 text-left text-[11px] outline-none transition-colors duration-150 focus-visible:bg-muted',
-                    p.id === current ? 'bg-field font-medium' : 'text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground',
+                    'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] items-center gap-2 rounded-md px-1.5 text-left text-xs outline-none transition-colors duration-150 focus-visible:bg-muted',
+                    p.id === current ? 'bg-selection-soft font-medium' : 'text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground',
                   )}
                 >
                   {/* React escapes the name, so an untrusted page name is safe here. */}
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                  {p.id === current && <Check className="size-3.5 shrink-0" />}
+                  {p.id === current && <Check className="size-3.5 shrink-0 stroke-[1.5]" />}
                 </button>
               )}
             </li>

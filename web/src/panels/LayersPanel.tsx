@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, Diamond, Eye, EyeOff, Hexagon, Image as ImageIcon, Lock, Square, Type, Unlock, Frame } from 'lucide-react';
+import { ChevronDown, ChevronRight, Diamond, Eye, EyeOff, Hexagon, Image as ImageIcon, Lock, Square, Type, Unlock, Frame, Layers } from 'lucide-react';
 import { useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { pageOfBoard } from '@/canvas/engine';
 import { rangeIds, toggleId } from '@/canvas/selection';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { ancestorsOf, kidsOf, kindOf, labelOf, sendEdit, snippetOf, treeOf, type Kind } from '@/lib/htmlTree';
 import { cn } from '@/lib/utils';
@@ -154,8 +155,8 @@ export function LayersPanel({ projectId }: { projectId: string }) {
             style={{ paddingLeft: 6 + r.depth * 14 }}
             className={cn(
               // Rows are inset with rounded ends, so the selection reads as a soft pill instead of a full-bleed stripe.
-              'group relative mx-1.5 flex h-7 cursor-default items-center gap-1 rounded-md pr-1.5 select-none',
-              selectedIds.includes(r.id) ? 'bg-selection-soft' : 'pointer-hover:bg-muted',
+              'group relative mx-1.5 flex h-7 cursor-default items-center gap-1 rounded-md pr-1.5 text-xs select-none',
+              selectedIds.includes(r.id) ? 'bg-selection-soft text-foreground' : 'pointer-hover:bg-muted',
               drag?.over === r.id && drag.pos === 'inside' && 'outline outline-1 -outline-offset-1 outline-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'before' && 'before:absolute before:inset-x-1.5 before:top-0 before:h-0.5 before:bg-[var(--selection)]',
               drag?.over === r.id && drag.pos === 'after' && 'after:absolute after:inset-x-1.5 after:bottom-0 after:h-0.5 after:bg-[var(--selection)]',
@@ -164,12 +165,12 @@ export function LayersPanel({ projectId }: { projectId: string }) {
             <button
               tabIndex={-1}
               aria-label={expanded.has(r.id) ? 'Collapse' : 'Expand'}
-              className={cn('grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3', !r.hasKids && 'invisible')}
+              className={cn('grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3.5', !r.hasKids && 'invisible')}
               onClick={(e) => { e.stopPropagation(); toggle(r.id); }}
             >
               {expanded.has(r.id) ? <ChevronDown /> : <ChevronRight />}
             </button>
-            <span className="grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3">{KIND_ICON[r.kind]}</span>
+            <span className="grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3.5 [&_svg]:stroke-[1.5]">{KIND_ICON[r.kind]}</span>
             {renaming === r.id ? (
               <RenameInput
                 initial={r.name}
@@ -196,7 +197,17 @@ export function LayersPanel({ projectId }: { projectId: string }) {
           </li>
         ))}
         {full() && <li className="px-3 py-2 text-muted-foreground">Showing the first {MAX_ROWS} layers. Collapse some boards or search.</li>}
-        {!rows.length && <li className="px-3 py-2 text-muted-foreground">{q ? 'No layers match.' : 'No layers yet.'}</li>}
+        {!rows.length && (
+          <li>
+            <Empty className="p-4">
+              <EmptyHeader>
+                <EmptyMedia variant="icon"><Layers /></EmptyMedia>
+                <EmptyTitle className="font-display">{q ? 'No layers match' : 'No layers yet'}</EmptyTitle>
+                <EmptyDescription>{q ? 'Try another name or text.' : 'Layers appear here once Claude or you add a frame.'}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          </li>
+        )}
       </ul>
     </>
   );
@@ -212,8 +223,8 @@ function FlagButton({ on, onLabel, offLabel, onIcon, offIcon, onClick }: {
       aria-pressed={on}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={cn(
-        'grid size-5 place-items-center rounded text-muted-foreground transition-opacity [&_svg]:size-3 focus-visible:opacity-100 group-focus-within:opacity-100',
-        on ? 'opacity-100' : 'opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100',
+        'grid size-5 place-items-center rounded text-muted-foreground transition-opacity [&_svg]:size-3.5 [&_svg]:stroke-[1.5] focus-visible:opacity-100 group-focus-within:opacity-100',
+        on ? 'opacity-100' : 'opacity-0 pointer-hover:group-hover:opacity-100',
       )}
     >
       {on ? onIcon : offIcon}
