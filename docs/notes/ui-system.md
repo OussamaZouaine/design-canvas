@@ -25,6 +25,10 @@ Warm obsidian (dark, flagship) / bone paper (light) chrome that recedes so the c
 - Concentric radii: outer = inner + padding (toolbar 8px buttons + 4px pad = 12px; project card 8px cover + 4px = 12px).
 - Images/covers/swatches get a pure black/white 10% outline (`outline-black/10 dark:outline-white/10`), never a tinted one.
 
+- Inspector `Section` (`panels/inspector/controls.tsx`) is the one section component: shadcn `Collapsible` + title row (13px/600, chevron) + optional trailing action, 12px body, hairline below, `gap-2`. No open/close animation (frequent action). Pages and Layers rows: 28px, 12px text, Lucide 14px at 1.5 stroke, selected = `bg-selection-soft`, hover `pointer-hover:`.
+- Empty states use shadcn `Empty` (icon media, `font-display` title, description): no layers, no comments, nothing selected. Labels sentence case, no middle-dot meta strings.
+- Light theme was re-checked in Phase 3 (top bar, main menu, shortcuts dialog, panels, inspector): no fixes needed. Headless pane screenshots can catch a theme transition half way; wait 2 s and retake.
+
 ## Primitives (Phase 1)
 - shadcn added: tooltip, kbd, button-group, toggle(-group), collapsible, popover, sonner, empty, separator, scroll-area (all in `web/src/components/ui`).
 - Button sizes `24` / `28` / `32` (by pixel) plus the old names; `variant="brand"` is champagne.
