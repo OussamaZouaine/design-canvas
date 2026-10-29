@@ -7,6 +7,7 @@ import { ancestorsOf, kidsOf, kindOf, labelOf, sendEdit, snippetOf, treeOf, type
 import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
+import { Tip } from '@/ui/Tip';
 
 const MAX_ROWS = 400; // a board with thousands of nodes must not freeze the panel
 
@@ -206,10 +207,9 @@ function FlagButton({ on, onLabel, offLabel, onIcon, offIcon, onClick }: {
   on: boolean; onLabel: string; offLabel: string; onIcon: ReactNode; offIcon: ReactNode; onClick: () => void;
 }) {
   return (
-    <button
+    <Tip label={on ? onLabel : offLabel}><button
       aria-label={on ? onLabel : offLabel}
       aria-pressed={on}
-      title={on ? onLabel : offLabel}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={cn(
         'grid size-5 place-items-center rounded text-muted-foreground transition-opacity [&_svg]:size-3 focus-visible:opacity-100 group-focus-within:opacity-100',
@@ -217,7 +217,7 @@ function FlagButton({ on, onLabel, offLabel, onIcon, offIcon, onClick }: {
       )}
     >
       {on ? onIcon : offIcon}
-    </button>
+    </button></Tip>
   );
 }
 

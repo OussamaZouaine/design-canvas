@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
+import { Tip } from '@/ui/Tip';
 
 // "Pages" section at the top of the left sidebar (the only page switcher: the old header select is gone).
 // The engine owns which page is visible and remembers it per project; this list mirrors `activePage` and drives
@@ -52,12 +53,12 @@ export function PagesPanel({ projectId }: { projectId: string }) {
           {open ? <ChevronDown className="size-3 text-muted-foreground" /> : <ChevronRight className="size-3 text-muted-foreground" />}
           Pages
         </button>
-        <button
-          aria-label="Add a page" title="Add a page" onClick={add}
+        <Tip label="Add a page"><button
+          aria-label="Add a page" onClick={add}
           className="grid size-6 place-items-center rounded-md text-muted-foreground outline-none transition-[color,background-color,scale] duration-150 active:scale-96 pointer-hover:bg-muted pointer-hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3.5"
         >
           <Plus />
-        </button>
+        </button></Tip>
       </div>
       {open && (
         <ul className="max-h-40 overflow-auto">

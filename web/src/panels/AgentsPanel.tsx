@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { idsInArgs, kindOf, presenceOf, useAgents, type CallEntry, type CallKind, type PendingCall, type Presence } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
+import { Tip } from '@/ui/Tip';
 
 // Re-render on a slow timer so "active" flips to "idle" (2 min) without any event arriving.
 export function useNow(everyMs = 10_000) {
@@ -93,13 +94,13 @@ export function AgentsPanel() {
                     {isPaused ? 'Paused: writes are refused' : a.active && a.status ? a.status : held.length ? `Editing ${held.map((c) => c.name).join(', ')}` : a.active ? a.tool : 'Idle'}
                   </small>
                 </span>
-                <button
+                <Tip label={isPaused ? 'Resume this agent' : 'Pause this agent'}><button
                   onClick={() => setPaused(a.id, !isPaused)} aria-pressed={isPaused}
-                  aria-label={isPaused ? `Resume ${a.name}` : `Pause ${a.name}`} title={isPaused ? 'Resume this agent' : 'Pause this agent'}
+                  aria-label={isPaused ? `Resume ${a.name}` : `Pause ${a.name}`}
                   className="flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted"
                 >
                   {isPaused ? <Play className="size-3" /> : <Pause className="size-3" />}{isPaused ? 'Resume' : 'Pause'}
-                </button>
+                </button></Tip>
               </li>
             );
           })}

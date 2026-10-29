@@ -4,6 +4,7 @@ import { MIXED, px, toPx } from '@/lib/inspect';
 import { cn } from '@/lib/utils';
 import { NumberField } from '@/ui/NumberField';
 import type { Model } from './model';
+import { Tip } from '@/ui/Tip';
 
 // Filled field, Figma-style: no border at rest, a slightly darker fill on hover, a signal-blue ring when focused.
 export const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection';
@@ -81,8 +82,8 @@ export function Section({ title, off, action, children }: { title: string; off?:
 // Small square icon button (align bar, toggles). `on` shows the pressed state; the label is always in title/aria-label.
 export function IconBtn({ label, on, disabled, onClick, children, className }: { label: string; on?: boolean; disabled?: boolean; onClick: () => void; children: ReactNode; className?: string }) {
   return (
-    <button
-      type="button" title={label} aria-label={label} aria-pressed={on} disabled={disabled} onClick={onClick}
+    <Tip label={label}><button
+      type="button" aria-label={label} aria-pressed={on} disabled={disabled} onClick={onClick}
       className={cn(
         'grid h-7 min-w-7 place-items-center rounded-md px-1 text-muted-foreground transition-[background-color,color,scale] duration-150 active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40 pointer-hover:hover:bg-field-hover pointer-hover:hover:text-foreground',
         on && 'bg-field text-foreground',
@@ -90,7 +91,7 @@ export function IconBtn({ label, on, disabled, onClick, children, className }: {
       )}
     >
       {children}
-    </button>
+    </button></Tip>
   );
 }
 
@@ -100,12 +101,12 @@ export function Segmented({ children, className }: { children: ReactNode; classN
 }
 export function SegBtn({ label, on, onClick, children }: { label: string; on: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button" title={label} aria-label={label} aria-pressed={on} onClick={onClick}
+    <Tip label={label}><button
+      type="button" aria-label={label} aria-pressed={on} onClick={onClick}
       className={cn('grid h-6 flex-1 place-items-center rounded-[5px] px-1.5 text-muted-foreground transition-[background-color,color] duration-150 pointer-hover:hover:text-foreground', on && 'bg-background text-foreground shadow-sm')}
     >
       {children}
-    </button>
+    </button></Tip>
   );
 }
 
@@ -114,12 +115,12 @@ export function TokenChip({ value, tokens, onDetach }: { value: string; tokens: 
   const name = tokenName(value);
   if (!name) return null;
   return (
-    <button
-      type="button" title={`Detach: replace var(--${name}) with its value`} disabled={!(name in tokens)} onClick={() => name in tokens && onDetach(tokens[name])}
+    <Tip label={`Detach: replace var(--${name}) with its value`}><button
+      type="button" disabled={!(name in tokens)} onClick={() => name in tokens && onDetach(tokens[name])}
       className="mt-0.5 flex items-center gap-1 rounded bg-muted px-1.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-50"
     >
       {name} <X className="size-2.5" />
-    </button>
+    </button></Tip>
   );
 }
 

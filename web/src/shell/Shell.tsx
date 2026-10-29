@@ -16,6 +16,7 @@ import { useAgents } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { useUi, type PanelTab, type Tool } from '@/store/ui';
+import { Tip } from '@/ui/Tip';
 
 // Status pill: connection state, plus "Claude is designing" while the server reports touched nodes.
 function StatusPill() {
@@ -45,16 +46,15 @@ function AgentChips() {
   return (
     <div className="flex min-w-0 items-center gap-1" role="list" aria-label="Agents on this project">
       {presence.slice(0, 3).map((a) => (
-        <button
-          key={a.id} role="listitem" onClick={() => setTab('agents')}
-          title={`${a.name}: ${a.active ? `${a.pending ? 'waiting on ' : 'last used '}${a.tool}` : 'idle'}${followAgent === a.id ? ' (followed)' : ''}${paused.includes(a.id) ? ' (paused)' : ''}`}
+        <Tip key={a.id} label={`${a.name}: ${a.active ? `${a.pending ? 'waiting on ' : 'last used '}${a.tool}` : 'idle'}${followAgent === a.id ? ' (followed)' : ''}${paused.includes(a.id) ? ' (paused)' : ''}`} side="bottom"><button
+          role="listitem" onClick={() => setTab('agents')}
           className={cn('flex h-6 max-w-40 items-center gap-1.5 rounded-full bg-field px-2 text-[11px] transition-[background-color,scale] duration-150 active:scale-96 pointer-hover:bg-field-hover', a.active ? 'text-foreground' : 'text-muted-foreground opacity-60')}
         >
           <i className={cn('size-1.5 shrink-0 rounded-full', a.pending && 'agent-pulse')} style={{ background: a.color }} />
           <span className="truncate">{a.name}</span>
           {paused.includes(a.id) && <span className="text-[10px] text-muted-foreground">paused</span>}
           {a.active && <span className="hidden truncate text-muted-foreground xl:inline">{a.tool}</span>}
-        </button>
+        </button></Tip>
       ))}
       {presence.length > 3 && <span className="text-[11px] text-muted-foreground">+{presence.length - 3}</span>}
     </div>
@@ -69,18 +69,18 @@ function ZoomControls() {
   return (
     <div role="group" aria-label="View" className="flex items-center gap-0.5">
       <div className="flex h-7 items-center rounded-md bg-field">
-        <Button variant="ghost" size="icon" aria-label="Zoom out" title="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button>
+        <Tip label="Zoom out" keys="−"><Button variant="ghost" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button></Tip>
         <span className="tnum w-10 text-center text-[11px] font-medium">{Math.round(zoom * 100)}%</span>
-        <Button variant="ghost" size="icon" aria-label="Zoom in" title="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button>
+        <Tip label="Zoom in" keys="+"><Button variant="ghost" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button></Tip>
       </div>
-      <Button variant="ghost" size="icon" aria-label="Fit all artboards" title="Fit all" onClick={() => engine?.fit()}><Maximize /></Button>
-      <Button variant={rulers ? 'secondary' : 'ghost'} size="icon" aria-pressed={rulers} aria-label="Rulers (Shift+R)" title="Rulers (Shift+R)" onClick={toggleRulers}><Ruler /></Button>
+      <Tip label="Fit all" keys="Shift+1"><Button variant="ghost" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
+      <Tip label="Rulers" keys="Shift+R"><Button variant={rulers ? 'secondary' : 'ghost'} size="icon" aria-pressed={rulers} aria-label="Rulers (Shift+R)" onClick={toggleRulers}><Ruler /></Button></Tip>
       {/* Follow is about Claude, so its on state borrows the signal colour rather than the neutral "pressed" grey. */}
-      <Button
-        variant="ghost" size="icon" aria-pressed={follow} aria-label="Follow Claude" title="Follow Claude's camera"
+      <Tip label="Follow Claude's camera" side="bottom"><Button
+        variant="ghost" size="icon" aria-pressed={follow} aria-label="Follow Claude"
         className={cn(follow && 'bg-selection-soft text-selection hover:bg-selection-soft hover:text-selection')}
         onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
-      ><Crosshair /></Button>
+      ><Crosshair /></Button></Tip>
     </div>
   );
 }
@@ -127,7 +127,7 @@ export function TopBar({ projectId }: { projectId: string }) {
   const { theme, toggleTheme, toggleLayers, togglePanel, layersOpen, panelOpen } = useUi();
   return (
     <header className="flex h-11 shrink-0 items-center gap-1 border-b bg-background px-2">
-      <Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" title="Pages and layers" onClick={toggleLayers}><PanelLeft /></Button>
+      <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
       <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 pl-1">
         <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 pointer-hover:text-foreground">Projects</Link>
         <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
@@ -141,10 +141,10 @@ export function TopBar({ projectId }: { projectId: string }) {
         <Divider />
         <ZoomControls />
         <Divider />
-        <Button variant="ghost" size="icon" aria-label="Connect agents" title="Connect agents" onClick={() => useUi.getState().setConnectOpen(true)}><Plug /></Button>
-        <Button variant="ghost" size="icon" aria-label="Keyboard shortcuts (?)" title="Keyboard shortcuts (?)" onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard /></Button>
-        <Button variant="ghost" size="icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} title="Theme" onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button>
-        <Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" title="Inspector" onClick={togglePanel}><PanelRight /></Button>
+        <Tip label="Connect agents" side="bottom"><Button variant="ghost" size="icon" aria-label="Connect agents" onClick={() => useUi.getState().setConnectOpen(true)}><Plug /></Button></Tip>
+        <Tip label="Keyboard shortcuts" keys="?" side="bottom"><Button variant="ghost" size="icon" aria-label="Keyboard shortcuts (?)" onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard /></Button></Tip>
+        <Tip label="Theme" side="bottom"><Button variant="ghost" size="icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button></Tip>
+        <Tip label="Inspector" side="bottom"><Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" onClick={togglePanel}><PanelRight /></Button></Tip>
       </div>
     </header>
   );
@@ -202,15 +202,15 @@ export function FloatingToolbar() {
           {i > 0 && TOOLS[i - 1].group !== t.group && <span aria-hidden className="mx-1 h-5 w-px bg-border" />}
           {/* Active tool = solid signal blue, the one place the chrome spends colour. Tool switching is frequent,
               so feedback is a 150ms colour change plus the 0.96 press scale, nothing more. */}
-          <button
-            type="button" aria-pressed={tool === t.id} aria-label={`${t.label} (${t.key})`} title={`${t.label} (${t.key})`} onClick={() => pick(t.id)}
+          <Tip label={t.label} keys={t.key}><button
+            type="button" aria-pressed={tool === t.id} aria-label={`${t.label} (${t.key})`} onClick={() => pick(t.id)}
             className={cn(
               'grid size-8 place-items-center rounded-lg outline-none transition-[background-color,color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
               tool === t.id ? 'bg-selection text-white' : 'text-foreground/75 pointer-hover:bg-foreground/8 pointer-hover:text-foreground',
             )}
           >
             {t.icon}
-          </button>
+          </button></Tip>
         </Fragment>
       ))}
     </div>
@@ -234,8 +234,8 @@ export function RightPanel({ projectId }: { projectId: string }) {
           edge aligned with the header. Names are in the tooltip and aria-label. */}
       <nav role="tablist" aria-label="Panels" className="flex h-10 shrink-0 items-center justify-between border-b px-2">
         {TABS.map((t) => (
-          <button
-            key={t.id} role="tab" aria-selected={panelTab === t.id} aria-label={t.label} title={t.label} onClick={() => setPanelTab(t.id)}
+          <Tip key={t.id} label={t.label} side="bottom"><button
+            role="tab" aria-selected={panelTab === t.id} aria-label={t.label} onClick={() => setPanelTab(t.id)}
             className={cn(
               'relative grid size-7 place-items-center rounded-md outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:size-3.5',
               panelTab === t.id ? 'bg-field text-foreground' : 'text-muted-foreground pointer-hover:text-foreground',
@@ -245,7 +245,7 @@ export function RightPanel({ projectId }: { projectId: string }) {
             {t.id === 'comment' && open > 0 && (
               <span className="tnum absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-selection px-0.5 text-[9px] font-semibold text-white ring-2 ring-background">{open}</span>
             )}
-          </button>
+          </button></Tip>
         ))}
       </nav>
       <div className="flex-1 overflow-auto">

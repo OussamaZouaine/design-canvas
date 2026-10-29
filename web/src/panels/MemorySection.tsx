@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
+import { Tip } from '@/ui/Tip';
 
 const H = ({ children }: { children: React.ReactNode }) => <h4 className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{children}</h4>;
 
@@ -36,9 +37,9 @@ export function MemorySection({ projectId }: { projectId: string }) {
         {m.text}
         {m.kind === 'decision' && <small className="ml-1 text-muted-foreground">{new Date(m.at).toLocaleDateString()}{m.agent ? ` · ${m.agent}` : ''}</small>}
       </span>
-      <button aria-label="Remove" title="Remove" onClick={() => remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors duration-150 active:scale-[0.96] pointer-hover:hover:bg-field-hover pointer-hover:hover:text-foreground">
+      <Tip label="Remove"><button aria-label="Remove" onClick={() => remove(m.id)} className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors duration-150 active:scale-[0.96] pointer-hover:hover:bg-field-hover pointer-hover:hover:text-foreground">
         <X className="size-3" />
-      </button>
+      </button></Tip>
     </li>
   );
 

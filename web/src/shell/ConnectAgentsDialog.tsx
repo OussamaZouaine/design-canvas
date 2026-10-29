@@ -16,6 +16,7 @@ import gemini from '@/assets/agents/gemini.svg';
 import antigravity from '@/assets/agents/antigravity.svg';
 import { toast } from '@/store/toast';
 import { useUi } from '@/store/ui';
+import { Tip } from '@/ui/Tip';
 
 // The address an agent must use. In Vite dev the page is on 5173 (which proxies /mcp), but an agent outside the
 // browser has to talk to the real server on 3777; in production the page and the server share one origin.
@@ -52,10 +53,10 @@ function CopyLine({ text, what, className }: { text: string; what: string; class
   return (
     <div className={cn('flex items-start gap-2 rounded-lg bg-field px-3 py-2', className)}>
       <code className="min-w-0 flex-1 text-[12px] leading-relaxed break-all whitespace-pre-wrap select-all">{text}</code>
-      <button
-        type="button" aria-label={`Copy ${what}`} title={`Copy ${what}`} onClick={() => copy(text, what)}
+      <Tip label={`Copy ${what}`}><button
+        type="button" aria-label={`Copy ${what}`} onClick={() => copy(text, what)}
         className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 pointer-hover:bg-foreground/8 pointer-hover:text-foreground motion-reduce:transition-none"
-      ><Copy className="size-3.5" /></button>
+      ><Copy className="size-3.5" /></button></Tip>
     </div>
   );
 }
