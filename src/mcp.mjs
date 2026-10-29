@@ -1204,33 +1204,41 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
     },
   }, safe(({ project_id, ...opts }) => text(findNodes(target(project_id).doc, opts))));
 
-  // PNG only: the render round-trip yields a bitmap. A PDF would need the browser's print pipeline
-  // (and would lose the exact canvas rendering), so it is deliberately not offered.
+  // Rendered by the open tab (same exporter as the Export button): PNG, JPG, SVG, and a raster PDF (one JPEG page).
   const EXPORT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'exports');
   server.registerTool('export', {
-    description: 'Render an artboard (or one node via node_id) to a PNG file on disk and return its path. Default scale 2 (retina). Works without an open tab when Chrome/Edge is installed. Files go to data/exports/<project_id>/ unless dir is given.',
+    description: 'Render an artboard (or one node via node_id) to a file on disk and return its path. Without scale/format it writes the settings saved in the Export section for that item, else PNG at 2x. format png (layer on transparent), jpg, svg or pdf. Works without an open tab when Chrome/Edge is installed. Files go to data/exports/<project_id>/ unless dir is given.',
     inputSchema: {
       ...pid,
       artboard_id: z.string(),
       node_id: z.string().optional().describe('Crop to this node (must be inside the artboard).'),
       scale: z.number().min(0.25).max(4).optional(),
+      format: z.enum(['png', 'jpg', 'svg', 'pdf']).optional(),
       dir: z.string().optional().describe('Absolute output folder (created if missing). Default data/exports/<project_id>.'),
     },
-  }, safe(async ({ project_id, artboard_id, node_id, scale = 2, dir }) => {
+  }, safe(async ({ project_id, artboard_id, node_id, scale, format, dir }) => {
     const { meta, doc } = target(project_id);
     const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
     if (node_id && doc.artboardOf(node_id)?.id !== artboard_id) throw new Error(`Node ${node_id} is not inside ${artboard_id}`);
     if (dir && !path.isAbsolute(dir)) throw new Error('dir must be an absolute path');
-    const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, scale, maxWidth: 8000, format: 'png' });
+    const id = node_id ?? artboard_id;
+    const saved = doc.exportSettings[id];
+    const rows = scale === undefined && !format && saved?.length ? saved : [{ scale: `${scale ?? 2}x`, format: format ?? 'png' }];
     const out = dir ? path.resolve(dir) : path.join(EXPORT_DIR, meta.id);
     fs.mkdirSync(out, { recursive: true });
     // The file name is generated from the board/node name, never taken from the caller (no path tricks).
     const label = (node_id ? doc.nodeInfo(node_id).name ?? '' : ab.name).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'export';
-    const file = path.join(out, `${label}-${node_id ?? artboard_id}@${scale}x.png`);
-    const buf = Buffer.from(dataUrl.split(',')[1], 'base64');
-    fs.writeFileSync(file, buf);
-    return text({ path: file, bytes: buf.length });
+    const files = [];
+    for (const row of rows) {
+      const dataUrl = await requestScreenshot(meta.id, artboard_id, { nodeId: node_id, exportRow: row });
+      const buf = Buffer.from(dataUrl.split(',')[1], 'base64');
+      const suffix = (row.suffix ?? `@${row.scale.replace(/x$/, '')}x`).replace(/[^A-Za-z0-9._@-]+/g, '-');
+      const file = path.join(out, `${label}-${id}${suffix}.${row.format}`);
+      fs.writeFileSync(file, buf);
+      files.push({ path: file, bytes: buf.length });
+    }
+    return text(files.length === 1 ? files[0] : { files });
   }));
 
   // The SDK stamps `$schema` on every inputSchema (~14 tokens x 62 tools) and the model gets nothing from it.
