@@ -10,6 +10,7 @@ import { isNodeEl } from '@/lib/htmlTree';
 import { PathTools } from './pen';
 import { toast } from '@/store/toast';
 import type { Artboard, DocData, Page, ProjectFont } from '@/api/types';
+import { exportNow } from '@/lib/exportActions';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
@@ -159,6 +160,7 @@ export class CanvasEngine {
       selectNew: (ids) => this.selectWhenReady(ids[0], 40, ids),
       redraw: () => this.drawSelection(),
       markUserEdit: () => this.markUserEdit(),
+      exportSelection: () => void exportNow(this),
       activePage: () => this.activePage,
       centerBoard: () => this.centerBoard(),
     }, this.abort.signal);
@@ -541,6 +543,7 @@ export class CanvasEngine {
       findBoard: (id) => this.doc.artboards.find((a) => a.id === id),
       findElement: (id, opts) => this.findElement(id, opts),
       frameOf: (id) => this.boards.get(id.startsWith('A') ? id : this.pidIndex.get(id) ?? '')?.frame ?? null,
+      boardIdOf: (id) => (id.startsWith('A') ? id : this.pidIndex.get(id)),
       reference: (refId) => (this.doc.references as { id: string; width: number; height: number }[] | undefined)?.find((r) => r.id === refId),
     };
   }

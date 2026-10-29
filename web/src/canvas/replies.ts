@@ -3,6 +3,8 @@
 // a request event and waits for our POST. Plain module, no React; the engine supplies the board data.
 import { canvasAction } from '@/api/projects';
 import type { Artboard } from '@/api/types';
+import type { ExportRow } from '@/lib/exportspec';
+import { buildExport } from './exporter';
 import { rasterizeCanvas, type Crop } from './raster';
 import { measureLayout } from './rects';
 import { fontsReady } from './fonts';
@@ -14,7 +16,20 @@ export interface ReplyHost {
   findElement: (id: string, opts?: { mount?: boolean }) => HTMLElement | null;
   // Artboard that holds a node id, plus its frame element (for measuring a crop).
   frameOf: (id: string) => HTMLElement | null;
+  // Id of the artboard that holds a node (or the id itself for a board).
+  boardIdOf: (id: string) => string | undefined;
   reference: (refId: string) => { id: string; width: number; height: number } | undefined;
+}
+
+// The box of a node inside its artboard, in artboard units, measured from the live DOM (the board is mounted first
+// if it was showing a bitmap). Shared by screenshots and exports.
+export function cropOf(host: ReplyHost, ab: Artboard, nodeId: string): Crop {
+  const el = host.findElement(nodeId, { mount: true });
+  const frame = host.frameOf(nodeId);
+  if (!el || !frame) throw new Error('Node not found on the canvas');
+  const f = frame.getBoundingClientRect(), r = el.getBoundingClientRect();
+  const k = f.width / ab.width; // on-screen pixels per artboard unit (the current zoom)
+  return { x: (r.left - f.left) / k, y: (r.top - f.top) / k, w: r.width / k, h: r.height / k };
 }
 
 // Token-lean defaults (an image costs about width*height/750 tokens): 1x, at most 800 px wide,
@@ -26,19 +41,22 @@ export interface ReplyHost {
 export async function screenshot(
   host: ReplyHost,
   artboardId: string,
-  { nodeId, scale = 1, maxWidth = 800, maxHeight, format = 'jpeg' }: { nodeId?: string; scale?: number; maxWidth?: number; maxHeight?: number; format?: string } = {},
+  { nodeId, scale = 1, maxWidth = 800, maxHeight, format = 'jpeg', exportRow }: { nodeId?: string; scale?: number; maxWidth?: number; maxHeight?: number; format?: string; exportRow?: ExportRow } = {},
 ) {
   const ab = host.findBoard(artboardId);
   if (!ab) throw new Error('Artboard not found');
-  let crop: Crop | undefined;
-  if (nodeId) {
-    const el = host.findElement(nodeId, { mount: true });
-    const frame = host.frameOf(nodeId);
-    if (!el || !frame) throw new Error('Node not found on the canvas');
-    const f = frame.getBoundingClientRect(), r = el.getBoundingClientRect();
-    const k = f.width / ab.width; // on-screen pixels per artboard unit (the current zoom)
-    crop = { x: (r.left - f.left) / k, y: (r.top - f.top) / k, w: r.width / k, h: r.height / k };
+  // The MCP export tool goes through the same exporter as the Export button (PNG / JPG / SVG / PDF, a layer isolated).
+  if (exportRow) {
+    const res = await buildExport(host, [{ id: nodeId ?? artboardId, name: 'export' }], [exportRow]);
+    if (!res) throw new Error('Nothing to export');
+    return new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(new Error('Could not read the exported file'));
+      r.readAsDataURL(res.blob);
+    });
   }
+  let crop = nodeId ? cropOf(host, ab, nodeId) : undefined;
   const w = crop?.w ?? ab.width;
   const eff = Math.min(scale, maxWidth / w); // never exceed maxWidth, whatever scale was asked
   const h = crop?.h ?? ab.height;

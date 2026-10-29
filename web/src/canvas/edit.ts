@@ -37,6 +37,7 @@ export interface EditHost {
   selectNew: (ids: string[]) => void;         // select nodes that only exist once the doc event has redrawn (wrapper, freed children)
   redraw: () => void;                          // reposition selection / hover boxes
   markUserEdit: () => void;
+  exportSelection: () => void;
   activePage: () => string | null;
   centerBoard: () => string | null;            // the board under the viewport centre (else the nearest one on this page): where a paste with no selection lands
   selBox: HTMLElement;
@@ -624,6 +625,9 @@ export class CanvasEditor {
       canvasAction(host.projectId, key === 'y' || e.shiftKey ? 'redo' : 'undo').catch((err) => fail(err, 'Nothing to do'));
     } else if (mod && !e.shiftKey && !e.altKey && (key === 'c' || key === 'x') && sel.length && !getSelection()?.toString()) {
       this.copy(sel, key === 'x');
+    } else if (mod && e.shiftKey && !e.altKey && key === 'e' && sel.length) {
+      e.preventDefault();
+      host.exportSelection(); // Figma's shortcut: download with the saved export rows
     } else if (mod && key === 'g' && nodes.length) {
       // Ctrl+G groups, Ctrl+Shift+G / Ctrl+Alt+G ungroups (the browser's own Ctrl+Shift+G is find-previous).
       e.preventDefault();
