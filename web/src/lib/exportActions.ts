@@ -19,9 +19,9 @@ function items(engine: Engine): ExportItem[] {
 const savedRows = (id: string): ExportRow[] => ((useProject.getState().doc?.exports as Record<string, ExportRow[]> | undefined) ?? {})[id] ?? [];
 
 // "Export…": show the Export section (it always shows one setting, 1x PNG until edited). Exporting itself
-// stays a deliberate click on the button.
-export function openExport(engine: Engine) {
-  if (!engine.selection.length) return;
+// stays a deliberate click on the button. With nothing selected the page view shows its own Export section (all frames),
+// so the top bar's Export button works either way.
+export function openExport(_engine: Engine) {
   useUi.getState().setPanelTab('design');
   // The section renders after the tab switch and the doc update: wait a frame or two, then bring it into view.
   const reveal = (tries: number) => {

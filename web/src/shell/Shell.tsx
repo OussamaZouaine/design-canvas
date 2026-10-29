@@ -1,16 +1,20 @@
 import { Link } from '@tanstack/react-router';
-import { Activity, Bot, Braces, ChevronRight, Circle, Crosshair, Hand, History, Keyboard, Image, Maximize, MessageSquare, Minus, MousePointer2, Moon, Palette, PanelLeft, PanelRight, PenTool, Plug, Plus, RectangleHorizontal, Ruler, Slash, SlidersHorizontal, Square, Sun, Type } from 'lucide-react';
-import { Fragment, useEffect, useRef, type ReactNode } from 'react';
-import { pageOfBoard } from '@/canvas/engine';
+import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, PenTool, Plug, Plus, Ruler, Slash, Square, Type } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CommentsPanel } from '@/panels/CommentsPanel';
-import { ActivityPanel, VersionsPanel } from '@/panels/HistoryPanels';
 import { InspectorPanel } from '@/panels/InspectorPanel';
-import { ThemePanel } from '@/panels/ThemePanel';
-import { McpPanel, TokensPanel } from '@/panels/TokensMcpPanels';
+import { McpPanel } from '@/panels/TokensMcpPanels';
 import { AgentsPanel, toolLabel, usePresence } from '@/panels/AgentsPanel';
 import { LayersPanel } from '@/panels/LayersPanel';
 import { PagesPanel } from '@/panels/PagesPanel';
+import { HistoryView, StylesView } from '@/shell/PanelViews';
+import { openExport } from '@/lib/exportActions';
+import { modLabel, shiftLabel } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { useAgents } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
@@ -61,32 +65,60 @@ function AgentChips() {
   );
 }
 
-// Zoom readout + fit + rulers + the "follow Claude" camera toggle. The zoom trio sits in one filled segment so the
-// view controls read as a unit (Apple: grouping and mapping) instead of a row of loose icons.
+// Zoom group: one shadcn button-group (minus, readout, plus, fit) so the view controls read as a unit.
 function ZoomControls() {
-  const { engine, zoom, follow, setFollow } = useCanvas();
-  const { rulers, toggleRulers } = useUi();
+  const { engine, zoom } = useCanvas();
   return (
-    <div role="group" aria-label="View" className="flex items-center gap-0.5">
-      <div className="flex h-7 items-center rounded-md bg-field">
-        <Tip label="Zoom out" keys="−"><Button variant="ghost" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button></Tip>
-        <span className="tnum w-10 text-center text-[11px] font-medium">{Math.round(zoom * 100)}%</span>
-        <Tip label="Zoom in" keys="+"><Button variant="ghost" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button></Tip>
-      </div>
-      <Tip label="Fit all" keys="Shift+1"><Button variant="ghost" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
-      <Tip label="Rulers" keys="Shift+R"><Button variant={rulers ? 'secondary' : 'ghost'} size="icon" aria-pressed={rulers} aria-label="Rulers (Shift+R)" onClick={toggleRulers}><Ruler /></Button></Tip>
-      {/* Follow is about Claude, so its on state borrows the signal colour rather than the neutral "pressed" grey. */}
-      <Tip label="Follow Claude's camera" side="bottom"><Button
-        variant="ghost" size="icon" aria-pressed={follow} aria-label="Follow Claude"
-        className={cn(follow && 'bg-selection-soft text-selection hover:bg-selection-soft hover:text-selection')}
-        onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
-      ><Crosshair /></Button></Tip>
-    </div>
+    <ButtonGroup aria-label="Zoom">
+      <Tip label="Zoom out" keys="−" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button></Tip>
+      <ButtonGroupText className="tnum w-12 justify-center px-0 text-[11px] font-medium">{Math.round(zoom * 100)}%</ButtonGroupText>
+      <Tip label="Zoom in" keys="+" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button></Tip>
+      <Tip label="Fit all" keys="Shift+1" side="bottom"><Button variant="outline" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
+    </ButtonGroup>
   );
 }
 
-// Hairline between groups in the top bar.
-const Divider = () => <span aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border" />;
+// Follow is about Claude, so its on state borrows the signal colour rather than the neutral "pressed" grey.
+function FollowButton() {
+  const { engine, follow, setFollow } = useCanvas();
+  return (
+    <Tip label="Follow Claude's camera" side="bottom"><Button
+      variant="ghost" size="28" aria-pressed={follow}
+      className={cn(follow && 'bg-selection-soft text-selection hover:bg-selection-soft hover:text-selection')}
+      onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
+    ><Crosshair />Follow</Button></Tip>
+  );
+}
+
+// Main menu behind the champagne logo mark: everything that left the bar because it is used rarely.
+// (There is no Settings screen yet, so the menu has no Settings item.)
+function MainMenu() {
+  const { theme, rulers, toggleRulers } = useUi();
+  const setTheme = (t: string) => { if (t !== useUi.getState().theme) useUi.getState().toggleTheme(); };
+  return (
+    <DropdownMenu>
+      <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="grid size-7 shrink-0 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink outline-none transition-[scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50" />}>D</DropdownMenuTrigger></Tip>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuItem render={<Link to="/" />}><FolderOpen />Projects</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => useUi.getState().setConnectOpen(true)}><Plug />Connect agents</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => useUi.getState().openView('history')}><History />History</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem checked={rulers} onCheckedChange={toggleRulers}><Ruler />Rulers<DropdownMenuShortcut>{shiftLabel()}R</DropdownMenuShortcut></DropdownMenuCheckboxItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger><Moon />Theme</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard />Keyboard shortcuts<DropdownMenuShortcut>?</DropdownMenuShortcut></DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 // "Claude is writing to <board>" pill over the canvas. The board's own label is unreadable when zoomed out
 // over dozens of boards, so this is the always-visible cue; clicking it glides to that board.
@@ -119,55 +151,90 @@ export function LivePill() {
   );
 }
 
-export function TopBar({ projectId }: { projectId: string }) {
+// Three zones (a grid with equal side columns keeps the centre truly centred): left = menu + where you are,
+// centre = who is working and the connection, right = view controls, the one primary action (Export), panel toggle.
+export function TopBar({ projectId: _projectId }: { projectId: string }) {
   const name = useProject((s) => s.meta?.name);
-  const doc = useProject((s) => s.doc);
-  const page = useCanvas((s) => s.activePage);
-  const count = doc ? doc.artboards.filter((a) => pageOfBoard(doc, a) === page).length : 0;
-  const { theme, toggleTheme, toggleLayers, togglePanel, layersOpen, panelOpen } = useUi();
+  const { toggleLayers, togglePanel, layersOpen, panelOpen } = useUi();
+  const engine = useCanvas((s) => s.engine);
   return (
-    <header className="flex h-11 shrink-0 items-center gap-1 border-b bg-background px-2">
-      <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 pl-1">
-        <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 pointer-hover:text-foreground">Projects</Link>
-        <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
-        {/* textContent-equivalent: React escapes text, so untrusted project names are safe here. */}
-        <span aria-current="page" className="truncate px-1 font-semibold">{name ?? '…'}</span>
-        <span className="tnum shrink-0 whitespace-nowrap text-muted-foreground">{count} {count === 1 ? 'artboard' : 'artboards'}</span>
-      </nav>
-      <div className="ml-auto flex items-center gap-1">
+    <header className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-background px-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <MainMenu />
+        <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
+          <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 pointer-hover:text-foreground">Projects</Link>
+          <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
+          {/* React escapes text, so untrusted project names are safe here. */}
+          <span aria-current="page" className="truncate px-1 font-semibold">{name ?? '…'}</span>
+        </nav>
+      </div>
+      <div className="flex min-w-0 items-center gap-1">
         <AgentChips />
         <StatusPill />
-        <Divider />
+      </div>
+      <div className="flex items-center justify-end gap-1.5">
         <ZoomControls />
-        <Divider />
-        <Tip label="Connect agents" side="bottom"><Button variant="ghost" size="icon" aria-label="Connect agents" onClick={() => useUi.getState().setConnectOpen(true)}><Plug /></Button></Tip>
-        <Tip label="Keyboard shortcuts" keys="?" side="bottom"><Button variant="ghost" size="icon" aria-label="Keyboard shortcuts (?)" onClick={() => useUi.getState().setShortcutsOpen(true)}><Keyboard /></Button></Tip>
-        <Tip label="Theme" side="bottom"><Button variant="ghost" size="icon" aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggleTheme}>{theme === 'dark' ? <Sun /> : <Moon />}</Button></Tip>
+        <FollowButton />
+        <Tip label="Export" keys={`${modLabel()}${shiftLabel()}E`} side="bottom"><Button variant="brand" size="28" onClick={() => engine && openExport(engine)}>Export</Button></Tip>
         <Tip label="Inspector" side="bottom"><Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" onClick={togglePanel}><PanelRight /></Button></Tip>
       </div>
     </header>
   );
 }
 
-// `group` splits the toolbar into navigate / draw / content / review clusters with a hairline between them.
-const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string; group: number }[] = [
-  { id: 'move', icon: <MousePointer2 />, label: 'Move', key: 'V', group: 0 },
-  { id: 'hand', icon: <Hand />, label: 'Hand', key: 'H', group: 0 },
-  { id: 'frame', icon: <Square />, label: 'Frame', key: 'F', group: 1 },
-  { id: 'rect', icon: <RectangleHorizontal />, label: 'Rectangle', key: 'R', group: 1 },
-  { id: 'ellipse', icon: <Circle />, label: 'Ellipse', key: 'O', group: 1 },
-  { id: 'line', icon: <Slash />, label: 'Line', key: 'L', group: 1 },
-  { id: 'pen', icon: <PenTool />, label: 'Pen', key: 'P', group: 1 },
-  { id: 'text', icon: <Type />, label: 'Text', key: 'T', group: 2 },
-  { id: 'image', icon: <Image />, label: 'Image', key: 'I', group: 2 },
-  { id: 'comment', icon: <MessageSquare />, label: 'Comment', key: 'C', group: 3 },
+const TOOLS: { id: Tool; icon: ReactNode; label: string; key: string }[] = [
+  { id: 'move', icon: <MousePointer2 />, label: 'Move', key: 'V' },
+  { id: 'hand', icon: <Hand />, label: 'Hand', key: 'H' },
+  { id: 'frame', icon: <Frame />, label: 'Frame', key: 'F' },
+  { id: 'rect', icon: <Square />, label: 'Rectangle', key: 'R' },
+  { id: 'ellipse', icon: <Circle />, label: 'Ellipse', key: 'O' },
+  { id: 'line', icon: <Slash />, label: 'Line', key: 'L' },
+  { id: 'pen', icon: <PenTool />, label: 'Pen', key: 'P' },
+  { id: 'text', icon: <Type />, label: 'Text', key: 'T' },
+  { id: 'image', icon: <Image />, label: 'Image', key: 'I' },
+  { id: 'comment', icon: <MessageSquare />, label: 'Comment', key: 'C' },
 ];
+const toolOf = (id: Tool) => TOOLS.find((t) => t.id === id)!;
+// The two split slots: Move/Hand and the four shape tools. Six toolbar slots in all.
+const POINTER_GROUP: Tool[] = ['move', 'hand'];
+const SHAPE_GROUP: Tool[] = ['rect', 'ellipse', 'line', 'pen'];
 
 const typing = (t: EventTarget | null) => t instanceof Element && !!t.closest('input, textarea, select, [contenteditable]');
 
-// Bottom-centre floating toolbar. Frame (drag a rectangle), Text (click an element), Hand (drag to pan) and
-// Comment are modes the canvas engine reads; Image opens a file picker (the picture becomes a reference board).
+// Active tool = solid signal blue, the one place the chrome spends colour. Tool switching is frequent, so feedback
+// is a 150ms colour change plus the 0.96 press scale, nothing more. Radii: 8px buttons + 4px padding = 12px shell.
+const slotClass = (on: boolean) => cn(
+  'grid h-8 place-items-center rounded-lg outline-none transition-[background-color,color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
+  on ? 'bg-selection text-white' : 'text-foreground/75 pointer-hover:bg-foreground/8 pointer-hover:text-foreground',
+);
+
+// A toolbar slot that stands for several tools (split button): the main button runs the last-used one, the small
+// chevron opens the list. Remembering the last choice keeps the common path one click.
+function SplitSlot({ group, label, tool, pick }: { group: Tool[]; label: string; tool: Tool; pick: (id: Tool) => void }) {
+  const [last, setLast] = useState<Tool>(group[0]);
+  const active = group.includes(tool);
+  // Shortcuts (R, O, L, P...) change the tool without touching this slot, so follow the store to keep `last` honest.
+  useEffect(() => { if (group.includes(tool)) setLast(tool); }, [tool, group]);
+  const shown = toolOf(active ? tool : last);
+  return (
+    <div role="group" aria-label={label} className="flex items-center">
+      <Tip label={shown.label} keys={shown.key}><button type="button" aria-pressed={active} aria-label={`${shown.label} (${shown.key})`} onClick={() => pick(shown.id)} className={cn(slotClass(active), 'w-7 rounded-r-none')}>{shown.icon}</button></Tip>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<button type="button" aria-label={`More ${label.toLowerCase()} tools`} className={cn(slotClass(active), 'w-4 rounded-l-none [&_svg]:size-3')} />}><ChevronDown /></DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" sideOffset={10} className="w-44">
+          {group.map((id) => { const t = toolOf(id); return (
+            <DropdownMenuItem key={id} onClick={() => pick(id)}>{t.icon}{t.label}<DropdownMenuShortcut>{t.key}</DropdownMenuShortcut></DropdownMenuItem>
+          ); })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// Bottom-centre floating toolbar, six slots: Move/Hand, Frame, Shapes, Text, Image, Comment. Frame (drag a rectangle),
+// Text (click an element), Hand (drag to pan) and Comment are modes the canvas engine reads; Image opens a file
+// picker (the picture becomes a reference board).
 export function FloatingToolbar() {
   const { tool, setTool } = useUi();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -190,73 +257,80 @@ export function FloatingToolbar() {
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  const single = (id: Tool) => { const t = toolOf(id); return (
+    <Tip label={t.label} keys={t.key}><button type="button" aria-pressed={tool === id} aria-label={`${t.label} (${t.key})`} onClick={() => pick(id)} className={cn(slotClass(tool === id), 'w-8')}>{t.icon}</button></Tip>
+  ); };
+  const sep = <span aria-hidden className="mx-1 h-5 w-px bg-border" />;
+
   return (
-    // Translucent material so the canvas stays visible under it. Radii are concentric: 8px buttons + 4px padding = 12px shell.
+    // Translucent material so the canvas stays visible under it.
     <div role="toolbar" aria-label="Tools" aria-orientation="horizontal" className="material absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-xl p-1">
       <input
         ref={fileInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden aria-hidden tabIndex={-1}
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void engine?.addImageFile(f); e.target.value = ''; }}
       />
-      {TOOLS.map((t, i) => (
-        <Fragment key={t.id}>
-          {i > 0 && TOOLS[i - 1].group !== t.group && <span aria-hidden className="mx-1 h-5 w-px bg-border" />}
-          {/* Active tool = solid signal blue, the one place the chrome spends colour. Tool switching is frequent,
-              so feedback is a 150ms colour change plus the 0.96 press scale, nothing more. */}
-          <Tip label={t.label} keys={t.key}><button
-            type="button" aria-pressed={tool === t.id} aria-label={`${t.label} (${t.key})`} onClick={() => pick(t.id)}
-            className={cn(
-              'grid size-8 place-items-center rounded-lg outline-none transition-[background-color,color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
-              tool === t.id ? 'bg-selection text-white' : 'text-foreground/75 pointer-hover:bg-foreground/8 pointer-hover:text-foreground',
-            )}
-          >
-            {t.icon}
-          </button></Tip>
-        </Fragment>
-      ))}
+      <SplitSlot group={POINTER_GROUP} label="Pointer" tool={tool} pick={pick} />
+      {sep}
+      {single('frame')}
+      <SplitSlot group={SHAPE_GROUP} label="Shapes" tool={tool} pick={pick} />
+      {sep}
+      {single('text')}
+      {single('image')}
+      {sep}
+      {single('comment')}
     </div>
   );
 }
 
-const TABS: { id: PanelTab; label: string; icon: ReactNode }[] = [
-  { id: 'design', label: 'Design', icon: <SlidersHorizontal /> }, { id: 'comment', label: 'Comments', icon: <MessageSquare /> },
-  { id: 'activity', label: 'Activity', icon: <Activity /> }, { id: 'versions', label: 'Versions', icon: <History /> },
-  { id: 'theme', label: 'Theme', icon: <Palette /> }, { id: 'tokens', label: 'Tokens', icon: <Braces /> },
-  { id: 'agents', label: 'Agents', icon: <Bot /> }, { id: 'mcp', label: 'MCP', icon: <Plug /> },
+const TABS: { id: PanelTab; label: string }[] = [
+  { id: 'design', label: 'Design' }, { id: 'comment', label: 'Comments' }, { id: 'agents', label: 'Agents' },
 ];
 
+// Agents tab: the live feed, plus the two things that used to be their own tabs: History (a view) and MCP (a collapsed section).
+function AgentsTab({ projectId }: { projectId: string }) {
+  return (
+    <>
+      <div className="flex items-center justify-between border-b px-3 py-1.5">
+        <span className="text-[11px] text-muted-foreground">Who is working here</span>
+        <Button variant="ghost" size="24" onClick={() => useUi.getState().openView('history')}><History />History</Button>
+      </div>
+      <AgentsPanel />
+      <Collapsible className="border-t">
+        <CollapsibleTrigger className="group flex h-8 w-full items-center gap-1.5 px-3 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+          <ChevronRight className="size-3 transition-transform duration-150 group-data-panel-open:rotate-90" />MCP connection
+        </CollapsibleTrigger>
+        <CollapsibleContent><McpPanel projectId={projectId} /></CollapsibleContent>
+      </Collapsible>
+    </>
+  );
+}
+
 export function RightPanel({ projectId }: { projectId: string }) {
-  const { panelTab, setPanelTab, panelOpen } = useUi();
+  const { panelTab, setPanelTab, panelOpen, panelView } = useUi();
   const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
   if (!panelOpen) return null;
   return (
     <aside aria-label="Inspector" className="flex w-68 shrink-0 flex-col border-l bg-background">
-      {/* Eight text tabs wrapped onto two ragged lines at this width; one even row of icon tabs keeps the panel's top
-          edge aligned with the header. Names are in the tooltip and aria-label. */}
-      <nav role="tablist" aria-label="Panels" className="flex h-10 shrink-0 items-center justify-between border-b px-2">
-        {TABS.map((t) => (
-          <Tip key={t.id} label={t.label} side="bottom"><button
-            role="tab" aria-selected={panelTab === t.id} aria-label={t.label} onClick={() => setPanelTab(t.id)}
-            className={cn(
-              'relative grid size-7 place-items-center rounded-md outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:size-3.5',
-              panelTab === t.id ? 'bg-field text-foreground' : 'text-muted-foreground pointer-hover:text-foreground',
-            )}
-          >
-            {t.icon}
-            {t.id === 'comment' && open > 0 && (
-              <span className="tnum absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-selection px-0.5 text-[9px] font-semibold text-white ring-2 ring-background">{open}</span>
-            )}
-          </button></Tip>
-        ))}
-      </nav>
+      {/* shadcn Tabs as a segmented control: three labelled tabs instead of eight icons. Panels render below, so
+          only the list is used. */}
+      <div className="shrink-0 border-b p-2">
+        <Tabs value={panelTab} onValueChange={(v) => setPanelTab(v as PanelTab)}>
+          <TabsList aria-label="Panels" className="w-full bg-field">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id} className="data-active:bg-background data-active:shadow-sm">
+                {t.label}
+                {t.id === 'comment' && open > 0 && <span className="tnum grid h-3.5 min-w-3.5 place-items-center rounded-full bg-selection px-1 text-[9px] font-semibold text-white">{open}</span>}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
       <div className="flex-1 overflow-auto">
-        {panelTab === 'design' && <InspectorPanel projectId={projectId} />}
-        {panelTab === 'comment' && <CommentsPanel />}
-        {panelTab === 'activity' && <ActivityPanel projectId={projectId} />}
-        {panelTab === 'versions' && <VersionsPanel projectId={projectId} />}
-        {panelTab === 'theme' && <ThemePanel projectId={projectId} />}
-        {panelTab === 'tokens' && <TokensPanel projectId={projectId} />}
-        {panelTab === 'agents' && <AgentsPanel />}
-        {panelTab === 'mcp' && <McpPanel projectId={projectId} />}
+        {panelView === 'history' && <HistoryView projectId={projectId} />}
+        {panelView === 'styles' && <StylesView projectId={projectId} />}
+        {!panelView && panelTab === 'design' && <InspectorPanel projectId={projectId} />}
+        {!panelView && panelTab === 'comment' && <CommentsPanel />}
+        {!panelView && panelTab === 'agents' && <AgentsTab projectId={projectId} />}
       </div>
     </aside>
   );

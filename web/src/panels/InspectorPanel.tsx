@@ -1,11 +1,13 @@
-import { X } from 'lucide-react';
+import { Palette, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { DEFAULT_ROW, type ExportRow } from '@/lib/exportspec';
 import type { Artboard, DocData, Page } from '@/api/types';
 import { pagesOf } from '@/canvas/engine';
 import { sendEdit } from '@/lib/htmlTree';
 import { useCanvas } from '@/store/canvas';
+import { Button } from '@/components/ui/button';
 import { useProject } from '@/store/project';
+import { useUi } from '@/store/ui';
 import { ColorField } from '@/ui/ColorField';
 import { NumberField } from '@/ui/NumberField';
 import { rowLabel, Section, SelectField, TextField, tokenName } from './inspector/controls';
@@ -164,6 +166,7 @@ function PageInspector({ projectId, doc, pageId, lists, tokens }: { projectId: s
         </div>
       </Section>
       {boards.length > 0 && <ExportSection projectId={projectId} items={boards} rows={exportRows} setRows={setExportRows} />}
+      <div className="px-3 py-2"><Button variant="outline" size="28" className="w-full justify-start" onClick={() => useUi.getState().openView('styles')}><Palette />Styles: theme, tokens, memory</Button></div>
       <p className="px-3 py-2 text-muted-foreground">Select a layer on the canvas or in the Layers panel to edit its styles.</p>
     </div>
   );
