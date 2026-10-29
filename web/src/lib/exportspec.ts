@@ -11,7 +11,8 @@ export const DEFAULT_ROW: ExportRow = { scale: '1x', format: 'png' };
 // Browsers refuse canvases past these limits (Chrome: 16384 px a side, about 268 megapixels).
 export const MAX_SIDE = 16384;
 export const MAX_AREA = 268_000_000;
-export const MAX_ROWS = 8;
+// One setting per item (the array shape is kept so the MCP tool and the multi-row writers still work).
+export const MAX_ROWS = 1;
 
 export type ParsedScale = { kind: 'x'; value: number } | { kind: 'w' | 'h'; value: number };
 

@@ -1,9 +1,9 @@
-import { ChevronDown, Ellipsis, Minus, Plus } from 'lucide-react';
+import { ChevronDown, Ellipsis } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { DocData } from '@/api/types';
 import { sendEdit } from '@/lib/htmlTree';
 import { boxOf, exportAndDownload, renderCanvas, type ExportItem } from '@/canvas/exporter';
-import { DEFAULT_ROW, FORMATS, MAX_ROWS, parseScale, SCALE_PRESETS, type ExportFormat, type ExportRow } from '@/lib/exportspec';
+import { DEFAULT_ROW, FORMATS, parseScale, SCALE_PRESETS, type ExportFormat, type ExportRow } from '@/lib/exportspec';
 import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
@@ -27,57 +27,55 @@ const readOpen = () => { try { return localStorage.getItem(PREVIEW_KEY) !== '0';
 
 export function ExportSection({ projectId, items, rows, setRows }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
-  const [more, setMore] = useState<number | null>(null); // row whose "…" options are open
+  const [more, setMore] = useState(false); // "…" options open
   const label = items.length === 1 ? items[0].name : `${items.length} items`;
-  const patch = (i: number, next: Partial<ExportRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...next } : r)));
+  // One setting per item: unsaved items show the default (1x PNG) and save it on the first edit.
+  const row = rows[0] ?? DEFAULT_ROW;
+  const patch = (next: Partial<ExportRow>) => setRows([{ ...row, ...next }]);
 
   const run = async () => {
     const host = useCanvas.getState().engine?.replyHost();
     if (!host || busy) return;
-    const list = rows.length ? rows : [DEFAULT_ROW];
     setBusy('Exporting…');
-    await exportAndDownload(host, items, list, (d, t) => t > 1 && setBusy(`Exporting ${d}/${t}`));
+    await exportAndDownload(host, items, [row], (d, t) => t > 1 && setBusy(`Exporting ${d}/${t}`));
     setBusy(null);
   };
 
   return (
-    <Section title="Export" action={<IconBtn label="Add export setting" disabled={rows.length >= MAX_ROWS} onClick={() => setRows([...rows, { ...(rows.at(-1) ?? DEFAULT_ROW), suffix: undefined }])}><Plus className="size-3.5" /></IconBtn>}>
+    <Section title="Export">
       <datalist id="dl-export-scale">{SCALE_PRESETS.map((s) => <option key={s} value={s} />)}</datalist>
-      {rows.map((row, i) => (
-        <div key={i} className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1">
-            <ScaleField value={row.scale} onCommit={(scale) => patch(i, { scale })} />
-            <label className={cn(chrome, 'w-[4.5rem] shrink-0')}>
-              <select aria-label="Format" value={row.format} onChange={(e) => patch(i, { format: e.target.value as ExportFormat })} className="min-w-0 flex-1 bg-transparent px-1.5 uppercase outline-none [&>option]:bg-popover">
-                {FORMATS.map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
-              </select>
-            </label>
-            <IconBtn label="More options" on={more === i} onClick={() => setMore(more === i ? null : i)}><Ellipsis className="size-3.5" /></IconBtn>
-            <IconBtn label="Remove export setting" onClick={() => { setMore(null); setRows(rows.filter((_, j) => j !== i)); }}><Minus className="size-3.5" /></IconBtn>
-          </div>
-          {more === i && (
-            <div className="flex items-center gap-1 pl-1">
-              <label className={cn(chrome, 'flex-1')} title="Added to the file name">
-                <span className="w-12 shrink-0 select-none px-1.5 text-muted-foreground">Suffix</span>
-                <input aria-label="File name suffix" spellCheck={false} placeholder="e.g. @2x" defaultValue={row.suffix ?? ''} onBlur={(e) => patch(i, { suffix: e.target.value.trim() || undefined })} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} className="min-w-0 flex-1 bg-transparent pr-1.5 outline-none placeholder:text-muted-foreground" />
-              </label>
-              {(row.format === 'jpg' || row.format === 'pdf') && (
-                <label className={cn(chrome, 'w-24 shrink-0')} title="JPEG quality (10 to 100)">
-                  <span className="shrink-0 select-none px-1.5 text-muted-foreground">Quality</span>
-                  <input aria-label="Quality" type="number" min={10} max={100} defaultValue={Math.round((row.quality ?? 0.92) * 100)} onBlur={(e) => { const q = Number(e.target.value); if (q >= 10 && q <= 100) patch(i, { quality: q / 100 }); }} className="tnum min-w-0 flex-1 bg-transparent pr-1 outline-none" />
-                </label>
-              )}
-            </div>
-          )}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-1">
+          <ScaleField value={row.scale} onCommit={(scale) => patch({ scale })} />
+          <label className={cn(chrome, 'w-[4.5rem] shrink-0')}>
+            <select aria-label="Format" value={row.format} onChange={(e) => patch({ format: e.target.value as ExportFormat })} className="min-w-0 flex-1 bg-transparent px-1.5 uppercase outline-none [&>option]:bg-popover">
+              {FORMATS.map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+            </select>
+          </label>
+          <IconBtn label="More options" on={more} onClick={() => setMore(!more)}><Ellipsis className="size-3.5" /></IconBtn>
         </div>
-      ))}
+        {more && (
+          <div className="flex items-center gap-1 pl-1">
+            <label className={cn(chrome, 'flex-1')} title="Added to the file name">
+              <span className="w-12 shrink-0 select-none px-1.5 text-muted-foreground">Suffix</span>
+              <input aria-label="File name suffix" spellCheck={false} placeholder="e.g. @2x" defaultValue={row.suffix ?? ''} onBlur={(e) => patch({ suffix: e.target.value.trim() || undefined })} onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} className="min-w-0 flex-1 bg-transparent pr-1.5 outline-none placeholder:text-muted-foreground" />
+            </label>
+            {(row.format === 'jpg' || row.format === 'pdf') && (
+              <label className={cn(chrome, 'w-24 shrink-0')} title="JPEG quality (10 to 100)">
+                <span className="shrink-0 select-none px-1.5 text-muted-foreground">Quality</span>
+                <input aria-label="Quality" type="number" min={10} max={100} defaultValue={Math.round((row.quality ?? 0.92) * 100)} onBlur={(e) => { const q = Number(e.target.value); if (q >= 10 && q <= 100) patch({ quality: q / 100 }); }} className="tnum min-w-0 flex-1 bg-transparent pr-1 outline-none" />
+              </label>
+            )}
+          </div>
+        )}
+      </div>
       <button
         type="button" onClick={run} disabled={!!busy}
         className="h-7 rounded-md bg-field text-xs font-medium transition-[background-color,scale] duration-150 active:scale-[0.96] disabled:opacity-60 pointer-hover:hover:bg-field-hover"
       >
         {busy ?? `Export ${label}`}
       </button>
-      <ExportPreview items={items} row={rows[0] ?? DEFAULT_ROW} />
+      <ExportPreview items={items} row={row} />
     </Section>
   );
 }

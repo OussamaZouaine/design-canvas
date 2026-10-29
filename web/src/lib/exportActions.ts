@@ -3,7 +3,6 @@
 import type { CanvasEngine as Engine } from '@/canvas/engine';
 import { copyPng, exportAndDownload, type ExportItem } from '@/canvas/exporter';
 import { DEFAULT_ROW, type ExportRow } from '@/lib/exportspec';
-import { sendEdit } from '@/lib/htmlTree';
 import { useProject } from '@/store/project';
 import { useToast } from '@/store/toast';
 import { useUi } from '@/store/ui';
@@ -19,14 +18,11 @@ function items(engine: Engine): ExportItem[] {
 
 const savedRows = (id: string): ExportRow[] => ((useProject.getState().doc?.exports as Record<string, ExportRow[]> | undefined) ?? {})[id] ?? [];
 
-// "Export…": show the Export section, and give the selection a first row (1x PNG) when it has none, so the
-// section is not empty. Exporting itself stays a deliberate click on the button.
-export async function openExport(engine: Engine) {
-  const list = items(engine);
-  if (!list.length) return;
+// "Export…": show the Export section (it always shows one setting, 1x PNG until edited). Exporting itself
+// stays a deliberate click on the button.
+export function openExport(engine: Engine) {
+  if (!engine.selection.length) return;
   useUi.getState().setPanelTab('design');
-  const projectId = engine.replyHost().projectId;
-  if (!savedRows(list[0].id).length) await Promise.all(list.map((it) => sendEdit(projectId, 'export-settings', { id: it.id, rows: [DEFAULT_ROW] })));
   // The section renders after the tab switch and the doc update: wait a frame or two, then bring it into view.
   const reveal = (tries: number) => {
     const sec = document.getElementById('dl-export-scale')?.closest('section');

@@ -32,12 +32,10 @@ test('validateRows drops junk, normalizes and caps', () => {
     { scale: '1x', format: 'jpg', quality: 7 },
     null,
   ]);
-  assert.deepEqual(rows, [
-    { scale: '2x', format: 'png', suffix: '@2x' },
-    { scale: '1x', format: 'jpg', quality: 0.5 },
-    { scale: '1x', format: 'jpg' },
-  ]);
-  assert.equal(validateRows(Array.from({ length: 20 }, () => ({ scale: '1x', format: 'png' }))).length, 8);
+  // Only one row is kept per item.
+  assert.deepEqual(rows, [{ scale: '2x', format: 'png', suffix: '@2x' }]);
+  assert.deepEqual(validateRows([{ scale: 'bad', format: 'png' }, { scale: '1x', format: 'jpg', quality: 0.5 }, { scale: '1x', format: 'jpg', quality: 7 }]), [{ scale: '1x', format: 'jpg', quality: 0.5 }]);
+  assert.equal(validateRows(Array.from({ length: 20 }, () => ({ scale: '1x', format: 'png' }))).length, 1);
 });
 
 test('fileNames uses suffixes, dedupes rows with @scale and same-named items with a counter', () => {
