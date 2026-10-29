@@ -39,6 +39,8 @@ interface UiState {
   rulers: boolean;
   shortcutsOpen: boolean;
   connectOpen: boolean;
+  paletteOpen: boolean;
+  setPaletteOpen: (open: boolean) => void;
   setConnectOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleRulers: () => void;
@@ -64,6 +66,8 @@ export const useUi = create<UiState>((set, get) => ({
   rulers: read('dc-rulers') === '1',
   shortcutsOpen: false,
   connectOpen: false,
+  paletteOpen: false,
+  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setConnectOpen: (connectOpen) => set({ connectOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   toggleRulers: () => {

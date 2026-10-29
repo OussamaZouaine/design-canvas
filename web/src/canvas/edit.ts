@@ -699,10 +699,16 @@ export class CanvasEditor {
 
   // The actions below are shared by the keyboard shortcuts and the right-click menu. They take the whole set:
   // the server actions already accept `ids`, so a multi-selection is still one request and one undo step.
-  remove(ids: string[]) {
+  // Destructive or hard-to-see changes end with a toast that carries Undo (the same server undo as Ctrl+Z).
+  private undoToast(message: string) {
+    toast(message, 'Undo', () => { this.host.markUserEdit(); canvasAction(this.host.projectId, 'undo').catch((err) => fail(err, 'Nothing to undo')); });
+  }
+
+  // `quiet` = the caller already told the user (a cut says "Cut", so no second "Deleted" toast).
+  remove(ids: string[], quiet = false) {
     if (!ids.length) return;
     this.host.markUserEdit();
-    canvasAction(this.host.projectId, 'delete', { ids }).catch((err) => fail(err, 'Could not delete'));
+    canvasAction(this.host.projectId, 'delete', { ids }).then(() => { if (!quiet) this.undoToast(ids.length > 1 ? `Deleted ${ids.length} layers` : 'Deleted'); }).catch((err) => fail(err, 'Could not delete'));
     this.host.select([]);
   }
 
@@ -756,6 +762,7 @@ export class CanvasEditor {
       const r = await canvasAction(host.projectId, 'unwrap', { id: ids[0], perId });
       const freed = (r.result as { ids?: string[] } | undefined)?.ids;
       if (freed?.length) host.selectNew(freed);
+      this.undoToast('Ungrouped');
       return freed;
     } catch (err) { fail(err, 'Could not ungroup'); }
   }
@@ -785,7 +792,7 @@ export class CanvasEditor {
     this.writeSystemClipboard(payload.items.map((i) => i.html).join('\n'));
     const n = payload.items.length, what = asBoards ? (n > 1 ? `${n} frames` : 'Frame') : (n > 1 ? `${n} layers` : 'Layer');
     toast(`${cut ? 'Cut' : 'Copied'} ${what}${mixed ? ' (only the frames)' : ''}. ${cut ? 'Paste anywhere with' : 'Paste with'} ${modLabel()}V`);
-    if (cut) this.remove(picked);
+    if (cut) this.remove(picked, true);
   }
 
   // The markup also goes to the system clipboard so it pastes as text elsewhere. Best effort: it needs a user gesture
@@ -835,7 +842,7 @@ export class CanvasEditor {
     canvasAction(this.host.projectId, 'paste', body).then((r) => {
       const res = r.result as { ids?: string[]; brought?: string } | undefined;
       if (res?.ids?.length) done(res.ids);
-      if (res?.brought) toast(`Pasted. Also brought ${res.brought}`);
+      this.undoToast(res?.brought ? `Pasted. Also brought ${res.brought}` : 'Pasted');
       // The ids of a cut are spent once they landed: a second paste must mint fresh ones.
       useClipboard.getState().spendCut();
     }).catch((err) => fail(err, 'Could not paste'));
