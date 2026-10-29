@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { ChevronRight, MessageSquare, SearchX } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -67,7 +69,7 @@ export function CommentsPage() {
         </Select>
       </AppHeader>
 
-      <main className="mx-auto max-w-[860px] px-7 pt-6 pb-16">
+      <main className="mx-auto max-w-[860px] px-7 pt-8 pb-16">
         {/* Status tabs double as the summary: how many are open vs resolved. */}
         <Tabs value={status} onValueChange={(v) => setStatus(v as Status)} className="mb-5">
           <TabsList>
@@ -82,17 +84,20 @@ export function CommentsPage() {
         </div>
 
         {loaded && shown.length === 0 && (
-          <div className="py-16 text-center text-muted-foreground text-balance">
-            <h2 className="mb-2 text-base font-semibold text-foreground">{all.length ? 'Nothing matches' : 'No comments yet'}</h2>
-            {all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Claude reads open comments and replies.'}
-          </div>
+          <Empty className="border py-16">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">{all.length ? <SearchX /> : <MessageSquare />}</EmptyMedia>
+              <EmptyTitle className="font-display text-xl tracking-[-0.03em]">{all.length ? 'Nothing matches' : 'No comments yet'}</EmptyTitle>
+              <EmptyDescription>{all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Claude reads open comments and replies.'}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
       </main>
     </div>
   );
 }
 
-// Where the comment points, in words: "Home · button “Sign in”".
+// Where the comment points, in words: project, board, then the element (chevrons instead of middle dots).
 function Where({ c }: { c: OverviewComment }) {
   const target = c.orphaned
     ? <span className="italic">{c.targetId.startsWith('A') ? 'artboard was replaced or deleted' : 'element was deleted'}</span>
@@ -100,8 +105,10 @@ function Where({ c }: { c: OverviewComment }) {
       ? <span>{c.element.tag}{c.element.text ? ` “${c.element.text}”` : ''}</span>
       : <span>artboard</span>;
   return (
-    <div className="min-w-0 truncate text-xs text-muted-foreground">
-      <b className="font-semibold text-foreground">{c.projectName}</b>{c.artboardName ? ` · ${c.artboardName}` : ''} · {target}
+    <div className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+      <b className="font-semibold text-foreground">{c.projectName}</b>
+      {c.artboardName && <><ChevronRight aria-hidden className="size-3 shrink-0" />{c.artboardName}</>}
+      <ChevronRight aria-hidden className="size-3 shrink-0" />{target}
     </div>
   );
 }
@@ -128,7 +135,7 @@ function CommentCard({ comment: c, index, animateIn }: { comment: OverviewCommen
 
   return (
     <article
-      className={cn('rounded-xl border bg-card px-[18px] py-4', animateIn && 'animate-in fade-in slide-in-from-bottom-1.5 duration-300 fill-mode-backwards')}
+      className={cn('rounded-[14px] border bg-card px-5 py-4', animateIn && 'animate-in fade-in slide-in-from-bottom-1.5 duration-300 fill-mode-backwards')}
       style={animateIn ? { animationDelay: `${Math.min(index, 10) * 40}ms` } : undefined}
     >
       <div className="mb-2.5 flex flex-wrap items-center gap-2.5">
