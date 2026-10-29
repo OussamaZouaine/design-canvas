@@ -29,9 +29,9 @@ interface Props {
   actions: CardActions;
 }
 
-// Grid thumbnail box (card is 256 wide with 4px padding inside a 1px border: 248 usable).
-const GRID_W = 248;
-const GRID_H = 164;
+// Grid thumbnail box (card is 320 wide with 4px padding inside a 1px border: 312 usable).
+const GRID_W = 312;
+const GRID_H = 208;
 
 // Hover lift only on real pointers (touch devices would stick the hover state); the lift uses the shared layered
 // float shadow so a hovered card matches the toolbar and popovers instead of a one-off grey blur.
@@ -65,13 +65,13 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
       }}
     />
   ) : inTrash ? (
-    <div className="truncate text-sm font-medium">{p.name}</div>
+    <div className="truncate font-display text-base tracking-[-0.02em]">{p.name}</div>
   ) : (
     // Stretched-link pattern: the ::after covers the whole card so it is all clickable, while the menu button
     // (z-10) sits above it. Avoids nesting a button inside an anchor. The overlay needs z-[1]: the preview wrapper
     // below is `relative` and comes later in the DOM, so without an explicit z-index it would paint over the overlay
     // and swallow clicks on the thumbnail.
-    <Link to="/p/$id" params={{ id: p.id }} className="block truncate text-sm font-medium after:absolute after:inset-0 after:z-[1] after:content-['']">
+    <Link to="/p/$id" params={{ id: p.id }} className="block truncate font-display text-base tracking-[-0.02em] after:absolute after:inset-0 after:z-[1] after:content-['']">
       {p.name}
     </Link>
   );
@@ -85,9 +85,8 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
 
   const subtitle = (
     <div className="tnum flex items-center gap-2 truncate text-xs text-muted-foreground" title={p.description || undefined}>
-      <span className="truncate">
-        {inTrash ? `Deleted ${ago(p.deletedAt ?? p.updatedAt)}` : `Edited ${ago(p.updatedAt)}`} · {p.artboardCount} artboard{p.artboardCount === 1 ? '' : 's'}
-      </span>
+      <span className="truncate">{inTrash ? `Deleted ${ago(p.deletedAt ?? p.updatedAt)}` : `Edited ${ago(p.updatedAt)}`}</span>
+      <span className="shrink-0">{p.artboardCount} artboard{p.artboardCount === 1 ? '' : 's'}</span>
       {list && badge}
     </div>
   );
@@ -131,7 +130,7 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
         // Concentric radii: 8px thumbnail + 4px padding = 12px card corner.
         'relative overflow-hidden rounded-[12px] border bg-card',
         'transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
-        list ? 'flex w-full items-center gap-3 p-2 pr-2' : 'w-[256px] p-1',
+        list ? 'flex w-full items-center gap-3 p-2 pr-2' : 'w-[320px] p-1',
         !inTrash && !list && HOVER_LIFT,
         inTrash && 'opacity-80',
         animateIn && index < 8 && 'animate-in fade-in slide-in-from-bottom-2 duration-300 fill-mode-backwards',

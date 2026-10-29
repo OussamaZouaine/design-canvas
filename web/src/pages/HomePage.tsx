@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { LayoutGrid, List, Plus } from 'lucide-react';
+import { FolderPlus, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createProject, importProject, listAllComments, listProjects, projectAction, type ProjectSummary } from '@/api/projects';
@@ -111,14 +112,14 @@ export function HomePage() {
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1280px] px-8 pt-10 pb-16">
-          <div className="mb-6 flex flex-wrap items-center gap-2">
-            <h1 className="mr-auto text-[22px] font-medium tracking-tight">{inTrash ? 'Trash' : 'Recents'}</h1>
+        <div className="mx-auto max-w-[1280px] px-10 pt-12 pb-16">
+          <div className="mb-8 flex flex-wrap items-center gap-2">
+            <h1 className="mr-auto font-display text-[40px]/[1.1] tracking-[-0.035em]">{inTrash ? 'Trash' : 'Recents'}</h1>
             <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
             </Select>
-            <Button onClick={() => setNewOpen(true)}><Plus />New project</Button>
+            <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>
             <div role="group" aria-label="View" className="flex rounded-lg bg-muted p-0.5">
               {([['grid', LayoutGrid, 'Grid view'], ['list', List, 'List view']] as const).map(([v, Icon, label]) => (
                 <button
@@ -137,14 +138,14 @@ export function HomePage() {
 
           <div
             className={cn('gap-6', view === 'grid' ? 'grid justify-start' : 'flex flex-col gap-2')}
-            style={view === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, 256px)' } : undefined}
+            style={view === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, 320px)' } : undefined}
           >
             {shown.map((p, i) => (
               <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
             ))}
           </div>
 
-          {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} />}
+          {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} onNew={() => setNewOpen(true)} />}
         </div>
       </main>
 
@@ -154,22 +155,29 @@ export function HomePage() {
   );
 }
 
-function EmptyState({ query, inTrash }: { query: string; inTrash: boolean }) {
-  const [title, body] = query
-    ? ['No matches', 'Try a different search.']
+// First run, empty Trash and no search match share one shadcn Empty; only the first run offers the setup command.
+function EmptyState({ query, inTrash, onNew }: { query: string; inTrash: boolean; onNew: () => void }) {
+  const [Icon, title, body] = query
+    ? [Search, 'No matches', 'Try a different search.']
     : inTrash
-      ? ['Trash is empty', 'Deleted projects stay here until you remove them for good.']
-      : ['No projects yet', 'Create one here, or ask Claude to design something and it will create a project for you.'];
+      ? [Trash2, 'Trash is empty', 'Deleted projects stay here until you remove them for good.']
+      : [FolderPlus, 'No projects yet', 'Create one here, or ask Claude to design something and it will create a project for you.'];
   return (
-    <div className="py-16 text-center text-muted-foreground text-balance">
-      <h2 className="mb-2 text-base font-semibold text-foreground">{title}</h2>
-      {body}
+    <Empty className="border py-16">
+      <EmptyHeader>
+        <EmptyMedia variant="icon"><Icon /></EmptyMedia>
+        <EmptyTitle className="font-display text-xl tracking-[-0.03em]">{title}</EmptyTitle>
+        <EmptyDescription>{body}</EmptyDescription>
+      </EmptyHeader>
       {!query && !inTrash && (
-        <code className="mx-auto mt-4 block w-fit rounded-lg border bg-background px-3.5 py-2.5 text-xs text-foreground select-all">
-          claude mcp add --transport http design-canvas http://localhost:3777/mcp
-        </code>
+        <EmptyContent>
+          <Button variant="brand" size="32" onClick={onNew}><Plus />New project</Button>
+          <code className="mt-2 block w-fit rounded-lg bg-field px-3.5 py-2.5 text-xs text-foreground select-all">
+            claude mcp add --transport http design-canvas http://localhost:3777/mcp
+          </code>
+        </EmptyContent>
       )}
-    </div>
+    </Empty>
   );
 }
 
