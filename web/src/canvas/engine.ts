@@ -541,6 +541,7 @@ export class CanvasEngine {
       findBoard: (id) => this.doc.artboards.find((a) => a.id === id),
       findElement: (id, opts) => this.findElement(id, opts),
       frameOf: (id) => this.boards.get(id.startsWith('A') ? id : this.pidIndex.get(id) ?? '')?.frame ?? null,
+      boardIdOf: (id) => (id.startsWith('A') ? id : this.pidIndex.get(id)),
       reference: (refId) => (this.doc.references as { id: string; width: number; height: number }[] | undefined)?.find((r) => r.id === refId),
     };
   }
