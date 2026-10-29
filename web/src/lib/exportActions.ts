@@ -4,7 +4,7 @@ import type { CanvasEngine as Engine } from '@/canvas/engine';
 import { copyPng, exportAndDownload, type ExportItem } from '@/canvas/exporter';
 import { DEFAULT_ROW, type ExportRow } from '@/lib/exportspec';
 import { useProject } from '@/store/project';
-import { useToast } from '@/store/toast';
+import { toast } from '@/store/toast';
 import { useUi } from '@/store/ui';
 
 function items(engine: Engine): ExportItem[] {
@@ -43,7 +43,6 @@ export async function exportNow(engine: Engine) {
 export async function copyAsPng(engine: Engine) {
   const first = items(engine)[0];
   if (!first) return;
-  const toast = useToast.getState().show;
   try {
     await copyPng(engine.replyHost(), first.id);
     toast('Copied as PNG');
