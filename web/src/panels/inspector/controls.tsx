@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { NumberField } from '@/ui/NumberField';
 import type { Model } from './model';
 import { Tip } from '@/ui/Tip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // Filled field, Figma-style: no border at rest, a slightly darker fill on hover, a signal-blue ring when focused.
 export const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection';
@@ -57,25 +58,21 @@ export function SelectField({ label, value, options, names, mixed, onCommit }: {
   );
 }
 
-// Title row with a chevron to collapse, and an optional trailing action (e.g. the + of Fill, the switch of Auto layout).
+// Inspector section: shadcn Collapsible (state, aria-expanded and keyboard come from Base UI) plus the title row and an
+// optional trailing action (the + of Fill, the switch of Auto layout). 13px/600 title, 12px body, hairline below, 4px grid.
+// No open/close animation on purpose: collapsing is a frequent action (CLAUDE.md motion rules).
 export function Section({ title, off, action, children }: { title: string; off?: boolean; action?: ReactNode; children?: ReactNode }) {
-  const [open, setOpen] = useState(true);
   return (
-    // Hairline between sections (structure, so a border), title in semibold foreground with a muted chevron on the
-    // trailing edge, so the eye scans titles down the left edge.
-    <section className={cn('border-b px-3 pt-1 pb-3', off && 'pointer-events-none opacity-50')}>
-      <div className="flex h-8 items-center gap-1">
-        <button
-          aria-expanded={open} onClick={() => setOpen(!open)}
-          className="group/sec -mx-1 flex h-8 flex-1 items-center justify-between rounded-md px-1 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-        >
+    <Collapsible defaultOpen render={<section className={cn('border-b px-3 pb-3', off && 'pointer-events-none opacity-50')} />}>
+      <div className="flex h-9 items-center gap-1">
+        <CollapsibleTrigger className="group/sec -mx-1 flex h-8 flex-1 items-center justify-between rounded-md px-1 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
           {title}
-          <ChevronDown className={cn('size-3 text-muted-foreground transition-[rotate,opacity] duration-150 group-hover/sec:text-foreground', !open && '-rotate-90')} />
-        </button>
+          <ChevronDown className="size-3.5 text-muted-foreground transition-[rotate] duration-150 group-hover/sec:text-foreground group-data-[panel-open]/sec:rotate-0 -rotate-90" />
+        </CollapsibleTrigger>
         {action}
       </div>
-      {open && children && <div className="flex flex-col gap-1.5">{children}</div>}
-    </section>
+      {children && <CollapsibleContent className="flex flex-col gap-2 text-xs">{children}</CollapsibleContent>}
+    </Collapsible>
   );
 }
 
