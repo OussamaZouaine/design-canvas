@@ -32,6 +32,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 14. `/comments` page: all comments across projects with status tabs, filters, replies, resolve/reopen/delete,
     deep link `/p/<id>?comment=<id>`; open-comment badge on the home header.
 
+## Atelier Phase 3 (2026-10-30)
+Inspector `Section` now on shadcn Collapsible (13px titles, 12px body); Pages/Layers rows polished (14px icons, signal-blue tint); shadcn `Empty` states for layers, comments, no selection. Both themes checked in the browser. Next: Phase 4 command palette (`docs/notes/luxury-redesign-plan.md`). Not done: other panels (Agents, Theme, Tokens) keep their own section styling.
+
 ## Home page redesign (2026-10-21)
 Home is now Paper-style: left sidebar (`web/src/pages/home/HomeSidebar.tsx`: workspace row, search, Recents / Trash / Comments / Import,
 connection pill + theme toggle in the footer) and a main area with a "Recents"/"Trash" heading, sort select, New project button and a
