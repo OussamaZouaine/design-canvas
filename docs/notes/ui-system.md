@@ -35,6 +35,11 @@ Warm obsidian (dark, flagship) / bone paper (light) chrome that recedes so the c
 - Undo toasts: `CanvasEditor.undoToast` (edit.ts) shows "Deleted", "Pasted" and "Ungrouped" with an Undo button (server undo, same as Ctrl+Z). A cut says "Cut" only.
 - The palette Image action re-fires the `i` key because the file input belongs to the toolbar. Zoom in/out have no keyboard shortcut (the old Fit tooltip claimed Shift+1; that never existed and was removed).
 
+## Home, dialogs, comments page (Phase 5)
+- Home hero is `font-display` 40px; project cards are 320px wide (312x208 cover, 8px cover + 4px pad = 12px corner), title `font-display` 16px, meta line = two spans (edited, artboard count) with no middle dot. ONE brand `New project` button (the first-run `Empty` has its own, the only one visible then). Sidebar logo is the champagne mark.
+- Dialogs: `components/ui/dialog.tsx` is the single place for overlay elevation (`shadow-overlay`), 18px radius, 20px padding, `font-display` title. Shortcuts rows are 32px, description left, `Kbd` right-aligned. Primary action in a dialog = brand button; secondary links = outline.
+- `/comments`: breadcrumb uses chevron icons instead of ` · `; empty states use `Empty`.
+
 ## Primitives (Phase 1)
 - shadcn added: tooltip, kbd, button-group, toggle(-group), collapsible, popover, sonner, empty, separator, scroll-area (all in `web/src/components/ui`).
 - Button sizes `24` / `28` / `32` (by pixel) plus the old names; `variant="brand"` is champagne.

@@ -32,8 +32,11 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 14. `/comments` page: all comments across projects with status tabs, filters, replies, resolve/reopen/delete,
     deep link `/p/<id>?comment=<id>`; open-comment badge on the home header.
 
+## Atelier Phase 5 (2026-10-30)
+Home (40px Bricolage hero, 320px cards with 312x208 covers, Bricolage titles, one brand "New project" button, shadcn `Empty` for first run/trash/no match), dialogs (shadcn `dialog` now 18px radius, overlay shadow, Bricolage title; Shortcuts = 32px rows with right-aligned `Kbd`; Connect agents: outline link button + brand Done) and `/comments` (chevron breadcrumb, `Empty`) restyled. Undo toasts (delete, paste, ungroup) verified in the browser; light theme checked on home and comments. Not checked: the home first-run/search Empty visually (screenshot lag in the small pane). Next: Phase 6 verify + document.
+
 ## Atelier Phase 4 (2026-10-30)
-Action registry `web/src/lib/actions.ts` (tested) feeds a Ctrl/Cmd+K command palette (shadcn `command`), the main menu, the shortcuts dialog and context-menu hints; delete, paste and ungroup show an Undo toast. Both themes checked in the browser. Not checked in the browser: the Undo toasts (build and tests pass). Next: Phase 5 home, dialogs, comments page.
+Action registry `web/src/lib/actions.ts` (tested) feeds a Ctrl/Cmd+K command palette (shadcn `command`), the main menu, the shortcuts dialog and context-menu hints; delete, paste and ungroup show an Undo toast. Both themes checked in the browser. Undo toasts verified in the browser in Phase 5.
 
 ## Atelier Phase 3 (2026-10-30)
 Inspector `Section` now on shadcn Collapsible (13px titles, 12px body); Pages/Layers rows polished (14px icons, signal-blue tint); shadcn `Empty` states for layers, comments, no selection. Both themes checked in the browser. Next: Phase 4 command palette (`docs/notes/luxury-redesign-plan.md`). Not done: other panels (Agents, Theme, Tokens) keep their own section styling.
