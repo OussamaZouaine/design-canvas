@@ -118,7 +118,7 @@ Order is a suggestion; the user decides.
 6. **Ideas from the Paper desktop analysis (2026-10-22, `docs/PAPER-QUALITY-PLAN.md` 1.1b):** DONE 2026-10-22: headless render worker
    (`src/headless.mjs`, see CLAUDE.md "Browser round-trips"), `capture_url`, `find_nodes`, `get_jsx`, `export` (PNG) and
    `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
-   reword on the next schema change. Still open: PDF export; per-MCP-session project binding + agent identity/presence;
+   reword on the next schema change. PDF export is done (raster, branch `feat/export`, see 13). Still open: per-MCP-session project binding + agent identity/presence;
    make `askBrowser` handlers work in hidden tabs.
 7. **MCP token/turn optimization (branch `perf/mcp-tokens`, A, B and C done 2026-10-24, not merged to main):** plan and numbers in
    `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
@@ -147,6 +147,7 @@ Order is a suggestion; the user decides.
 12. **Element manipulation (Figma/Paper-style): DONE, all 5 phases (selection model; drag reorder / reparent `Doc.moveNodes`; snapping / guides / nudge `snap.ts`; Design tab `panels/inspector/*`; group / ungroup / add auto layout `Doc.wrapNodes`, `structure.ts`, drag hints, shortcuts dialog, fit regrow) 2026-10-25/26:** `docs/notes/element-manipulation-plan.md`. Phases, one session each:
     1 selection model (multi-select, context scoping, marquee, keyboard nav), 2 drag reorder/reparent in flow (`moveNodes`), 3 snapping + smart guides + nudge + better resize,
     4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Nothing left except the "not exercised" notes in the plan (real mouse drags, touch, cross-board drags).
+13. **Export (branch `feat/export`, 2026-10-29, not merged):** Figma-style Export section in the Design tab (scale + format rows, suffix, JPG/PDF quality, Preview), "Export…" and "Copy as PNG" in the context menu, Ctrl+Shift+E, page view exports all frames, saved rows per node, zip for several files, MCP `export` takes `format` png|jpg|svg|pdf and uses saved rows. Browser-tested on a scratch server (all four formats, zip, reload keeps rows). Not done: vector PDF (Chrome print-to-PDF), WebP, multi-select UI test, real download-folder check (blobs inspected in page JS).
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
