@@ -4,7 +4,8 @@ import { Outlet, RouterProvider, createRootRoute, createRoute, createRouter } fr
 import './styles/globals.css';
 import { CommentsPage } from './pages/CommentsPage';
 import { HomePage } from './pages/HomePage';
-import { Toaster } from './ui/Toaster';
+import { Toaster } from '@/components/ui/sonner';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { ProjectPage } from './pages/ProjectPage';
 
 // Code-based TanStack Router (no file-based plugin: only three routes, so one file is clearer).
@@ -28,7 +29,10 @@ declare module '@tanstack/react-router' {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    {/* Base UI tooltip provider: after one tooltip opens the next ones show instantly (delay=400 only for the first). */}
+    <TooltipProvider delay={400} closeDelay={0}>
+      <RouterProvider router={router} />
+    </TooltipProvider>
     <Toaster />
   </StrictMode>,
 );

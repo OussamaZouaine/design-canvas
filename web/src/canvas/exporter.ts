@@ -6,7 +6,7 @@ import { fileNames, outputSize, safeName, type ExportFormat, type ExportRow } fr
 import { makePdf } from '@/lib/pdf';
 import { makeZip, type ZipEntry } from '@/lib/zip';
 import { boardSvg, rasterizeCanvas, type Crop } from './raster';
-import { useToast } from '@/store/toast';
+import { toast } from '@/store/toast';
 import { cropOf, type ReplyHost } from './replies';
 
 export interface ExportItem { id: string; name: string }
@@ -130,7 +130,6 @@ export async function copyPng(host: ReplyHost, id: string) {
 // Build, then save. One place so the Export button, the shortcut and the context menu behave the same
 // (toast on failure and when a huge size had to be scaled down).
 export async function exportAndDownload(host: ReplyHost, items: ExportItem[], rows: ExportRow[], onProgress?: (done: number, total: number) => void): Promise<boolean> {
-  const toast = useToast.getState().show;
   try {
     const res = await buildExport(host, items, rows, onProgress);
     if (!res) return false;

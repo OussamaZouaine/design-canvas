@@ -1,28 +1,11 @@
-import { create } from 'zustand';
+import { toast as sonner } from 'sonner';
 
-interface ToastState {
-  message: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  visible: boolean;
-  show: (message: string, actionLabel?: string, onAction?: () => void) => void;
-  hide: () => void;
-}
-
-// One timer for the whole app: a new toast replaces the old one instead of stacking (matches the legacy pages).
-let timer: ReturnType<typeof setTimeout> | undefined;
-
-export const useToast = create<ToastState>((set) => ({
-  message: '',
-  visible: false,
-  show: (message, actionLabel, onAction) => {
-    clearTimeout(timer);
-    set({ message, actionLabel, onAction, visible: true });
-    // Toasts with an Undo action stay longer so there is time to react.
-    timer = setTimeout(() => set({ visible: false }), actionLabel ? 7000 : 3000);
-  },
-  hide: () => set({ visible: false }),
-}));
-
+// Thin adapter so the ~25 call sites keep `toast(message, actionLabel?, onAction?)`; sonner (shadcn) renders it.
+// A fixed id makes a new toast replace the previous one instead of stacking (same behaviour as the old store).
+// Toasts with an Undo action stay longer so there is time to react.
 export const toast = (message: string, actionLabel?: string, onAction?: () => void) =>
-  useToast.getState().show(message, actionLabel, onAction);
+  sonner(message, {
+    id: 'dc-toast',
+    duration: actionLabel ? 7000 : 3000,
+    action: actionLabel ? { label: actionLabel, onClick: () => onAction?.() } : undefined,
+  });
