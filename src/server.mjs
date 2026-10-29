@@ -292,7 +292,7 @@ function bringDeps(p, fromId, items) {
   return plan.summary;
 }
 
-const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'wrap', 'unwrap', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste']); // undo and redo record themselves
+const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', 'create', 'theme', 'move-node', 'move-nodes', 'wrap', 'unwrap', 'flags', 'style', 'attrs', 'vector', 'text', 'page-create', 'page-update', 'page-delete', 'move-to-page', 'reference', 'paste', 'export-settings']); // undo and redo record themselves
 
 // Canvas actions on one project's document.
 const canvasActions = {
@@ -338,6 +338,7 @@ const canvasActions = {
   redo: (p) => { if (!p.doc.redo(1, 'user').length) throw new Error('Nothing to redo'); },
   // Pages (the page selector in the header)
   'page-create': (p, b) => p.doc.createPage(String(b.name || 'Page')),
+  'export-settings': (p, b) => p.doc.setExports(String(b.id), b.rows),
   'page-update': (p, b) => p.doc.updatePage(String(b.id), { name: b.name, background: b.background }),
   'page-delete': (p, b) => p.doc.deletePage(String(b.id), b.moveTo),
   'move-to-page': (p, b) => p.doc.moveToPage(b.ids, String(b.page)),

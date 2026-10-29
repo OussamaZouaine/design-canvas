@@ -11,6 +11,7 @@ import { sanitizeSvg, checkAttrs, isSvgNode } from './svg.mjs';
 import { normalizeTree } from './normalize.mjs';
 import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
 import { foundationsHtml } from './foundations.mjs';
+import { validateRows } from '../web/src/lib/exportspec.ts';
 import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSheetHtml } from './components.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
@@ -101,7 +102,7 @@ export class Doc {
   // because mutations replace `html` strings (immutable) rather than editing them in place,
   // so a copy is cheap even for a multi-megabyte design.
   _snapshotState(label) {
-    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components), pages: structuredClone(this.data.pages), references: structuredClone(this.data.references) };
+    return { label, artboards: this.data.artboards.map((a) => ({ ...a })), theme: structuredClone(this.data.theme), components: structuredClone(this.data.components), pages: structuredClone(this.data.pages), references: structuredClone(this.data.references), exports: structuredClone(this.data.exports) };
   }
 
   _checkpoint(label) {
@@ -117,6 +118,7 @@ export class Doc {
     this.data.components = entry.components;
     this.data.pages = entry.pages;
     this.data.references = entry.references;
+    this.data.exports = entry.exports;
   }
 
   // Step back `steps` mutations. The id counter is deliberately NOT rewound, so an id that was
@@ -462,6 +464,25 @@ export class Doc {
     this._refreshFoundations();
     this._commit();
     return ab;
+  }
+
+  // ---- Export settings (Figma's Export section) -------------------------------------
+  // Rows of {scale, format, suffix, quality} per artboard or node id, kept in the document so they survive reloads,
+  // reach other tabs and can be used by the MCP export tool. Validation is shared with the browser (lib/exportspec.ts).
+  // Entries for ids that no longer exist are dropped on every write, so deleted layers do not pile up.
+
+  get exportSettings() { return this.data.exports ?? {}; }
+
+  setExports(id, rows) {
+    if (!this.artboardOf(id)) throw new Error(`Node ${id} not found`);
+    const clean = validateRows(rows);
+    this._checkpoint('export_settings');
+    const next = {};
+    for (const [k, v] of Object.entries(this.exportSettings)) if (k !== id && this.artboardOf(k)) next[k] = v;
+    if (clean.length) next[id] = clean;
+    if (Object.keys(next).length) this.data.exports = next; else delete this.data.exports;
+    this._commit();
+    return clean;
   }
 
   // ---- Reference images ------------------------------------------------------------
