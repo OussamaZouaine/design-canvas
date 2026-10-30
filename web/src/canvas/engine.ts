@@ -131,7 +131,9 @@ export class CanvasEngine {
   private fitPending = false; // fit() was asked for before the viewport had a size
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
-    this.activePage = lsGet(`dc-page:${projectId}`);
+    // ?page=<id> in the URL wins (each tab, link or bookmark keeps its own page); else the page last seen in this
+    // project. An unknown id is fixed up by setDoc like any stale value.
+    this.activePage = new URLSearchParams(location.search).get('page') ?? lsGet(`dc-page:${projectId}`);
     this.overlay.append(this.claimHost, this.agentHost, this.hoverBox, this.memberHost, this.selBox, this.draft, this.marqueeBox);
     this.selBox.append(this.sizeLabel);
     viewport.append(this.world, this.overlay);
@@ -526,6 +528,9 @@ export class CanvasEngine {
 
   // Pan so a node sits in the middle of the viewport (comments list, layers). Wakes an unmounted board.
   panTo(id: string) {
+    // A target on another page is display:none and has no rect: switch to its page first (comment links, Activity).
+    const ab = this.boards.get(this.pidIndex.get(id) ?? id)?.ab;
+    if (ab && !this.inPage(ab)) this.setPage(pageOfBoard(this.doc, ab), { fitView: false });
     const el = this.findElement(id, { mount: true });
     if (!el) return false;
     const r = this.relRect(el);

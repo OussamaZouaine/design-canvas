@@ -14,8 +14,12 @@ const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', comp
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$id',
-  // ?comment=<id> deep link (from the Comments page); the canvas opens that thread in Phase 6.
-  validateSearch: (s: Record<string, unknown>): { comment?: string } => (typeof s.comment === 'string' ? { comment: s.comment } : {}),
+  // ?comment=<id> deep link (from the Comments page) opens that thread; ?page=<page id> is the page shown (an id,
+  // not the name, so renames never break a link). Anything else is dropped.
+  validateSearch: (s: Record<string, unknown>): { comment?: string; page?: string } => ({
+    ...(typeof s.comment === 'string' && { comment: s.comment }),
+    ...(typeof s.page === 'string' && { page: s.page }),
+  }),
   component: function Project() { return <ProjectPage projectId={projectRoute.useParams().id} />; },
 });
 const commentsRoute = createRoute({ getParentRoute: () => rootRoute, path: '/comments', component: CommentsPage });
