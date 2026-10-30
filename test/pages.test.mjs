@@ -40,25 +40,42 @@ test('boards move between pages and a duplicate stays on its page', () => {
   assert.throws(() => doc.moveToPage(['A99'], 'P2'), /not found/);
 });
 
-test('deleting a page moves its boards instead of deleting them', () => {
+test('deleting a page with moveTo moves its boards instead of deleting them', () => {
   const doc = new Doc(null);
   const a = doc.createArtboard({ name: 'A' });
   doc.createPage('Two');
   doc.createPage('Three');
   doc.moveToPage([a.id], 'P2');
-  assert.equal(doc.deletePage('P2', 'P3'), 'P3');
+  assert.deepEqual(doc.deletePage('P2', 'P3'), { moved: 1, deleted: 0 });
   assert.equal(doc.pageOf(a), 'P3');
   assert.equal(doc.data.artboards.length, 1);
-  doc.deletePage('P3');
+  doc.deletePage('P3', 'P1');
   assert.throws(() => doc.deletePage('P1'), /at least one page/);
   assert.equal(doc.pageOf(a), 'P1');
 });
 
-test('deleting the first page promotes the next and keeps every board', () => {
+test('deleting a page without moveTo deletes its boards in one undo step', () => {
   const doc = new Doc(null);
   const a = doc.createArtboard({ name: 'A' });
   doc.createPage('Two');
-  doc.deletePage('P1');
+  const b = doc.createArtboard({ name: 'B', page: 'P2' });
+  doc.createArtboard({ name: 'C', page: 'P2' });
+  const steps = doc.undoStack.length;
+  assert.deepEqual(doc.deletePage('P2'), { moved: 0, deleted: 2 });
+  assert.equal(doc.undoStack.length, steps + 1);
+  assert.deepEqual(doc.pages.map((p) => p.id), ['P1']);
+  assert.deepEqual(doc.data.artboards.map((x) => x.id), [a.id]);
+  doc.undo();
+  assert.equal(doc.pages.length, 2);
+  assert.equal(doc.pageOf(doc.getArtboard(b.id)), 'P2');
+  assert.throws(() => new Doc(null).deletePage('P1'), /at least one page/); // implicit lone page
+});
+
+test('deleting the first page promotes the next and keeps boards moved to it', () => {
+  const doc = new Doc(null);
+  const a = doc.createArtboard({ name: 'A' });
+  doc.createPage('Two');
+  doc.deletePage('P1', 'P2');
   assert.deepEqual(doc.pages.map((p) => p.id), ['P2']);
   assert.equal(doc.pageOf(a), 'P2');
 });
