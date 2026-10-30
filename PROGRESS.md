@@ -32,6 +32,9 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
 14. `/comments` page: all comments across projects with status tabs, filters, replies, resolve/reopen/delete,
     deep link `/p/<id>?comment=<id>`; open-comment badge on the home header.
 
+## Atelier Phase 6 (2026-10-30): redesign DONE
+Agents, Theme, Tokens, Memory, MCP and Efficiency panels now use the shared `Section` + shadcn `Empty`. Verified both themes in the browser (all panels, menus, palette, dialogs, home, comments, toasts, page-delete) with a scripted contrast audit. Fixed: blue text on light (`--selection-ink`), dark destructive contrast, focus rings (90% alpha), hover trash/action buttons in Pages and Layers that never appeared (`pointer-hover:group-hover` gotcha), clicking the active tab now closes History/Styles, reduced motion/transparency gaps. System documented in `docs/notes/ui-system.md`; the plan is collapsed. Not done: before/after screenshots (the browser pane was too small and laggy for useful ones); reduced motion/transparency were checked in CSS only (the pane cannot emulate the media queries).
+
 ## Atelier Phase 5 (2026-10-30)
 Home (40px Bricolage hero, 320px cards with 312x208 covers, Bricolage titles, one brand "New project" button, shadcn `Empty` for first run/trash/no match), dialogs (shadcn `dialog` now 18px radius, overlay shadow, Bricolage title; Shortcuts = 32px rows with right-aligned `Kbd`; Connect agents: outline link button + brand Done) and `/comments` (chevron breadcrumb, `Empty`) restyled. Undo toasts (delete, paste, ungroup) verified in the browser; light theme checked on home and comments. Not checked: the home first-run/search Empty visually (screenshot lag in the small pane). Next: Phase 6 verify + document.
 
@@ -112,7 +115,7 @@ Copy / cut / paste now work for frames as well as layers, across pages, projects
 
 ## Next work, split into sessions (start a fresh session per area; each one reads CLAUDE.md + this file)
 Order is a suggestion; the user decides.
-- **Luxury UI redesign (PLAN 2026-10-29; Phase 0 mock approved, Phase 1 tokens + primitives DONE 2026-10-29, Phase 2 editor shell DONE 2026-10-29 (top bar zones + main menu + Export, 3-tab right panel with History/Styles views, 6-slot toolbar), Phase 3 next):** `docs/notes/luxury-redesign-plan.md`. Phases 0-6, one per session, in order.
+- **Luxury UI redesign: DONE 2026-10-30 (Phases 0-6):** see `docs/notes/ui-system.md` (system as built) and `docs/notes/luxury-redesign-plan.md` (3-line summary).
 0. **Generation quality (Phases A, B, C, D, F built 2026-10-21; F baseline runs still to do via `examples/evals/run.mjs`; Phase E fonts built 2026-10-21; turn-cutting change made, eval re-run `turns-cut` pending):** follow `docs/PAPER-QUALITY-PLAN.md`
    (stop frame clipping with fit-height boards + measured overflow report, taste guide served by the MCP, skill rewrite, evals).
    Decisions answered 2026-10-21 (section 5): auto-grow boards by default, soft brief reminder, system + Google Fonts
