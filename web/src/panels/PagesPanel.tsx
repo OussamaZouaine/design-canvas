@@ -65,7 +65,7 @@ export function PagesPanel({ projectId }: { projectId: string }) {
       {open && (
         <ul className="max-h-40 overflow-auto">
           {list.map((p) => (
-            <li key={p.id}>
+            <li key={p.id} className="group/page relative">
               {renaming === p.id ? (
                 <div className="mx-1.5 flex h-7 items-center px-1.5"><RenameInput label="Page name" initial={p.name} onDone={(n) => rename(p.id, n)} /></div>
               ) : (
@@ -84,6 +84,14 @@ export function PagesPanel({ projectId }: { projectId: string }) {
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   {p.id === current && <Check className="size-3.5 shrink-0 stroke-[1.5]" />}
                 </ContextMenuTrigger>
+                {/* Sibling of the row button (a button can't nest in a button). Hidden until hover/focus; never on the last page. */}
+                {list.length > 1 && (
+                  <button
+                    aria-label={`Delete page ${p.name}`}
+                    onClick={() => useUi.getState().setDeletePageId(p.id)}
+                    className="absolute top-1/2 right-2.5 grid size-5 -translate-y-1/2 place-items-center rounded-sm bg-muted text-muted-foreground opacity-0 outline-none transition-[color,opacity] duration-150 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring pointer-hover:group-hover/page:opacity-100 pointer-hover:hover:text-destructive [&_svg]:size-3"
+                  ><Trash2 /></button>
+                )}
                 {/* Last page can't be deleted (server refuses too); the item is disabled rather than hidden so the rule is visible. */}
                 <ContextMenuContent>
                   <ContextMenuItem onClick={() => setRenaming(p.id)}>Rename</ContextMenuItem>
