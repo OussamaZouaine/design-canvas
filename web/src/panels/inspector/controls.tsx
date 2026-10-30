@@ -65,7 +65,7 @@ export function Section({ title, off, action, children }: { title: string; off?:
   return (
     <Collapsible defaultOpen render={<section className={cn('border-b px-3 pb-3', off && 'pointer-events-none opacity-50')} />}>
       <div className="flex h-9 items-center gap-1">
-        <CollapsibleTrigger className="group/sec -mx-1 flex h-8 flex-1 items-center justify-between rounded-md px-1 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+        <CollapsibleTrigger className="group/sec -mx-1 flex h-8 flex-1 items-center justify-between rounded-md px-1 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/90">
           {title}
           <ChevronDown className="size-3.5 text-muted-foreground transition-[rotate] duration-150 group-hover/sec:text-foreground group-data-[panel-open]/sec:rotate-0 -rotate-90" />
         </CollapsibleTrigger>
