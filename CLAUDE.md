@@ -119,7 +119,7 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   carry no `page`). The browser shows one page at a time (`activePage`, remembered per project); off-page boards are
   `display:none` and unmounted. Claude's default target page is `ui.currentPage` (`pages` action `set`), not document data.
   The only page switcher is `web/src/panels/PagesPanel.tsx`, the top section of the left sidebar (`LeftPanel` in Shell.tsx): click to switch,
-  "+" creates a page (canvas action `page-create`) and starts inline rename (`page-update`), double-click renames. There is no header select any more.
+  "+" creates a page (canvas action `page-create`) and starts inline rename (`page-update`), double-click renames. Right-click a row (or the palette action "Delete current page") opens `panels/DeletePageDialog.tsx` (shadcn alert-dialog, state `useUi.deletePageId`): `page-delete` with no `moveTo` deletes the page AND its boards in one undo step (`Doc.deletePage`), then the view moves to the neighbour page with an Undo toast. The last page cannot be deleted. MCP `pages delete` still moves boards (default: first remaining page). There is no header select any more.
 - **Token sync:** `meta.repo` is the linked code folder; `src/tokensync.mjs` only reads files inside it (path check) and maps
   CSS custom properties onto token names, reporting what it cannot classify instead of guessing.
 - **Inspector (Design tab):** `web/src/panels/InspectorPanel.tsx` picks the page / artboard / node view; the node view is `panels/inspector/*`: `model.ts` (`useModel`: the whole selection,

@@ -38,6 +38,9 @@ Home (40px Bricolage hero, 320px cards with 312x208 covers, Bricolage titles, on
 ## Atelier Phase 4 (2026-10-30)
 Action registry `web/src/lib/actions.ts` (tested) feeds a Ctrl/Cmd+K command palette (shadcn `command`), the main menu, the shortcuts dialog and context-menu hints; delete, paste and ungroup show an Undo toast. Both themes checked in the browser. Undo toasts verified in the browser in Phase 5.
 
+## Delete page (2026-10-30)
+Right-click a page > "Delete page" (or palette "Delete current page") opens an alert dialog naming the page and its board count; deletes both in one undo step, switches to a neighbour, Undo toast. Last page is protected. Checked in both themes. MCP `pages delete` unchanged (moves boards).
+
 ## Atelier Phase 3 (2026-10-30)
 Inspector `Section` now on shadcn Collapsible (13px titles, 12px body); Pages/Layers rows polished (14px icons, signal-blue tint); shadcn `Empty` states for layers, comments, no selection. Both themes checked in the browser. Next: Phase 4 command palette (`docs/notes/luxury-redesign-plan.md`). Not done: other panels (Agents, Theme, Tokens) keep their own section styling.
 
