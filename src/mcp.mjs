@@ -750,7 +750,10 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       log(meta, doc, 'update_page', []);
       return text(page);
     }
-    const dest = doc.deletePage(page_id, move_boards_to);
+    // Agents keep the safe default (boards move to the first remaining page); the UI dialog deletes them.
+    doc._pageId(page_id);
+    const dest = move_boards_to ?? doc.pages.find((p) => p.id !== page_id)?.id;
+    doc.deletePage(page_id, dest);
     if (ui.currentPage.get(meta.id) === page_id) ui.currentPage.delete(meta.id);
     log(meta, doc, 'delete_page', []);
     return text({ deleted: page_id, boards_moved_to: dest });

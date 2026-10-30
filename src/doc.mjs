@@ -569,19 +569,24 @@ export class Doc {
     return page;
   }
 
-  // Delete a page. Its boards must go somewhere: `moveTo` (default: the first remaining page).
+  // Delete a page. Its boards are deleted with it unless `moveTo` names another page to receive them.
+  // One checkpoint, so a single undo brings back the page and its boards. Returns { moved, deleted }.
   deletePage(id, moveTo) {
     this._pageId(id);
     const pages = this._ensurePages();
     if (pages.length === 1) throw new Error('A project needs at least one page');
-    const rest = pages.filter((p) => p.id !== id);
-    const dest = moveTo ? this._pageId(moveTo) : rest[0].id;
-    if (dest === id) throw new Error('Choose a different page to move the boards to');
+    if (moveTo && this._pageId(moveTo) === id) throw new Error('Choose a different page to move the boards to');
     this._checkpoint('delete_page');
-    for (const ab of this.data.artboards) if (ab.page === id) ab.page = dest;
-    this.data.pages = rest;
+    const mine = this.data.artboards.filter((ab) => ab.page === id);
+    if (moveTo) for (const ab of mine) ab.page = moveTo;
+    else {
+      this.data.artboards = this.data.artboards.filter((ab) => ab.page !== id);
+      // A reference picture lives on its board: drop the ones whose board just went, like deleteReference.
+      if (this.data.references) this.data.references = this.references.filter((r) => this.data.artboards.some((ab) => ab.ref === r.id));
+    }
+    this.data.pages = pages.filter((p) => p.id !== id);
     this._commit();
-    return dest;
+    return moveTo ? { moved: mine.length, deleted: 0 } : { moved: 0, deleted: mine.length };
   }
 
   moveToPage(ids, pageId) {
