@@ -39,4 +39,4 @@ Motion rules are in CLAUDE.md. Reduced motion: `.ctx-menu`/`.sk`/`.agent-pulse` 
 - Tailwind v4 `scale-*` / `translate-*` set the `scale` / `translate` properties, not `transform`: name those in `transition-[...]`.
 - `applyTheme` (store/ui.ts) disables transitions for the flip with `.theme-switching` and clears it with a timeout, not rAF (rAF never fires in background tabs).
 - Headless pane screenshots lag one action behind and can catch a theme transition half way; retake after 2 s. Synthetic key events miss some Base UI handlers: use real key presses for Esc/Tab checks.
-- Native `<select>` / checkbox in the Agents filters are styled with `bg-field` only; swap for shadcn `select` if they ever need more.
+- Agents filters use shadcn `select` (`AgentSelect`, "all" sentinel because Base UI has no empty value) and `checkbox`; a native control is a gap.
