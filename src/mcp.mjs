@@ -246,7 +246,9 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       // ab is the live artboard object, so after the write its html holds the whole normalized board (a 27k-char
       // write echoed ~9k tokens back). The caller already has the markup; return only the board's fields.
       const { html: _written, ...board } = ab;
-      return { ...board, ...written, ...reminder };
+      // The asked x/y would have covered another board: say where it went instead, so the agent's mental map stays right.
+      const placed = ab.placed ? { placed: `x ${ab.placed.asked.x}, y ${ab.placed.asked.y} was taken by another board; placed at x ${ab.x}, y ${ab.y} in the same row` } : {};
+      return { ...board, ...placed, ...written, ...reminder };
     },
     async write_html({ project_id, target_id, html, mode, stream }, quiet) {
       const { meta, doc } = target(project_id);
@@ -582,8 +584,8 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       height: z.number().min(40).max(10000).optional().describe('Height in px (minimum height for a fit board). Default 900.'),
       height_mode: z.enum(['fit', 'fixed']).optional().describe('fit (default): grows with content. fixed: exactly this tall; extra content is clipped.'),
       page_id: z.string().optional().describe('Page for the new board (default: the page chosen with pages set, else the first).'),
-      x: z.number().optional().describe('Canvas x position (default: placed to the right of the last artboard).'),
-      y: z.number().optional().describe('Canvas y position (default 0). Use it to start a new row.'),
+      x: z.number().optional().describe('Canvas x position (default: right after the last board of the row at y). A spot that covers another board slides right along the row.'),
+      y: z.number().optional().describe('Row y position (default 0). Related boards share a row; start a new row (below the lowest board + 120) only for a different topic.'),
       html: z.string().max(200_000).optional().describe('First content for the board, written in the same call (saves a write_html turn).'),
     },
   }, viaEdit('create_artboard'));
@@ -608,7 +610,7 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
     const { doc } = target(project_id);
     // A big project outlined whole is thousands of tokens (46 boards = 3.6k): list the boards, let the agent pick one.
     if (!node_id && !query && depth === undefined && doc.data.artboards.length > 8) {
-      const lines = doc.data.artboards.map((a) => `${a.id} artboard "${a.name}" ${a.width}×${a.height}`);
+      const lines = doc.data.artboards.map((a) => `${a.id} artboard "${a.name}" ${a.width}×${a.height} at ${a.x},${a.y}`);
       return text(`${lines.join('\n')}\n(${lines.length} artboards: pass node_id to outline one, or query to search by name or text)`);
     }
     return text(doc.outline(node_id, { depth, query }) || '(empty)');
@@ -1094,7 +1096,8 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       const mem = formatMemory(store.listMemory(meta.id));
       if (mem) out.memory = mem;
       const boards = doc.data.artboards;
-      if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height}`).join('\n');
+      // Position + page on each line: without them agents guessed x/y for a new row and stacked boards.
+      if (boards.length) out.artboards = boards.map((a) => `${a.id} ${a.name} ${a.width}x${a.height} at ${a.x},${a.y}${doc.data.pages?.length ? ' ' + doc.pageOf(a) : ''}`).join('\n');
     } else ui.lastRead.set(meta.id, doc.version);
     store.logPrompt(meta.id, prompt, brief, agentOf());
     if (artboard) {
