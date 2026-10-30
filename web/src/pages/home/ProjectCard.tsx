@@ -148,8 +148,10 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
           <div className={cn('relative rounded-2xl border bg-card p-2 transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', !inTrash && HOVER_LIFT)}>
             <CoverThumb cover={p.cover} height={GRID_H} className="w-full rounded-lg" />
             {badge && <div className="absolute bottom-4 left-4">{badge}</div>}
-            {menu}
           </div>
+          {/* Outside the preview on purpose: the preview lifts with a transform, which makes its own stacking context, so a
+              z-10 menu inside it would sit under the title link's full-card overlay and clicks would open the project. */}
+          {menu}
           <div className="px-1">{title}{subtitle}</div>
         </>
       )}
