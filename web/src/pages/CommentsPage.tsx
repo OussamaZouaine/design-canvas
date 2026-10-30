@@ -88,7 +88,7 @@ export function CommentsPage() {
             <EmptyHeader>
               <EmptyMedia variant="icon">{all.length ? <SearchX /> : <MessageSquare />}</EmptyMedia>
               <EmptyTitle className="font-display text-xl tracking-[-0.03em]">{all.length ? 'Nothing matches' : 'No comments yet'}</EmptyTitle>
-              <EmptyDescription>{all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Claude reads open comments and replies.'}</EmptyDescription>
+              <EmptyDescription>{all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Your agent reads open comments and replies.'}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}

@@ -38,7 +38,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           {empty && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center text-center text-muted-foreground">
               <div>
-                Nothing here yet.<br />Ask Claude to design something and it will appear live,<br />or press <kbd className="rounded border px-1">F</kbd> and drag to draw an artboard.
+                Nothing here yet.<br />Ask your agent to design something and it will appear live,<br />or press <kbd className="rounded border px-1">F</kbd> and drag to draw an artboard.
               </div>
             </div>
           )}
