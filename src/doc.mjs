@@ -13,6 +13,7 @@ import { applyTokens, emptyTheme, resolveTokens, STARTER } from './theme.mjs';
 import { foundationsHtml } from './foundations.mjs';
 import { validateRows } from '../web/src/lib/exportspec.ts';
 import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSheetHtml } from './components.mjs';
+import { freeSpot, pushBelow } from './placement.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
@@ -694,16 +695,17 @@ export class Doc {
   // ---- Mutations ----------------------------------------------------------
 
   // heightMode 'fit' = `height` is a minimum and the board grows with its content; anything else = fixed.
+  // A requested x/y is a wish: if it would cover another board on the page, the board slides right along that
+  // row (freeSpot) and `ab.placed` records the asked position so the tool result can say it moved.
   createArtboard({ name = 'Artboard', width = 1440, height = 900, x, y, page: pageArg, heightMode } = {}) {
-    // Place new artboards to the right of the rightmost one so they never overlap.
     const page = this._pageId(pageArg); // validate before the undo checkpoint so a bad page leaves no entry
     this._checkpoint('create_artboard');
-    const right = this.data.artboards.filter((a) => this.pageOf(a) === page).reduce((m, a) => Math.max(m, a.x + a.width), -120);
+    const spot = freeSpot(this.data.artboards.filter((a) => this.pageOf(a) === page), { x, y: y ?? 0, width, height });
     const ab = {
       id: this._newId('A'),
       name,
-      x: x ?? right + 120,
-      y: y ?? 0,
+      x: spot.x,
+      y: spot.y,
       width,
       height,
       html: '',
@@ -712,7 +714,8 @@ export class Doc {
     };
     this.data.artboards.push(ab);
     this._commit();
-    return ab;
+    // Not stored on the board (kept off `ab` so it never reaches doc.json): returned beside it for the caller.
+    return x != null && spot.x !== x ? Object.defineProperty(ab, 'placed', { value: { asked: { x, y: y ?? 0 } }, enumerable: false }) : ab;
   }
 
   // Add HTML into an artboard or relative to a node.
@@ -977,7 +980,8 @@ export class Doc {
     for (const id of ids) {
       const ab = this.getArtboard(id);
       if (ab) {
-        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, heightMode: ab.heightMode, page: this.pageOf(ab) });
+        // Same row as the original, right of it: a copy is a variant of the same thing, so it sits beside it.
+        const copy = this.createArtboard({ name: ab.name + ' copy', width: ab.width, height: ab.height, heightMode: ab.heightMode, page: this.pageOf(ab), x: ab.x + ab.width + 120, y: ab.y });
         // Strip old ids from the copy so _prepare mints fresh ones.
         copy.html = this._prepare(ab.html.replace(/ data-pid="[^"]*"/g, '')).toString();
         pair(ab.html, copy.html);
@@ -1182,7 +1186,10 @@ export class Doc {
     const ab = this.getArtboard(id);
     const next = Math.min(MAX_BOARD_HEIGHT, Math.ceil(contentHeight));
     if (!ab || ab.heightMode !== 'fit' || next <= ab.height) return false;
+    const old = ab.height;
     ab.height = next;
+    // Growing must not run into the board placed below it (agents place rows from the height they saw).
+    pushBelow(this.data.artboards.filter((a) => this.pageOf(a) === this.pageOf(ab)), ab, old);
     this._commit();
     return true;
   }
