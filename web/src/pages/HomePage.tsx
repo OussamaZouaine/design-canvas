@@ -113,13 +113,20 @@ export function HomePage() {
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-[1280px] px-10 pt-12 pb-16">
-          <div className="mb-8 flex flex-wrap items-center gap-2">
-            <h1 className="mr-auto font-display text-[40px]/[1.1] tracking-[-0.035em]">{inTrash ? 'Trash' : 'Recents'}</h1>
+          <section className="mb-12 flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+            <div className="flex flex-col gap-3">
+              <h1 className="font-display text-[44px]/[1.05] tracking-[-0.04em] md:text-[64px]/[1.05]">Your work,<br />drawn by Claude.</h1>
+              <p className="max-w-[480px] text-base/6 text-muted-foreground">Open a project to watch designs appear live, comment on any element, and let your agents answer.</p>
+            </div>
+            <Button variant="brand" size="lg" className="h-10 px-5 text-sm" onClick={() => setNewOpen(true)}><Plus className="size-4" />New project</Button>
+          </section>
+
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <h2 className="mr-auto text-[13px] font-semibold">{inTrash ? 'Trash' : 'Recent projects'} <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span></h2>
             <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
             </Select>
-            <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>
             <div role="group" aria-label="View" className="flex rounded-lg bg-muted p-0.5">
               {([['grid', LayoutGrid, 'Grid view'], ['list', List, 'List view']] as const).map(([v, Icon, label]) => (
                 <button
@@ -136,10 +143,7 @@ export function HomePage() {
             </div>
           </div>
 
-          <div
-            className={cn('gap-6', view === 'grid' ? 'grid justify-start' : 'flex flex-col gap-2')}
-            style={view === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, 320px)' } : undefined}
-          >
+          <div className={cn(view === 'grid' ? 'grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2')}>
             {shown.map((p, i) => (
               <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
             ))}
