@@ -714,7 +714,7 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
   // strict; fields are flat and optional in the schema, so each action checks its own required ones with `need`.
   // log() keeps the old per-operation names (create_page, ...): the Activity panel labels and doc history use them.
   server.registerTool('pages', {
-    description: 'Pages are separate canvases inside a project (one per flow or breakpoint); get_basic_info lists them. action: create (name) returns the page id; set (page_id) chooses the page NEW artboards go to until changed; update (page_id, name and/or background colour such as oklch(0.2 0 0), "" clears it); delete (page_id; its artboards move to move_boards_to, default the first remaining page, never deleted); move_boards (artboard_ids, page_id).',
+    description: 'Pages are separate canvases inside a project (one per flow or breakpoint); get_basic_info lists them. action: create (name) returns the page id; set (page_id) chooses the page NEW artboards go to until changed; update (page_id, name and/or background colour such as oklch(0.2 0 0), "" clears it); delete (page_id; ASK THE USER FIRST, it removes a page they may rely on; its artboards move to move_boards_to, default the first remaining page, never deleted); move_boards (artboard_ids, page_id).',
     inputSchema: {
       ...pid,
       action: z.enum(['create', 'set', 'update', 'delete', 'move_boards']),
