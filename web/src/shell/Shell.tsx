@@ -86,7 +86,7 @@ function FollowButton() {
   return (
     <Tip label="Follow Claude's camera" side="bottom"><Button
       variant="ghost" size="28" aria-pressed={follow}
-      className={cn(follow && 'bg-selection-soft text-selection hover:bg-selection-soft hover:text-selection')}
+      className={cn(follow && 'bg-selection-soft text-selection-ink hover:bg-selection-soft hover:text-selection-ink')}
       onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
     ><Crosshair />Follow</Button></Tip>
   );
@@ -321,7 +321,9 @@ export function RightPanel({ projectId }: { projectId: string }) {
         <Tabs value={panelTab} onValueChange={(v) => setPanelTab(v as PanelTab)}>
           <TabsList aria-label="Panels" className="w-full bg-field">
             {TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id} className="data-active:bg-background data-active:shadow-sm">
+              // onValueChange never fires for the already-active tab, so this click is what closes an open
+              // History / Styles view (the Agents tab stays active while History is shown).
+              <TabsTrigger key={t.id} value={t.id} onClick={() => panelView && setPanelTab(t.id)} className="data-active:bg-background data-active:shadow-sm">
                 {t.label}
                 {t.id === 'comment' && open > 0 && <span className="tnum grid h-3.5 min-w-3.5 place-items-center rounded-full bg-selection px-1 text-[9px] font-semibold text-white">{open}</span>}
               </TabsTrigger>
