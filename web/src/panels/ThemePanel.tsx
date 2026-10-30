@@ -1,7 +1,10 @@
+import { Palette } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { sendEdit } from '@/lib/htmlTree';
+import { Section } from '@/panels/inspector/controls';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 import { Tip } from '@/ui/Tip';
@@ -25,10 +28,14 @@ export function ThemePanel({ projectId }: { projectId: string }) {
 
   if (!Object.keys(theme.tokens).length) {
     return (
-      <div className="p-3">
-        <p className="mb-3 text-muted-foreground">No tokens yet. Tokens are CSS variables (var(--color-primary)) that every board can share, so one edit restyles the whole design.</p>
-        <Button size="sm" onClick={() => post({ preset: 'starter' })}>Load starter scale</Button>
-      </div>
+      <Empty className="py-10">
+        <EmptyHeader>
+          <EmptyMedia variant="icon"><Palette /></EmptyMedia>
+          <EmptyTitle className="font-display text-base tracking-[-0.03em]">No tokens yet</EmptyTitle>
+          <EmptyDescription>Tokens are CSS variables (var(--color-primary)) that every board can share, so one edit restyles the whole design.</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent><Button size="sm" onClick={() => post({ preset: 'starter' })}>Load starter scale</Button></EmptyContent>
+      </Empty>
     );
   }
 
@@ -51,17 +58,17 @@ export function ThemePanel({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="p-3">
-      <div className="mb-2 flex flex-wrap gap-1">
+    <>
+      <div className="flex flex-wrap gap-1 border-b px-3 py-2">
         {['base', ...modes].map((m) => (
           <Button key={m} size="sm" variant={m === mode ? 'secondary' : 'ghost'} aria-pressed={m === mode} onClick={() => setView(m)}>{m === 'base' ? 'Base' : m}</Button>
         ))}
         {!modes.includes('dark') && <Tip label="Add a dark mode that overrides the colour tokens"><Button size="sm" variant="ghost" onClick={addMode}>+ dark</Button></Tip>}
       </div>
-      {mode !== 'base' && <p className="mb-2 text-[11px] text-muted-foreground">Only tokens you fill in are overridden in this mode; empty ones inherit the base value.</p>}
+      {mode !== 'base' && <p className="border-b px-3 py-2 text-[11px] text-muted-foreground">Only tokens you fill in are overridden in this mode; empty ones inherit the base value.</p>}
       {[...families].map(([f, names]) => (
-        <section key={f}>
-          <h4 className="mt-3 mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{f}</h4>
+        <Section key={f} title={f[0].toUpperCase() + f.slice(1)}>
+          <div>
           {names.map((n) => (
             <TokenRow
               // Keyed by the shown value so an outside change (Claude, undo) resets a half-typed draft.
@@ -71,19 +78,19 @@ export function ThemePanel({ projectId }: { projectId: string }) {
               onDelete={() => post({ tokens: { [n]: null } })}
             />
           ))}
-        </section>
+          </div>
+        </Section>
       ))}
       {mode === 'base' && (
-        <>
-          <h4 className="mt-4 mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Add token</h4>
+        <Section title="Add token">
           <div className="flex gap-1">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="color-accent" aria-label="New token name" spellCheck={false} />
             <Input value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} placeholder="oklch(0.7 0.15 30)" aria-label="New token value" spellCheck={false} />
             <Button size="sm" onClick={add}>Add</Button>
           </div>
-        </>
+        </Section>
       )}
-    </div>
+    </>
   );
 }
 
