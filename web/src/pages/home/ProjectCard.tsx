@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Input } from '@/components/ui/input';
 import { ago } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -93,41 +94,45 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
     </div>
   );
 
+  // One item list, rendered by both the "..." dropdown and the right-click context menu (same shadcn look, so the
+  // two components are passed in instead of writing the items twice).
+  const items = (Item: typeof DropdownMenuItem | typeof ContextMenuItem, Sep: typeof DropdownMenuSeparator | typeof ContextMenuSeparator) =>
+    inTrash ? (
+      <>
+        <Item onClick={() => actions.restore(p)}>Restore</Item>
+        <Sep />
+        <Item
+          variant="destructive"
+          // The arming click must keep the menu open so the label can change to "Click again".
+          closeOnClick={armed}
+          onClick={() => { if (armed) actions.purge(p); else setArmed(true); }}
+        >
+          {armed ? 'Click again to confirm' : 'Delete forever'}
+        </Item>
+      </>
+    ) : (
+      <>
+        <Item render={<Link to="/p/$id" params={{ id: p.id }} />}>Open</Item>
+        <Item onClick={() => setRenaming(true)}>Rename</Item>
+        <Item onClick={() => actions.duplicate(p)}>Duplicate</Item>
+        <Item render={<a href={`/api/projects/${p.id}/export`} />}>Export</Item>
+        <Sep />
+        <Item variant="destructive" onClick={() => actions.trash(p)}>Move to Trash</Item>
+      </>
+    );
+
   const menu = (
     <DropdownMenu onOpenChange={(open) => { if (!open) setArmed(false); }}>
       <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${p.name}`} className={cn('relative z-10 shrink-0', !list && MENU_REVEAL)} />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-40">
-        {inTrash ? (
-          <>
-            <DropdownMenuItem onClick={() => actions.restore(p)}>Restore</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              // The arming click must keep the menu open so the label can change to "Click again".
-              closeOnClick={armed}
-              onClick={() => { if (armed) actions.purge(p); else setArmed(true); }}
-            >
-              {armed ? 'Click again to confirm' : 'Delete forever'}
-            </DropdownMenuItem>
-          </>
-        ) : (
-          <>
-            <DropdownMenuItem render={<Link to="/p/$id" params={{ id: p.id }} />}>Open</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setRenaming(true)}>Rename</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => actions.duplicate(p)}>Duplicate</DropdownMenuItem>
-            <DropdownMenuItem render={<a href={`/api/projects/${p.id}/export`} />}>Export</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onClick={() => actions.trash(p)}>Move to Trash</DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
+      <DropdownMenuContent align="end" className="min-w-40">{items(DropdownMenuItem, DropdownMenuSeparator)}</DropdownMenuContent>
     </DropdownMenu>
   );
 
   return (
-    <div
+    <ContextMenu onOpenChange={(open) => { if (!open) setArmed(false); }}>
+    <ContextMenuTrigger
       className={cn(
         'group relative',
         list ? 'flex w-full items-center gap-3 rounded-[12px] border bg-card p-2' : 'flex flex-col gap-3',
@@ -155,6 +160,8 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
           <div className="px-1">{title}{subtitle}</div>
         </>
       )}
-    </div>
+    </ContextMenuTrigger>
+    <ContextMenuContent className="min-w-40">{items(ContextMenuItem, ContextMenuSeparator)}</ContextMenuContent>
+    </ContextMenu>
   );
 }
