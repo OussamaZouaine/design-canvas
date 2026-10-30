@@ -40,6 +40,9 @@ Warm obsidian (dark, flagship) / bone paper (light) chrome that recedes so the c
 - Dialogs: `components/ui/dialog.tsx` is the single place for overlay elevation (`shadow-overlay`), 18px radius, 20px padding, `font-display` title. Shortcuts rows are 32px, description left, `Kbd` right-aligned. Primary action in a dialog = brand button; secondary links = outline.
 - `/comments`: breadcrumb uses chevron icons instead of ` · `; empty states use `Empty`.
 
+## Delete page
+`DeletePageDialog` (shadcn `alert-dialog` + `context-menu`, restyled to the dialog look: 18px radius, `shadow-overlay`) is opened from the Pages row context menu or the "Delete current page" palette action; destructive-variant Button for Delete, text names the page and its board count. Text is kept in a ref so it does not blank during the fade-out.
+
 ## Primitives (Phase 1)
 - shadcn added: tooltip, kbd, button-group, toggle(-group), collapsible, popover, sonner, empty, separator, scroll-area (all in `web/src/components/ui`).
 - Button sizes `24` / `28` / `32` (by pixel) plus the old names; `variant="brand"` is champagne.
