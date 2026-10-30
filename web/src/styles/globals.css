@@ -248,4 +248,11 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .ctx-menu, .sk, .agent-pulse { animation: none; }
+  /* shadcn dialogs, menus, tooltips and popovers enter/exit with tw-animate classes on data-open / data-closed;
+     skip them (Base UI unmounts straight away when nothing animates). */
+  [data-open], [data-closed] { animation: none !important; }
+}
+/* Dialog scrims and badges blur what is behind them; honour reduced transparency like .material does. */
+@media (prefers-reduced-transparency: reduce) {
+  [class*="backdrop-blur"] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 }
