@@ -60,8 +60,24 @@ const safe = (fn) => async (args) => {
 const pid = { project_id: z.string().optional().describe('Default: the project this session opened') };
 const KEEP_PID = new Set(['project']);
 
-export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims() }) {
-  const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions: INSTRUCTIONS });
+// Every listed tool's schema is resent with every request of the session: all 50 cost ~9.2k tokens, this core set
+// ~4.3k. The rest stay registered but disabled until the agent calls `more_tools` (or connects with ?tools=all).
+// Keep the hot path here: a design task (start -> write -> lint -> screenshot -> finish) and the comment loop.
+export const CORE_TOOLS = new Set([
+  'get_guide', 'start', 'list_projects', 'log_prompt', 'project', 'create_artboard', 'write_html', 'update_styles',
+  'set_text_content', 'get_tree', 'get_node_info', 'get_selection', 'get_changes', 'get_comments', 'reply_comment',
+  'resolve_comment', 'lint', 'get_screenshot', 'finish_working', 'fit_artboard', 'delete_nodes', 'duplicate_nodes',
+  'batch', 'use_font',
+]);
+
+// `toolset`: 'core' (what server.mjs gives new sessions) or 'all' (the default here, so tests and old stateless
+// clients, which cannot unlock anything across requests, see every tool).
+export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims(), toolset = 'all' }) {
+  const instructions = toolset === 'core'
+    ? `${INSTRUCTIONS}\nSome tools are hidden to save tokens (pages, components, tokens, references, capture, export, assets...): call more_tools once when the guide or the task needs one that is not listed.`
+    : INSTRUCTIONS;
+  const server = new McpServer({ name: 'design-canvas', version: '0.3.0' }, { instructions });
+  const registered = new Map(); // name -> RegisteredTool, so the extended ones can be disabled / enabled after registration
   // clientInfo arrives once, on `initialize`: that is where the agent's name comes from.
   server.server.oninitialized = () => session.setClient(server.server.getClientVersion());
   // The project this session works in: bound by start / project open, else the shared active one (old clients).
@@ -81,7 +97,7 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       const { project_id, ...rest } = config.inputSchema;
       if (project_id) config = { ...config, inputSchema: z.object(rest).passthrough() };
     }
-    return register(name, config, async (...args) => {
+    const tool = register(name, config, async (...args) => {
       const input = args[0];
       // Project the call targets: explicit id, else the session's (resolved again after, since start/open can bind it).
       const projectOf = () => input?.project_id ?? currentId();
@@ -113,6 +129,8 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
       } catch { /* the log must never break a tool call */ }
       return result;
     });
+    registered.set(name, tool);
+    return tool;
   };
   // Who is calling, as stored on call-log entries (id for joins, name + colour so the UI needs no second lookup).
   const agentOf = () => { const { id, name, color } = session.agent; return { id, name, color, ...(session.status && { status: session.status }) }; };
@@ -1246,6 +1264,24 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
     }
     return text(files.length === 1 ? files[0] : { files });
   }));
+
+  // Core toolset: disable everything outside CORE_TOOLS and offer one tool that turns them back on.
+  // A disabled RegisteredTool is left out of tools/list and refuses calls; enable() makes the SDK send a
+  // `notifications/tools/list_changed`, and clients that honour it re-list. `session.tools` remembers the choice so a
+  // revived session (server restart, one McpServer per request) keeps the full list too.
+  if (toolset === 'core') {
+    const extended = [...registered.keys()].filter((n) => !CORE_TOOLS.has(n));
+    for (const n of extended) registered.get(n).disable();
+    const more = server.registerTool('more_tools', {
+      description: `Shows the hidden tools: ${extended.join(', ')}. Call once, only when you need one of them.`,
+      inputSchema: {},
+    }, safe(() => {
+      session.tools = 'all';
+      for (const n of extended) registered.get(n).enable();
+      more.disable(); // nothing left to unlock; also drops its own schema from the list
+      return text(`Enabled ${extended.length} tools. If your client does not show them yet, reconnect the design-canvas MCP server (or register its URL with ?tools=all).`);
+    }));
+  }
 
   // The SDK stamps `$schema` on every inputSchema (~14 tokens x 62 tools) and the model gets nothing from it.
   // There is no option for that, so wrap the tools/list handler it installed (the registrations above set it up).

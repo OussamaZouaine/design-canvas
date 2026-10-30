@@ -444,3 +444,36 @@ test('tokens: extract, export, link_repo and import through one tool', async () 
   fs.rmSync(repo, { recursive: true, force: true });
   h.close();
 });
+
+test('core toolset lists only CORE_TOOLS + more_tools, and more_tools unlocks the rest once', async () => {
+  const { Session } = await import('../src/sessions.mjs');
+  const { CORE_TOOLS } = await import('../src/mcp.mjs');
+  const session = new Session('core-test');
+  const { client, call, close } = await harness({ toolset: 'core', session });
+  try {
+    // The client re-lists on notifications/tools/list_changed, as Claude Code does.
+    let changed = 0;
+    const { ToolListChangedNotificationSchema } = await import('@modelcontextprotocol/sdk/types.js');
+    client.setNotificationHandler(ToolListChangedNotificationSchema, () => { changed++; });
+    const before = (await client.listTools()).tools.map((t) => t.name);
+    assert.deepEqual(new Set(before), new Set([...CORE_TOOLS, 'more_tools']));
+    assert.match(client.getInstructions(), /more_tools/);
+    // A hidden tool refuses the call until unlocked.
+    const refused = await client.callTool({ name: 'pages', arguments: { action: 'list' } });
+    assert.equal(refused.isError, true);
+    assert.match(await call('more_tools'), /^Enabled \d+ tools/);
+    const after = (await client.listTools()).tools.map((t) => t.name);
+    assert.ok(after.includes('pages') && after.includes('capture_url'));
+    assert.ok(!after.includes('more_tools'));
+    assert.equal(session.tools, 'all'); // a revived session (new McpServer) starts with everything listed
+    assert.ok(changed >= 1);
+  } finally { close(); }
+});
+
+test('default toolset (tests, stateless clients) lists every tool and no more_tools', async () => {
+  const { client, close } = await harness();
+  try {
+    const names = (await client.listTools()).tools.map((t) => t.name);
+    assert.ok(names.includes('capture_url') && !names.includes('more_tools'));
+  } finally { close(); }
+});

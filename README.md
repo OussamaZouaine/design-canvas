@@ -92,6 +92,7 @@ install link, a "manual install" config snippet, and notes. Everything below is 
 **Basics for every agent**
 - MCP URL: `http://localhost:3777/mcp` (change the port if you set `PORT`).
 - Add `?agent=<name>` (e.g. `?agent=codex`) so the client shows up by name in the **Agents** panel. The dialog already does this.
+- To save tokens, a new session lists only the 25 core tools (~4.5k tokens of schemas instead of ~9.3k). The agent calls `more_tools` to show the rest (pages, components, tokens, capture, export...). If your client ignores tool-list updates, add `&tools=all` to the URL so every tool is listed from the start.
 - The server must be running, and you must **restart the agent** (or start a new session) after adding the server.
 - Keep a project open in a browser tab for `get_screenshot`; without one the server falls back to a headless browser.
 
