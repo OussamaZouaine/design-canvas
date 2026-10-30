@@ -1,11 +1,10 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { Section } from '@/panels/inspector/controls';
 import { useProject } from '@/store/project';
 import { toast } from '@/store/toast';
 import { Tip } from '@/ui/Tip';
-
-const H = ({ children }: { children: React.ReactNode }) => <h4 className="mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{children}</h4>;
 
 // Design memory (src/memory.mjs): standing rules agents must follow plus the decisions they recorded. Agents receive both
 // in `start`, so the user edits them here. Entries arrive over SSE (`memory`), so a rule an agent adds appears live.
@@ -44,20 +43,19 @@ export function MemorySection({ projectId }: { projectId: string }) {
   );
 
   return (
-    <section className="mb-4">
-      <H>Memory · rules agents follow</H>
-      {rules.length === 0 && <p className="mb-1 text-muted-foreground">No rules yet. Add a one-line rule, e.g. “one accent colour, hue 150”.</p>}
+    <Section title="Memory: rules agents follow">
+      {rules.length === 0 && <p className="text-muted-foreground">No rules yet. Add a one-line rule, e.g. “one accent colour, hue 150”.</p>}
       <ul>{rules.map(row)}</ul>
-      <form className="mt-1.5" onSubmit={(e) => { e.preventDefault(); void addRule(); }}>
+      <form onSubmit={(e) => { e.preventDefault(); void addRule(); }}>
         <Input value={draft} onChange={(e) => setDraft(e.target.value)} maxLength={200} placeholder="Add a rule and press Enter" className="h-7 text-xs" />
       </form>
       {decisions.length > 0 && (
         <>
-          <h4 className="mt-3 mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">Decisions</h4>
+          <h5 className="mt-1 font-semibold">Decisions</h5>
           <ul>{decisions.slice(0, 8).map(row)}</ul>
           {decisions.length > 8 && <p className="text-muted-foreground">+{decisions.length - 8} older (memory list)</p>}
         </>
       )}
-    </section>
+    </Section>
   );
 }

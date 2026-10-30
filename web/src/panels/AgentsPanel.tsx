@@ -1,6 +1,8 @@
-import { Eye, Pause, Pencil, Play, ShieldCheck } from 'lucide-react';
+import { Bot, Eye, Pause, Pencil, Play, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { cn } from '@/lib/utils';
+import { Section } from '@/panels/inspector/controls';
 import { idsInArgs, kindOf, presenceOf, useAgents, type CallEntry, type CallKind, type PendingCall, type Presence } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
@@ -78,9 +80,10 @@ export function AgentsPanel() {
   };
 
   return (
-    <div className="p-3">
+    <>
       {presence.length > 0 && (
-        <ul className="mb-3 space-y-0.5" aria-label="Agents on this project">
+        <Section title="Working here">
+        <ul className="space-y-0.5" aria-label="Agents on this project">
           {presence.map((a) => {
             const isPaused = paused.includes(a.id), held = claims.filter((c) => c.agent.id === a.id);
             return (
@@ -105,7 +108,9 @@ export function AgentsPanel() {
             );
           })}
         </ul>
+        </Section>
       )}
+      <Section title="Call log">
       <div className="flex flex-wrap items-center gap-1.5">
         <select aria-label="Filter by agent" value={filterAgent ?? ''} onChange={(e) => setFilterAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md border bg-background px-1 text-[11px]">
           <option value="">All agents</option>
@@ -121,7 +126,7 @@ export function AgentsPanel() {
         </select>
       </div>
 
-      <ul className="mt-3 space-y-0.5" aria-live="off">
+      <ul className="space-y-0.5" aria-live="off">
         {shownPending.map((p) => <PendingRow key={p.id} p={p} />)}
         {rows.map((c) => {
           const kind = kindOf(c.tool, c.args), Icon = ICON[kind], hit = boardOf(c.args);
@@ -146,9 +151,16 @@ export function AgentsPanel() {
         })}
       </ul>
       {!rows.length && !shownPending.length && (
-        <p className="text-muted-foreground">{calls.length ? 'No calls match the filters.' : 'No MCP calls yet. When an agent works on this project, each call shows up here live.'}</p>
+        <Empty className="py-8">
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><Bot /></EmptyMedia>
+            <EmptyTitle className="font-display text-base tracking-[-0.03em]">{calls.length ? 'No calls match' : 'No agent calls yet'}</EmptyTitle>
+            <EmptyDescription>{calls.length ? 'Try another filter.' : 'When an agent works on this project, each call shows up here live.'}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       )}
-    </div>
+      </Section>
+    </>
   );
 }
 

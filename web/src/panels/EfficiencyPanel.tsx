@@ -1,3 +1,4 @@
+import { Section } from '@/panels/inspector/controls';
 import { useEffect, useState } from 'react';
 import { useJson } from '@/hooks/useJson';
 import { useAgents } from '@/store/agents';
@@ -25,8 +26,6 @@ interface Report {
 const n = (x: number) => x.toLocaleString();
 const secs = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
 const mpx = (px: number) => `${(px / 1e6).toFixed(1)} Mpx`;
-
-const H = ({ children }: { children: React.ReactNode }) => <h4 className="mt-4 mb-1.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{children}</h4>;
 
 // A bar scaled to the largest sibling. One hue (the app's selection colour) because the bars show one measure.
 function Bar({ value, max }: { value: number; max: number }) {
@@ -95,21 +94,22 @@ export function EfficiencyPanel({ projectId }: { projectId: string }) {
   useEffect(() => { const t = setTimeout(() => setKey(lastId), 800); return () => clearTimeout(t); }, [lastId]);
   const { data: r, failed } = useJson<Report>(`/api/p/${projectId}/efficiency`, key);
 
-  if (!r) return <p className="mt-4 text-muted-foreground">{failed ? 'Cost numbers unavailable.' : 'Loading…'}</p>;
+  if (!r) return <p className="px-3 py-3 text-muted-foreground">{failed ? 'Cost numbers unavailable.' : 'Loading…'}</p>;
   const maxPrompt = Math.max(...r.sessions.flatMap((s) => s.prompts.map((p) => p.tokens)), 1);
   return (
     <div className="efficiency">
       {r.fixed && (
-        <>
-          <H>Fixed cost per session · ~{n(r.fixed.total)} tokens</H>
-          {([['tools/list', `${r.fixed.toolCount} tools`, r.fixed.toolsListTokens], ['instructions', 'sent on connect', r.fixed.instructionsTokens], ['get_guide()', 'default topic', r.fixed.guideTokens]] as const).map(([k, note, v]) => (
-            <div key={k} className="flex items-center justify-between gap-2 py-0.5"><span>{k} <span className="text-muted-foreground">{note}</span></span><span className="tnum text-muted-foreground">{n(v)}</span></div>
-          ))}
-        </>
+        <Section title={`Fixed cost per session (~${n(r.fixed.total)} tokens)`}>
+          <div>
+            {([['tools/list', `${r.fixed.toolCount} tools`, r.fixed.toolsListTokens], ['instructions', 'sent on connect', r.fixed.instructionsTokens], ['get_guide()', 'default topic', r.fixed.guideTokens]] as const).map(([k, note, v]) => (
+              <div key={k} className="flex items-center justify-between gap-2 py-0.5"><span>{k} <span className="text-muted-foreground">{note}</span></span><span className="tnum text-muted-foreground">{n(v)}</span></div>
+            ))}
+          </div>
+        </Section>
       )}
-      <H>This project · {n(r.window.calls)} logged calls</H>
+      <Section title={`This project (${n(r.window.calls)} logged calls)`}>
       {r.window.calls === 0 ? <p className="text-muted-foreground">No tool calls yet.</p> : <Tiles s={r.total} />}
-      {r.window.truncated && <p className="mt-1 text-[11px] text-muted-foreground">Only the newest 500 calls are kept, so older work is not counted.</p>}
+      {r.window.truncated && <p className="text-[11px] text-muted-foreground">Only the newest 500 calls are kept, so older work is not counted.</p>}
       {r.sessions.map((s) => (
         <section key={s.agent.id} className="mt-3">
           <div className="mb-1 flex items-center gap-1.5 font-medium">
@@ -131,6 +131,7 @@ export function EfficiencyPanel({ projectId }: { projectId: string }) {
           ))}
         </section>
       ))}
+      </Section>
     </div>
   );
 }
