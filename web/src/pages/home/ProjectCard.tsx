@@ -78,7 +78,7 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
 
   // In grid view the badge sits on the preview (the subtitle line is too narrow for it); in list view it follows the text.
   const badge = p.active && !inTrash && (
-    <span title="The project Claude will use unless told otherwise" className="shrink-0 rounded-full bg-[color-mix(in_oklch,var(--selection)_16%,transparent)] px-2 py-px text-[11px] font-semibold text-[var(--selection)] backdrop-blur-sm">
+    <span title="The project Claude will use unless told otherwise" className="shrink-0 rounded-full bg-[color-mix(in_oklch,var(--selection)_16%,transparent)] px-2 py-px text-[11px] font-semibold text-selection-ink backdrop-blur-sm">
       Claude is here
     </span>
   );

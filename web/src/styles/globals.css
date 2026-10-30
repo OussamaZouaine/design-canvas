@@ -25,6 +25,8 @@
      "this is the thing you are acting on". Claude's violet (canvas.css) is reserved for agent activity. */
   --selection: oklch(0.6 0.19 256);
   --selection-soft: oklch(0.6 0.19 256 / 0.14);
+  /* Selection blue as TEXT: the fill blue is 3.3:1 on light surfaces, this darker step passes 4.5:1. */
+  --selection-ink: oklch(0.47 0.19 256);
   /* Champagne: logo mark, the one primary button per area, the "Claude is designing" glow, home hero. Never state. */
   --brand: oklch(0.72 0.09 75);
   --brand-ink: oklch(0.25 0.04 70);
@@ -120,6 +122,7 @@ body { background: var(--background); color: var(--foreground); }
   --color-field-hover: var(--field-hover);
   --color-selection: var(--selection);
   --color-selection-soft: var(--selection-soft);
+  --color-selection-ink: var(--selection-ink);
   --shadow-float: var(--elevation-float);
   --shadow-overlay: var(--elevation-overlay);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -135,6 +138,7 @@ body { background: var(--background); color: var(--foreground); }
 .dark {
   --selection: oklch(0.66 0.17 256);
   --selection-soft: oklch(0.66 0.17 256 / 0.2);
+  --selection-ink: var(--selection);
   --brand: oklch(0.82 0.07 82);
   --brand-ink: oklch(0.2 0.02 70);
   --hint-bg: oklch(0.3 0.05 85 / 0.5);
