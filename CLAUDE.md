@@ -88,7 +88,7 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
 ## Conventions (follow these)
 - **Reuse before building (user rule):** if shadcn has a component, add it (`pnpm dlx shadcn@latest add <name>` in `web/`) and restyle it; else use a well-maintained library; custom code only for canvas-specific needs.
 - **Colours are OKLCH everywhere** (UI CSS, generated designs, tokens). Hex only as authored input that gets converted.
-- **Chrome UI tokens and patterns** (Atelier warm surfaces, champagne `--brand`, `Tip` tooltips, `bg-field`, `.material`, `shadow-float`, `pointer-hover:` variant, signal blue = selection only): `docs/notes/ui-system.md`.
+- **Chrome UI tokens and patterns** (Atelier warm surfaces, champagne `--brand`, `Tip` tooltips, `bg-field`, `.material`, `shadow-float`, `Section` / `Empty` panels, `text-selection-ink` for blue text, `pointer-hover:` variant, signal blue = selection only): `docs/notes/ui-system.md`.
 - **Motion rules:** curves `--ease-out cubic-bezier(0.23,1,0.32,1)`, `--ease-in-out cubic-bezier(0.77,0,0.175,1)`,
   `--ease-drawer cubic-bezier(0.32,0.72,0,1)`; animate transform/opacity only; never `transition: all`;
   press scale 0.96; hover styles gated by `(hover:hover) and (pointer:fine)`; always a `prefers-reduced-motion`
