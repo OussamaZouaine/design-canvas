@@ -77,7 +77,7 @@ export function buildActions(c: ActionCtx): Action[] {
 
     { id: 'view.zoomIn', label: 'Zoom in', group: 'View', run: c.do.zoomIn },
     { id: 'view.zoomOut', label: 'Zoom out', group: 'View', run: c.do.zoomOut },
-    { id: 'view.fit', label: 'Fit all artboards', group: 'View', keywords: ['zoom'], run: c.do.fit },
+    { id: 'view.fit', label: 'Fit all artboards', group: 'View', keys: ['shift+1'], keywords: ['zoom'], run: c.do.fit },
     { id: 'view.follow', label: 'Follow Claude\'s camera', group: 'View', keywords: ['agent'], run: c.do.toggleFollow },
     { id: 'view.rulers', label: 'Rulers', group: 'View', keys: ['shift+r'], run: c.do.toggleRulers },
     { id: 'view.theme', label: 'Toggle light or dark theme', group: 'View', keywords: ['dark', 'light', 'appearance'], run: c.do.toggleTheme },
