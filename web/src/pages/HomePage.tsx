@@ -165,7 +165,7 @@ function EmptyState({ query, inTrash, onNew }: { query: string; inTrash: boolean
     ? [Search, 'No matches', 'Try a different search.']
     : inTrash
       ? [Trash2, 'Trash is empty', 'Deleted projects stay here until you remove them for good.']
-      : [FolderPlus, 'No projects yet', 'Create one here, or ask Claude to design something and it will create a project for you.'];
+      : [FolderPlus, 'No projects yet', 'Create one here, or ask your agent to design something and it will create a project for you.'];
   return (
     <Empty className="border py-16">
       <EmptyHeader>
