@@ -115,7 +115,7 @@ export function HomePage() {
         <div className="mx-auto max-w-[1280px] px-10 pt-12 pb-16">
           <section className="mb-12 flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
             <div className="flex flex-col gap-3">
-              <h1 className="font-display text-[44px]/[1.05] tracking-[-0.04em] md:text-[64px]/[1.05]">Your work,<br />drawn by Claude.</h1>
+              <h1 className="font-display text-[44px]/[1.05] tracking-[-0.04em] md:text-[64px]/[1.05]">Your work,<br />drawn by your agent.</h1>
               <p className="max-w-[480px] text-base/6 text-muted-foreground">Open a project to watch designs appear live, comment on any element, and let your agents answer.</p>
             </div>
             <Button variant="brand" size="lg" className="h-10 px-5 text-sm" onClick={() => setNewOpen(true)}><Plus className="size-4" />New project</Button>
