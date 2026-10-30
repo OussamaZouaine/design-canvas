@@ -39,6 +39,9 @@ interface UiState {
   rulers: boolean;
   shortcutsOpen: boolean;
   connectOpen: boolean;
+  // Page awaiting delete confirmation (shared so the panel, context menu and palette open the same dialog).
+  deletePageId: string | null;
+  setDeletePageId: (id: string | null) => void;
   paletteOpen: boolean;
   setPaletteOpen: (open: boolean) => void;
   setConnectOpen: (open: boolean) => void;
@@ -66,6 +69,8 @@ export const useUi = create<UiState>((set, get) => ({
   rulers: read('dc-rulers') === '1',
   shortcutsOpen: false,
   connectOpen: false,
+  deletePageId: null,
+  setDeletePageId: (deletePageId) => set({ deletePageId }),
   paletteOpen: false,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setConnectOpen: (connectOpen) => set({ connectOpen }),

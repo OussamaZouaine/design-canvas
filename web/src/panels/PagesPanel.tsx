@@ -1,5 +1,7 @@
-import { Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
+import { useUi } from '@/store/ui';
 import { canvasAction } from '@/api/projects';
 import { pagesOf } from '@/canvas/engine';
 import { RenameInput } from '@/panels/LayersPanel';
@@ -67,7 +69,8 @@ export function PagesPanel({ projectId }: { projectId: string }) {
               {renaming === p.id ? (
                 <div className="mx-1.5 flex h-7 items-center px-1.5"><RenameInput label="Page name" initial={p.name} onDone={(n) => rename(p.id, n)} /></div>
               ) : (
-                <button
+                <ContextMenu>
+                <ContextMenuTrigger render={<button
                   aria-current={p.id === current ? 'page' : undefined}
                   onClick={() => engine?.setPage(p.id)}
                   onDoubleClick={() => setRenaming(p.id)}
@@ -76,11 +79,17 @@ export function PagesPanel({ projectId }: { projectId: string }) {
                     'mx-1.5 flex h-7 w-[calc(100%-0.75rem)] items-center gap-2 rounded-md px-1.5 text-left text-xs outline-none transition-colors duration-150 focus-visible:bg-muted',
                     p.id === current ? 'bg-selection-soft font-medium' : 'text-muted-foreground pointer-hover:bg-muted pointer-hover:text-foreground',
                   )}
-                >
+                />}>
                   {/* React escapes the name, so an untrusted page name is safe here. */}
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   {p.id === current && <Check className="size-3.5 shrink-0 stroke-[1.5]" />}
-                </button>
+                </ContextMenuTrigger>
+                {/* Last page can't be deleted (server refuses too); the item is disabled rather than hidden so the rule is visible. */}
+                <ContextMenuContent>
+                  <ContextMenuItem onClick={() => setRenaming(p.id)}>Rename</ContextMenuItem>
+                  <ContextMenuItem variant="destructive" disabled={list.length < 2} onClick={() => useUi.getState().setDeletePageId(p.id)}><Trash2 />Delete page</ContextMenuItem>
+                </ContextMenuContent>
+                </ContextMenu>
               )}
             </li>
           ))}

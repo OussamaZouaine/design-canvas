@@ -53,7 +53,7 @@ export function useActions(): Action[] {
         openExport: () => engine && openExport(engine), copyPng: () => engine && void copyAsPng(engine),
         projects: () => void navigate({ to: '/' }), connect: () => ui().setConnectOpen(true),
         shortcuts: () => ui().setShortcutsOpen(true), palette: () => ui().setPaletteOpen(true),
-        page: (id) => engine?.setPage(id), board: (id) => engine?.focusBoard(id),
+        page: (id) => engine?.setPage(id), deletePage: () => ui().setDeletePageId(page ?? pagesOf(doc!)[0].id), board: (id) => engine?.focusBoard(id),
       },
     });
   }, [engine, doc, page, projectId, navigate]);

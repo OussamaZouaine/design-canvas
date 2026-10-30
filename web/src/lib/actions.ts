@@ -52,7 +52,7 @@ export interface ActionCtx {
     view: (id: 'history' | 'styles') => void;
     openExport: () => void; copyPng: () => void;
     projects: () => void; connect: () => void; shortcuts: () => void; palette: () => void;
-    page: (id: string) => void; board: (id: string) => void;
+    page: (id: string) => void; deletePage: () => void; board: (id: string) => void;
   };
 }
 
@@ -100,6 +100,8 @@ export function buildActions(c: ActionCtx): Action[] {
     { id: 'help.shortcuts', label: 'Keyboard shortcuts', group: 'Help', keys: ['?'], run: c.do.shortcuts },
   ];
   for (const p of c.pages) list.push({ id: `page.${p.id}`, label: p.name, group: 'Pages', keywords: ['page'], run: () => c.do.page(p.id) });
+  // The last page can never be deleted, so the action only exists with two or more.
+  if (c.pages.length > 1) list.push({ id: 'page.delete', label: 'Delete current page', group: 'Pages', keywords: ['remove', 'page'], run: c.do.deletePage });
   for (const b of c.boards) list.push({ id: `board.${b.id}`, label: b.name, group: 'Boards', keywords: ['artboard', 'frame'], run: () => c.do.board(b.id) });
   return list;
 }

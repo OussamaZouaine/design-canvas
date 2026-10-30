@@ -4,6 +4,7 @@ import { useSearch } from '@tanstack/react-router';
 import { pageOfBoard } from '@/canvas/engine';
 import { CommentsLayer } from '@/panels/CommentsLayer';
 import { CanvasContextMenu } from '@/shell/ContextMenu';
+import { DeletePageDialog } from '@/panels/DeletePageDialog';
 import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
 import { CommandPalette } from '@/shell/CommandPalette';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
@@ -49,6 +50,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <ShortcutsDialog />
           <CommandPalette />
           <ConnectAgentsDialog />
+          <DeletePageDialog projectId={projectId} />
         </main>
         <RightPanel projectId={projectId} />
       </div>
