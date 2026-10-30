@@ -17,6 +17,7 @@ the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (he
 - UI dev: `pnpm dev:web` (Vite on http://localhost:5173 with HMR, proxies /api /events /mcp /reply to the 3777 server, which must be running).
 - MCP endpoint: `http://localhost:3777/mcp` (StreamableHTTP, stateful sessions: `src/sessions.mjs`; a session id gets an agent identity from `clientInfo` / `?agent=<name>` / `start({agent})` and a bound project; unknown/expired ids (server restart, idle TTL) are served statelessly under a revived Session with the same id, never 404, because SDK clients do not re-initialize; requests with no session fall back to the active project). Registered in Claude Code as `design-canvas`.
   After changing MCP tool schemas, Claude Code must be restarted to see them.
+  Toolsets: new sessions list only `CORE_TOOLS` (mcp.mjs, ~4.5k vs ~9.3k schema tokens); `more_tools` enables the rest (list_changed) and sets `Session.tools='all'`; `?tools=all` lists all from the start; tests/stateless clients default to all. Add a new hot tool to `CORE_TOOLS` or it is hidden.
 - A project must be open in a browser tab for `get_screenshot` to work (the browser rasterizes the artboard).
 - Pages: `/` projects home, `/p/<id>` canvas, `/comments` all comments.
 

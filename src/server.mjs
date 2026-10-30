@@ -153,7 +153,8 @@ let fixedCache = null;
 async function measureFixed() {
   if (fixedCache) return fixedCache;
   const [a, b] = InMemoryTransport.createLinkedPair();
-  const server = createMcpServer({ store, ui, fonts, assets, highlight, port: PORT });
+  // Core toolset: that is what a new session pays for (more_tools adds the rest only when an agent asks).
+  const server = createMcpServer({ store, ui, fonts, assets, highlight, port: PORT, toolset: 'core' });
   const client = new Client({ name: 'cost-probe', version: '0' });
   try {
     await Promise.all([server.connect(a), client.connect(b)]);
@@ -183,7 +184,9 @@ async function handleStaleSession(req, res, url, sid) {
   if (req.method === 'DELETE') { sessions.remove(sid); res.writeHead(204).end(); return; }
   if (req.method !== 'POST') { res.writeHead(405).end(); return; } // no standalone SSE stream without a real session
   const body = await readJson(req);
-  const mcp = createMcpServer({ ...mcpDeps, session: sessions.revive(sid, url.searchParams.get('agent')) });
+  const session = sessions.revive(sid, url.searchParams.get('agent'));
+  if (url.searchParams.get('tools') === 'all') session.tools = 'all';
+  const mcp = createMcpServer({ ...mcpDeps, session, toolset: session.tools });
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   res.on('close', () => { transport.close(); mcp.close(); });
   await mcp.connect(transport);
@@ -205,11 +208,13 @@ async function handleMcp(req, res, url) {
   // subagents share one connection, so the label is the only way to tell them apart).
   if (isInitializeRequest(body)) {
     const session = new Session(null, url.searchParams.get('agent'));
+    // ?tools=all in the registered URL lists every tool from the start (clients that ignore list_changed need it).
+    if (url.searchParams.get('tools') === 'all') session.tools = 'all';
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: randomUUID,
       onsessioninitialized: (id) => { session.id = id; sessions.add(session, transport, mcp); },
     });
-    const mcp = createMcpServer({ ...mcpDeps, session });
+    const mcp = createMcpServer({ ...mcpDeps, session, toolset: session.tools });
     transport.onclose = () => { if (session.id) sessions.map.delete(session.id); };
     await mcp.connect(transport);
     return transport.handleRequest(req, res, body);

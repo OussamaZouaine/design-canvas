@@ -28,6 +28,7 @@ export class Session {
     this.lastSeen = Date.now();
     this.delivered = new Map(); // commentId -> time it was shown to this agent as HUMAN FEEDBACK (feedback.mjs)
     this.status = null; // one-line present-tense status the agent published; shown in the Agents tab
+    this.tools = 'core'; // MCP toolset: 'core' until more_tools runs or the URL asks for ?tools=all (mcp.mjs CORE_TOOLS)
   }
 
   setClient(info) { if (info) this.client = { name: String(info.name ?? '').slice(0, 60), version: String(info.version ?? '').slice(0, 30) }; }
