@@ -89,7 +89,7 @@ export function PagesPanel({ projectId }: { projectId: string }) {
                   <button
                     aria-label={`Delete page ${p.name}`}
                     onClick={() => useUi.getState().setDeletePageId(p.id)}
-                    className="absolute top-1/2 right-2.5 grid size-5 -translate-y-1/2 place-items-center rounded-sm bg-muted text-muted-foreground opacity-0 outline-none transition-[color,opacity] duration-150 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring pointer-hover:group-hover/page:opacity-100 pointer-hover:hover:text-destructive [&_svg]:size-3"
+                    className="absolute top-1/2 right-2.5 grid size-5 -translate-y-1/2 place-items-center rounded-sm bg-muted text-muted-foreground opacity-0 outline-none transition-[color,opacity] duration-150 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring [@media(hover:hover)_and_(pointer:fine)]:group-hover/page:opacity-100 pointer-hover:hover:text-destructive [&_svg]:size-3"
                   ><Trash2 /></button>
                 )}
                 {/* Last page can't be deleted (server refuses too); the item is disabled rather than hidden so the rule is visible. */}

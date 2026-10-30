@@ -224,7 +224,7 @@ function FlagButton({ on, onLabel, offLabel, onIcon, offIcon, onClick }: {
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       className={cn(
         'grid size-5 place-items-center rounded text-muted-foreground transition-opacity [&_svg]:size-3.5 [&_svg]:stroke-[1.5] focus-visible:opacity-100 group-focus-within:opacity-100',
-        on ? 'opacity-100' : 'opacity-0 pointer-hover:group-hover:opacity-100',
+        on ? 'opacity-100' : 'opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100',
       )}
     >
       {on ? onIcon : offIcon}
