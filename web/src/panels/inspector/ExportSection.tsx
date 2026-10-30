@@ -129,7 +129,7 @@ function ExportPreview({ items, row }: { items: ExportItem[]; row: ExportRow }) 
   const toggle = () => { setOpen(!open); try { localStorage.setItem(PREVIEW_KEY, open ? '0' : '1'); } catch { /* per-tab only */ } };
   return (
     <div className="flex flex-col gap-1.5">
-      <button type="button" aria-expanded={open} onClick={toggle} className="-mx-1 flex h-7 items-center gap-1 rounded-md px-1 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+      <button type="button" aria-expanded={open} onClick={toggle} className="-mx-1 flex h-7 items-center gap-1 rounded-md px-1 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/90">
         <ChevronDown className={cn('size-3 text-muted-foreground transition-[rotate] duration-150', !open && '-rotate-90')} />
         Preview
       </button>

@@ -133,7 +133,7 @@ function Textarea({ ref, ...p }: React.ComponentProps<'textarea'>) {
     <textarea
       ref={ref}
       {...p}
-      className="mt-2 min-h-16 w-full resize-y rounded-md border border-input bg-input/20 p-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+      className="mt-2 min-h-16 w-full resize-y rounded-md border border-input bg-input/20 p-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/90"
     />
   );
 }

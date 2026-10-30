@@ -55,7 +55,7 @@ function CopyLine({ text, what, className }: { text: string; what: string; class
       <code className="min-w-0 flex-1 text-[12px] leading-relaxed break-all whitespace-pre-wrap select-all">{text}</code>
       <Tip label={`Copy ${what}`}><button
         type="button" aria-label={`Copy ${what}`} onClick={() => copy(text, what)}
-        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 pointer-hover:bg-foreground/8 pointer-hover:text-foreground motion-reduce:transition-none"
+        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90 pointer-hover:bg-foreground/8 pointer-hover:text-foreground motion-reduce:transition-none"
       ><Copy className="size-3.5" /></button></Tip>
     </div>
   );
@@ -103,7 +103,7 @@ export function ConnectAgentsDialog() {
                 key={a.id} type="button" role="tab" aria-selected={a.id === agent.id}
                 onClick={() => { setId(a.id); setManualOpen(false); }}
                 className={cn(
-                  'flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] whitespace-nowrap text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:bg-foreground/6 pointer-hover:text-foreground',
+                  'flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 text-left text-[13px] whitespace-nowrap text-muted-foreground transition-[background-color,color,scale] duration-150 outline-none active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90 motion-reduce:transition-none pointer-hover:bg-foreground/6 pointer-hover:text-foreground',
                   a.id === agent.id && 'bg-field text-foreground',
                 )}
               ><AgentIcon id={a.id} />{a.label}</button>
@@ -132,7 +132,7 @@ export function ConnectAgentsDialog() {
               <div className="rounded-lg border">
                 <button
                   type="button" aria-expanded={manualOpen} onClick={() => setManualOpen(!manualOpen)}
-                  className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/90"
                 >
                   <ChevronRight aria-hidden className={cn('size-3.5 text-muted-foreground transition-[rotate] duration-150 motion-reduce:transition-none', manualOpen && 'rotate-90')} />
                   Or, install manually
@@ -150,7 +150,7 @@ export function ConnectAgentsDialog() {
               {EXAMPLE_PROMPTS.map((p) => (
                 <button
                   key={p} type="button" onClick={() => copy(p, 'prompt')}
-                  className="flex items-start gap-2 rounded-lg bg-field px-3 py-2 text-left text-[12px] outline-none transition-[background-color,scale] duration-150 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none pointer-hover:bg-field-hover"
+                  className="flex items-start gap-2 rounded-lg bg-field px-3 py-2 text-left text-[12px] outline-none transition-[background-color,scale] duration-150 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring/90 motion-reduce:transition-none pointer-hover:bg-field-hover"
                 ><Copy aria-hidden className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />{p}</button>
               ))}
             </Step>

@@ -106,7 +106,7 @@ function MainMenu() {
   const rulersAction = act('view.rulers');
   return (
     <DropdownMenu>
-      <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="grid size-7 shrink-0 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink outline-none transition-[scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50" />}>D</DropdownMenuTrigger></Tip>
+      <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="grid size-7 shrink-0 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink outline-none transition-[scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90" />}>D</DropdownMenuTrigger></Tip>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuItem render={<Link to="/" />}><FolderOpen />{act('project.home').label}</DropdownMenuItem>
         {item('help.palette', <Search />)}
@@ -173,7 +173,7 @@ export function TopBar({ projectId: _projectId }: { projectId: string }) {
         <MainMenu />
         <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
-          <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/40 pointer-hover:text-foreground">Projects</Link>
+          <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/90 pointer-hover:text-foreground">Projects</Link>
           <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
           {/* React escapes text, so untrusted project names are safe here. */}
           <span aria-current="page" className="truncate px-1 font-semibold">{name ?? '…'}</span>
@@ -209,7 +209,7 @@ const typing = (t: EventTarget | null) => t instanceof Element && !!t.closest('i
 // Active tool = solid signal blue, the one place the chrome spends colour. Tool switching is frequent, so feedback
 // is a 150ms colour change plus the 0.96 press scale, nothing more. Radii: 8px buttons + 4px padding = 12px shell.
 const slotClass = (on: boolean) => cn(
-  'grid h-8 place-items-center rounded-lg outline-none transition-[background-color,color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/50 [&_svg]:size-4',
+  'grid h-8 place-items-center rounded-lg outline-none transition-[background-color,color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90 [&_svg]:size-4',
   on ? 'bg-selection text-white' : 'text-foreground/75 pointer-hover:bg-foreground/8 pointer-hover:text-foreground',
 );
 
@@ -300,7 +300,7 @@ function AgentsTab({ projectId }: { projectId: string }) {
       </div>
       <AgentsPanel />
       <Collapsible className="border-t">
-        <CollapsibleTrigger className="group flex h-8 w-full items-center gap-1.5 px-3 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+        <CollapsibleTrigger className="group flex h-8 w-full items-center gap-1.5 px-3 text-[11px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/90">
           <ChevronRight className="size-3 transition-transform duration-150 group-data-panel-open:rotate-90" />MCP connection
         </CollapsibleTrigger>
         <CollapsibleContent><McpPanel projectId={projectId} /></CollapsibleContent>
