@@ -100,7 +100,7 @@ export function AgentsPanel() {
                 <Tip label={isPaused ? 'Resume this agent' : 'Pause this agent'}><button
                   onClick={() => setPaused(a.id, !isPaused)} aria-pressed={isPaused}
                   aria-label={isPaused ? `Resume ${a.name}` : `Pause ${a.name}`}
-                  className="flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted"
+                  className="flex h-6 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[11px] transition-transform duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none pointer-hover:hover:bg-field-hover"
                 >
                   {isPaused ? <Play className="size-3" /> : <Pause className="size-3" />}{isPaused ? 'Resume' : 'Pause'}
                 </button></Tip>
@@ -112,7 +112,7 @@ export function AgentsPanel() {
       )}
       <Section title="Call log">
       <div className="flex flex-wrap items-center gap-1.5">
-        <select aria-label="Filter by agent" value={filterAgent ?? ''} onChange={(e) => setFilterAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md border bg-background px-1 text-[11px]">
+        <select aria-label="Filter by agent" value={filterAgent ?? ''} onChange={(e) => setFilterAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md bg-field px-1 text-[11px]">
           <option value="">All agents</option>
           {presence.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
@@ -120,7 +120,7 @@ export function AgentsPanel() {
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         Follow
-        <select aria-label="Agent the camera follows" value={followAgent ?? ''} onChange={(e) => setFollowAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md border bg-background px-1 text-[11px] text-foreground">
+        <select aria-label="Agent the camera follows" value={followAgent ?? ''} onChange={(e) => setFollowAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md bg-field px-1 text-[11px] text-foreground">
           <option value="">Any agent</option>
           {presence.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
