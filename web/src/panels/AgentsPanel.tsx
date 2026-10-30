@@ -1,6 +1,8 @@
 import { Bot, Eye, Pause, Pencil, Play, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Section } from '@/panels/inspector/controls';
 import { idsInArgs, kindOf, presenceOf, useAgents, type CallEntry, type CallKind, type PendingCall, type Presence } from '@/store/agents';
@@ -55,6 +57,20 @@ const dur = (ms: number) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)}
 
 function Dot({ color, pulse }: { color: string; pulse?: boolean }) {
   return <i className={cn('size-2 shrink-0 rounded-full', pulse && 'agent-pulse')} style={{ background: color }} />;
+}
+
+// Agent picker for the filter / follow rows. Base UI Select has no empty value, so "all" is a sentinel mapped to null.
+// `items` lets the trigger show the label (not the raw id) of the selected agent.
+function AgentSelect({ label, all, value, onChange, presence, className }: { label: string; all: string; value: string | null; onChange: (v: string | null) => void; presence: Presence[]; className?: string }) {
+  const items = [{ value: 'all', label: all }, ...presence.map((a) => ({ value: a.id, label: a.name }))];
+  return (
+    <Select items={items} value={value ?? 'all'} onValueChange={(v) => onChange(v === 'all' ? null : v)}>
+      <SelectTrigger size="sm" aria-label={label} className={cn('h-6 max-w-32 border-0 bg-field px-1.5 py-0 text-[11px]', className)}><SelectValue /></SelectTrigger>
+      <SelectContent alignItemWithTrigger={false} className="min-w-36">
+        {items.map((i) => <SelectItem key={i.value} value={i.value} className="min-h-6 text-[11px]">{i.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
 }
 
 // Agents tab: who is working here and a live timeline of every MCP call, newest first. Click a row to jump to the
@@ -112,18 +128,14 @@ export function AgentsPanel() {
       )}
       <Section title="Call log">
       <div className="flex flex-wrap items-center gap-1.5">
-        <select aria-label="Filter by agent" value={filterAgent ?? ''} onChange={(e) => setFilterAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md bg-field px-1 text-[11px]">
-          <option value="">All agents</option>
-          {presence.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <label className="flex items-center gap-1 text-[11px] text-muted-foreground"><input type="checkbox" checked={writesOnly} onChange={(e) => setWritesOnly(e.target.checked)} />Writes only</label>
+        <AgentSelect label="Filter by agent" all="All agents" value={filterAgent} onChange={setFilterAgent} presence={presence} />
+        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Checkbox checked={writesOnly} onCheckedChange={(c) => setWritesOnly(c === true)} className="size-3.5" aria-label="Writes only" />Writes only
+        </label>
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
         Follow
-        <select aria-label="Agent the camera follows" value={followAgent ?? ''} onChange={(e) => setFollowAgent(e.target.value || null)} className="h-6 max-w-32 rounded-md bg-field px-1 text-[11px] text-foreground">
-          <option value="">Any agent</option>
-          {presence.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
+        <AgentSelect label="Agent the camera follows" all="Any agent" value={followAgent} onChange={setFollowAgent} presence={presence} className="text-foreground" />
       </div>
 
       <ul className="space-y-0.5" aria-live="off">
