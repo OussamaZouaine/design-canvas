@@ -1,4 +1,4 @@
-import { Palette } from 'lucide-react';
+import { Palette, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
@@ -117,7 +117,7 @@ function TokenRow({ name, base, mode, override, onCommit, onDelete }: {
         onChange={(e) => setDraft(e.target.value)} onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
       />
-      {mode === 'base' && <Tip label="Delete token"><Button variant="ghost" size="icon" aria-label={`Delete ${name}`} onClick={onDelete}>×</Button></Tip>}
+      {mode === 'base' && <Tip label="Delete token"><Button variant="ghost" size="icon" aria-label={`Delete ${name}`} onClick={onDelete}><X /></Button></Tip>}
     </div>
   );
 }
