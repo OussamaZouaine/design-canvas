@@ -169,7 +169,7 @@ export function PositionSection({ m }: { m: Model }) {
           type="button" aria-pressed={abs}
           title="Absolute position: take the layer out of the auto layout, keeping its offset"
           onClick={toggleAbsolute}
-          className={cn(chrome, 'justify-center gap-1.5 px-2 text-muted-foreground transition-[background-color,color,scale] active:scale-[0.96] pointer-hover:hover:text-foreground', abs && 'bg-selection-soft text-selection', !abs && anyAbs && 'opacity-70')}
+          className={cn(chrome, 'justify-center gap-1.5 px-2 text-muted-foreground transition-[background-color,color,scale] active:scale-[0.96] pointer-hover:hover:text-foreground', abs && 'bg-selection-soft text-selection-ink', !abs && anyAbs && 'opacity-70')}
         >
           Absolute
         </button>
@@ -328,7 +328,7 @@ export function AutoLayoutSection({ m }: { m: Model }) {
                 type="button" aria-pressed={between}
                 title="Space between: spread the children along the main axis"
                 onClick={() => m.patch({ 'justify-content': between ? 'flex-start' : 'space-between' })}
-                className={cn(chrome, 'justify-center px-2 text-muted-foreground transition-[background-color,color,scale] active:scale-[0.96] pointer-hover:hover:text-foreground', between && 'bg-selection-soft text-selection')}
+                className={cn(chrome, 'justify-center px-2 text-muted-foreground transition-[background-color,color,scale] active:scale-[0.96] pointer-hover:hover:text-foreground', between && 'bg-selection-soft text-selection-ink')}
               >
                 Space between
               </button>
