@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { FolderPlus, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeft, FolderPlus, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -11,8 +11,8 @@ import { useLiveReload } from '@/hooks/useLiveReload';
 import { toast } from '@/store/toast';
 import { cn } from '@/lib/utils';
 import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
-import { useUi } from '@/store/ui';
-import { HomeSidebar } from './home/HomeSidebar';
+import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
+import { HomeTopBar } from './home/HomeTopBar';
 import { ProjectCard, type CardActions, type View } from './home/ProjectCard';
 
 type Sort = 'recent' | 'created' | 'name';
@@ -96,30 +96,46 @@ export function HomePage() {
   };
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
-      <HomeSidebar
-        query={query}
-        onQuery={setQuery}
-        inTrash={inTrash}
-        onSection={setInTrash}
-        liveCount={live.length}
-        trashCount={trashed.length}
-        openComments={openComments}
-        connection={connection}
-        onImport={() => fileRef.current?.click()}
-        onConnect={() => useUi.getState().setConnectOpen(true)}
-      />
+    <div className="h-full overflow-y-auto bg-canvas">
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
+      {/* Mock "Atelier · Home": 96px side padding and 48px between top bar, hero and list at desktop width. */}
+      <main className="mx-auto flex max-w-[1536px] flex-col gap-12 px-6 pt-8 pb-16 md:px-24 md:pt-12">
+        <HomeTopBar
+          inTrash={inTrash}
+          onTrash={() => setInTrash(!inTrash)}
+          trashCount={trashed.length}
+          openComments={openComments}
+          connection={connection}
+          onImport={() => fileRef.current?.click()}
+        />
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1280px] px-10 pt-12 pb-16">
-          <div className="mb-8 flex flex-wrap items-center gap-2">
-            <h1 className="mr-auto font-display text-[40px]/[1.1] tracking-[-0.035em]">{inTrash ? 'Trash' : 'Recents'}</h1>
+        <section className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+          <div className="flex flex-col gap-3">
+            <h1 className="font-display text-[44px]/[1.05] tracking-[-0.04em] md:text-[64px]/[1.05]">Your work,<br />drawn by Claude.</h1>
+            <p className="max-w-[480px] text-base/6 text-muted-foreground">Open a project to watch designs appear live, comment on any element, and let your agents answer.</p>
+          </div>
+          <Button variant="brand" size="lg" className="h-10 px-5 text-sm" onClick={() => setNewOpen(true)}><Plus className="size-4" />New project</Button>
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {inTrash && <Button variant="ghost" size="32" onClick={() => setInTrash(false)}><ArrowLeft />Projects</Button>}
+            <h2 className="mr-auto text-[13px] font-semibold">{inTrash ? 'Trash' : 'Recent projects'}</h2>
+            <label className="flex h-8 w-44 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection">
+              <Search className="size-3.5 shrink-0" aria-hidden />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search"
+                aria-label="Search projects"
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+              />
+            </label>
             <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
             </Select>
-            <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>
             <div role="group" aria-label="View" className="flex rounded-lg bg-muted p-0.5">
               {([['grid', LayoutGrid, 'Grid view'], ['list', List, 'List view']] as const).map(([v, Icon, label]) => (
                 <button
@@ -134,22 +150,21 @@ export function HomePage() {
                 </button>
               ))}
             </div>
+            <span className="tnum text-[13px] text-muted-foreground">{shown.length} {inTrash ? 'deleted' : shown.length === 1 ? 'project' : 'projects'}</span>
           </div>
 
-          <div
-            className={cn('gap-6', view === 'grid' ? 'grid justify-start' : 'flex flex-col gap-2')}
-            style={view === 'grid' ? { gridTemplateColumns: 'repeat(auto-fill, 320px)' } : undefined}
-          >
+          <div className={cn(view === 'grid' ? 'grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3' : 'flex flex-col gap-2')}>
             {shown.map((p, i) => (
               <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
             ))}
           </div>
 
           {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} onNew={() => setNewOpen(true)} />}
-        </div>
+        </section>
       </main>
 
       <ConnectAgentsDialog />
+      <ShortcutsDialog />
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
     </div>
   );

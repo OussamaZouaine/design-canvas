@@ -47,14 +47,14 @@ Right-click a page > "Delete page", the row hover trash button (or palette "Dele
 ## Atelier Phase 3 (2026-10-30)
 Inspector `Section` now on shadcn Collapsible (13px titles, 12px body); Pages/Layers rows polished (14px icons, signal-blue tint); shadcn `Empty` states for layers, comments, no selection. Both themes checked in the browser. Next: Phase 4 command palette (`docs/notes/luxury-redesign-plan.md`). Not done: other panels (Agents, Theme, Tokens) keep their own section styling.
 
-## Home page redesign (2026-10-21)
-Home is now Paper-style: left sidebar (`web/src/pages/home/HomeSidebar.tsx`: workspace row, search, Recents / Trash / Comments / Import,
-connection pill + theme toggle in the footer) and a main area with a "Recents"/"Trash" heading, sort select, New project button and a
-grid/list toggle (remembered in localStorage `dc-home-view`). `ProjectCard` shows title + "Edited N ago" above the preview; `CoverThumb`
-takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet checked with real covers on a populated project.
+## Home page (rebuilt 2026-10-30 to match the mock "Atelier · Home · Dark", p_5f9fde61 / A3112)
+No sidebar. `pages/home/HomeTopBar.tsx`: logo + text links (Comments with open count, Connect agents, Shortcuts) and Tip icon buttons (Import,
+Trash with count, theme, connection). `HomePage.tsx`: 64px Bricolage hero + subtitle + brand New project; "Recent projects" row with search, sort,
+grid/list toggle (`dc-home-view`) and count; 3-column fluid grid. `ProjectCard`: raised preview card (200px, fluid `CoverThumb` that measures its
+width), title + "N boards, edited X ago" below, menu revealed on hover. Trash is the same page with a back button. Verified dark, light, 800px.
+Not checked: command palette on home (it is only mounted on the project page).
 
 ## UI round 2026-10-21 (merged into main, verified in the browser)
-- Home page restyled like Paper (`web/src/pages/home/HomeSidebar.tsx`, `ProjectCard.tsx`): sidebar, Recents grid, New project, grid/list toggle.
 - Left sidebar has a collapsible Pages section with "+" (`web/src/panels/PagesPanel.tsx`): create, rename, switch.
 - Design tab Font row is a picker (`web/src/ui/FontField.tsx`): real family name in its own face, project fonts + system fonts.
 - Gotchas: locked nodes/boards (e.g. generated Foundations) disable the whole inspector (`pointer-events-none`), which looks like a broken picker.

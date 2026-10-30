@@ -10,7 +10,7 @@ How the React chrome is built after the 2026-10 luxury redesign (done; the plan 
 - Destructive text/tints are `--destructive` (dark value lifted to 0.75 so it passes 4.5:1 on its own 20% tint).
 
 ## Type
-Inter Variable for all UI (12px base, 11px meta, 13px section titles, `tnum` for numbers). `font-display` = Bricolage Grotesque 500 (`@fontsource/bricolage-grotesque/500.css`) for TITLES ONLY: home hero (40px), project card titles, dialog titles, empty-state titles; tight tracking (-0.03em). No serif. Labels are sentence case, never all-caps, no middle-dot meta strings.
+Inter Variable for all UI (12px base, 11px meta, 13px section titles, `tnum` for numbers). `font-display` = Bricolage Grotesque 500 (`@fontsource/bricolage-grotesque/500.css`) for TITLES ONLY: home hero (64px, `HomeTopBar` + hero + card grid, no sidebar), project card titles, dialog titles, empty-state titles; tight tracking (-0.03em). No serif. Labels are sentence case, never all-caps, no middle-dot meta strings.
 
 ## Elevation and material
 Three levels: flat (panels, no shadow), `shadow-float` (toolbar, pills; `--elevation-float`), `shadow-overlay` (menus, tooltips, toasts, dialogs; `--elevation-overlay`). `.material` = translucent blurred surface for floating things; under `prefers-reduced-transparency` it goes solid, and one global rule also removes every `backdrop-blur-*` (dialog scrims, home badge).

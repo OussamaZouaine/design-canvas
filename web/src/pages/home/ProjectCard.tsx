@@ -29,15 +29,17 @@ interface Props {
   actions: CardActions;
 }
 
-// Grid thumbnail box (card is 320 wide with 4px padding inside a 1px border: 312 usable).
-const GRID_W = 312;
-const GRID_H = 208;
+// Grid preview height from the mock "Atelier · Home" (200px); the width fills the column.
+const GRID_H = 200;
 
 // Hover lift only on real pointers (touch devices would stick the hover state); the lift uses the shared layered
 // float shadow so a hovered card matches the toolbar and popovers instead of a one-off grey blur.
+// Grid menu button sits on the preview: hidden until hover/focus (always shown on touch or while its menu is open).
+const MENU_REVEAL = 'absolute top-3 right-3 border bg-card opacity-0 shadow-sm group-hover:opacity-100 group-focus-within:opacity-100 aria-expanded:opacity-100 [@media(hover:none)]:opacity-100';
 const HOVER_LIFT = 'pointer-hover:-translate-y-0.5 pointer-hover:shadow-float';
 
-// One project, as a Paper-style card (title + "Edited" line above the preview) or, in list view, as a row.
+// One project: a raised preview card with the title and "N boards, edited X ago" underneath (as in the mock), or in
+// list view a compact row.
 export function ProjectCard({ project: p, inTrash, view, index, animateIn, actions }: Props) {
   const [renaming, setRenaming] = useState(false);
   // "Delete forever" is two-step without a blocking dialog: the first click arms it.
@@ -65,13 +67,13 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
       }}
     />
   ) : inTrash ? (
-    <div className="truncate font-display text-base tracking-[-0.02em]">{p.name}</div>
+    <div className="truncate font-display text-base tracking-[-0.01em]">{p.name}</div>
   ) : (
     // Stretched-link pattern: the ::after covers the whole card so it is all clickable, while the menu button
     // (z-10) sits above it. Avoids nesting a button inside an anchor. The overlay needs z-[1]: the preview wrapper
     // below is `relative` and comes later in the DOM, so without an explicit z-index it would paint over the overlay
     // and swallow clicks on the thumbnail.
-    <Link to="/p/$id" params={{ id: p.id }} className="block truncate font-display text-base tracking-[-0.02em] after:absolute after:inset-0 after:z-[1] after:content-['']">
+    <Link to="/p/$id" params={{ id: p.id }} className="block truncate font-display text-base tracking-[-0.01em] after:absolute after:inset-0 after:z-[1] after:content-['']">
       {p.name}
     </Link>
   );
@@ -83,17 +85,17 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
     </span>
   );
 
+  const n = p.artboardCount;
   const subtitle = (
-    <div className="tnum flex items-center gap-2 truncate text-xs text-muted-foreground" title={p.description || undefined}>
-      <span className="truncate">{inTrash ? `Deleted ${ago(p.deletedAt ?? p.updatedAt)}` : `Edited ${ago(p.updatedAt)}`}</span>
-      <span className="shrink-0">{p.artboardCount} artboard{p.artboardCount === 1 ? '' : 's'}</span>
+    <div className="tnum flex items-center gap-2 truncate text-[13px] text-muted-foreground" title={p.description || undefined}>
+      <span className="truncate">{n} board{n === 1 ? '' : 's'}, {inTrash ? `deleted ${ago(p.deletedAt ?? p.updatedAt)}` : `edited ${ago(p.updatedAt)}`}</span>
       {list && badge}
     </div>
   );
 
   const menu = (
     <DropdownMenu onOpenChange={(open) => { if (!open) setArmed(false); }}>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${p.name}`} className="relative z-10 shrink-0" />}>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${p.name}`} className={cn('relative z-10 shrink-0', !list && MENU_REVEAL)} />}>
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
@@ -127,11 +129,8 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
   return (
     <div
       className={cn(
-        // Concentric radii: 8px thumbnail + 4px padding = 12px card corner.
-        'relative overflow-hidden rounded-[12px] border bg-card',
-        'transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none',
-        list ? 'flex w-full items-center gap-3 p-2 pr-2' : 'w-[320px] p-1',
-        !inTrash && !list && HOVER_LIFT,
+        'group relative',
+        list ? 'flex w-full items-center gap-3 rounded-[12px] border bg-card p-2' : 'flex flex-col gap-3',
         inTrash && 'opacity-80',
         animateIn && index < 8 && 'animate-in fade-in slide-in-from-bottom-2 duration-300 fill-mode-backwards',
       )}
@@ -145,15 +144,13 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
         </>
       ) : (
         <>
-          <div className="flex items-start gap-1 px-2.5 pt-2 pb-2.5">
-            <div className="min-w-0 flex-1">{title}{subtitle}</div>
-            {/* -mt/-mr pull the 32px icon button into the padding so the title row stays compact. */}
-            <div className="-mt-1 -mr-1.5">{menu}</div>
+          {/* Concentric radii: 8px preview + 8px padding = 16px card corner. */}
+          <div className={cn('relative rounded-2xl border bg-card p-2 transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', !inTrash && HOVER_LIFT)}>
+            <CoverThumb cover={p.cover} height={GRID_H} className="w-full rounded-lg" />
+            {badge && <div className="absolute bottom-4 left-4">{badge}</div>}
+            {menu}
           </div>
-          <div className="relative">
-            <CoverThumb cover={p.cover} width={GRID_W} height={GRID_H} className="rounded-lg" />
-            {badge && <div className="absolute bottom-2 left-2">{badge}</div>}
-          </div>
+          <div className="px-1">{title}{subtitle}</div>
         </>
       )}
     </div>
