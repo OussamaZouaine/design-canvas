@@ -177,6 +177,22 @@ Order is a suggestion; the user decides.
     OPEN, in order: (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
     (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
+15. **Brand identity generation (idea, 2026-10-31, not started; user wants a full, professional identity like an agency delivers, not just a logo):**
+    an agent builds a brand on its own page, in agency order: 0 strategy board (audience, positioning, 3-5 values, personality, voice and tone with
+    do/don't lines), 1 mood board (inspiration), 2 logo directions (3-4 side by side with the reasoning for each, then the chosen one), 3 logo system
+    (construction grid, clear space, minimum size, primary / secondary / icon-only lockups, mono and reversed, 16-64 px checks, misuse examples),
+    4 colour (primary / secondary / neutrals with roles, contrast pairs, OKLCH + hex) and type (hierarchy specimen), written as project tokens via
+    `tokens`, fonts via `use_font`, 5 mockups (business card, letterhead, app icon, social post, website hero, signage) that reuse the logo as a component
+    (`components` + `insert_component`), so a logo edit updates every mockup, 6 brand guidelines: the page exported as a multi-page PDF + an asset pack
+    (SVG/PNG of every lockup, zip via `export`). Mostly a guide job: a `get_guide({topic:"brand"})` topic in `src/guide.mjs` with that sequence, the
+    quality bar (no clip-art icons as the mark, marks as plain inline `<svg>` on a grid, every choice explained in one line) and a fixed board layout.
+    Already there: references (user pictures), `capture_url` (inspiration sites as boards), `assets` icons, inline SVG, tokens, components, SVG/PDF export.
+    Images (decided 2026-10-31): user uploads (references, works today) + SVG/CSS patterns and textures the agent draws + free web images from
+    KEYLESS openly licensed APIs: Openverse (api.openverse.org, CC search, anonymous rate limit) and Wikimedia Commons (commons.wikimedia.org API).
+    Unsplash / Pexels / Pixabay stay out (keys). Build it like `assets` (`src/assets.mjs`): fixed host allowlist, query validated, image downloaded
+    once into the project (magic-number check like `src/images.mjs`) and served locally, because the SVG rasterizer cannot load http images.
+    Store creator, source URL and licence with each image; default filter to commercial-safe licences (CC0, public domain, CC BY, CC BY-SA; never
+    NC/ND for brand work), and the guidelines page lists credits for CC BY images. Later: a logo lint check (tiny-size legibility, colour count).
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
