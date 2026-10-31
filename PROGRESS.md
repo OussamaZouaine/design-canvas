@@ -170,7 +170,8 @@ Order is a suggestion; the user decides.
 14. **User-test pass (2026-10-31), annoyances found by using the app:** FIXED: board names unreadable when zoomed out (labels counter-scaled via `--k`),
     no zoom to selection (Shift+2) and dead +/- keys / tiny 1.25x zoom step (`ZOOM_STEP = 2`); copy now puts only ids on the system clipboard;
     (a) below `LIVE_K` a plain click (and drag) picks the whole board (`pickBoardFirst` in `selection.ts`) until something on that board is selected;
-    double-click enters it, Ctrl/Cmd+click still goes deep.
+    double-click enters it, Ctrl/Cmd+click still goes deep. Ctrl+Z skipped board moves / resizes (`Doc.moveArtboard` / `resizeArtboard` took no
+    checkpoint); now one undo step each, and a left/top-handle resize sends x/y inside the single `resize` action.
     OPEN, in order: (b) Inspector shows "Mixed"
     X/Y/W for ONE selected flow child; (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
     (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,

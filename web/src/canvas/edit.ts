@@ -191,8 +191,11 @@ export class CanvasEditor {
       const r = Math.round;
       if (board) {
         const n = subs[0].next, l = subs[0].local;
-        if (r(n.w) !== r(l.w) || r(n.h) !== r(l.h)) canvasAction(host.projectId, 'resize', { id: board.id, width: r(n.w), height: r(n.h) }).catch((err) => fail(err, 'Could not resize'));
-        if (r(n.x) !== r(l.x) || r(n.y) !== r(l.y)) canvasAction(host.projectId, 'move', { id: board.id, x: r(n.x), y: r(n.y) }).catch((err) => fail(err, 'Could not move'));
+        // Size and position go in ONE resize action (left / top handles move the board too), so Ctrl+Z undoes the
+        // whole gesture in one step.
+        if (r(n.w) !== r(l.w) || r(n.h) !== r(l.h) || r(n.x) !== r(l.x) || r(n.y) !== r(l.y)) {
+          canvasAction(host.projectId, 'resize', { id: board.id, width: r(n.w), height: r(n.h), x: r(n.x), y: r(n.y) }).catch((err) => fail(err, 'Could not resize'));
+        }
         return;
       }
       const perId: Record<string, Record<string, string>> = {};

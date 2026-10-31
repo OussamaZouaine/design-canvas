@@ -302,7 +302,7 @@ const USER_EDITS = new Set(['move', 'resize', 'rename', 'delete', 'duplicate', '
 // Canvas actions on one project's document.
 const canvasActions = {
   move: (p, b) => p.doc.moveArtboard(b.id, b.x, b.y),
-  resize: (p, b) => p.doc.resizeArtboard(b.id, b.width, b.height),
+  resize: (p, b) => p.doc.resizeArtboard(b.id, b.width, b.height, b.x, b.y),
   rename: (p, b) => p.doc.renameNodes({ [b.id]: b.name }),
   delete: (p, b) => p.doc.deleteNodes(b.ids),
   duplicate: (p, b) => p.doc.duplicateNodes(b.ids),

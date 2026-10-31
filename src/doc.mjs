@@ -1162,21 +1162,27 @@ export class Doc {
     this._commit();
   }
 
+  // Board drags and Inspector X/Y/W/H. Each is one undo step (Ctrl+Z used to skip them and undo the change before);
+  // a no-op takes no checkpoint so it never leaves an empty step.
   moveArtboard(id, x, y) {
     const ab = this.getArtboard(id);
-    if (!ab) return;
+    if (!ab || (ab.x === x && ab.y === y)) return;
+    this._checkpoint('move_artboard');
     ab.x = x;
     ab.y = y;
     this._commit();
   }
 
-  resizeArtboard(id, width, height) {
+  // `x` / `y` are optional: a resize from the left or top handle also moves the board, in the SAME undo step.
+  resizeArtboard(id, width, height, x = undefined, y = undefined) {
     const ab = this.getArtboard(id);
     if (!ab) return;
+    x ??= ab.x; y ??= ab.y;
+    if (ab.width === width && ab.height === height && ab.x === x && ab.y === y) return;
+    this._checkpoint('resize_artboard');
     // Dragging a board to a new height is an explicit "this tall": it stops auto-growing.
     if (height !== ab.height) delete ab.heightMode;
-    ab.width = width;
-    ab.height = height;
+    Object.assign(ab, { width, height, x, y });
     this._commit();
   }
 

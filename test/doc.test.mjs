@@ -209,3 +209,17 @@ test('unwrapNode frees the children in place with their ids, restyles them, one 
   assert.equal(doc.parentOf(a), w);
   assert.throws(() => doc.unwrapNode(c), /Nothing inside/);
 });
+
+test('moving and resizing a board are undo steps of their own', () => {
+  const { doc, ab } = setup();
+  const before = { x: ab.x, y: ab.y, width: ab.width, height: ab.height };
+  doc.moveArtboard(ab.id, before.x + 100, before.y + 50);
+  doc.moveArtboard(ab.id, before.x + 100, before.y + 50); // no-op: no empty step
+  doc.resizeArtboard(ab.id, 300, 200, before.x + 80, before.y + 50); // left handle: size + x in one step
+  assert.deepEqual(doc.undo(1, 'user'), ['resize_artboard']);
+  assert.equal(doc.getArtboard(ab.id).x, before.x + 100);
+  assert.deepEqual(doc.undo(1, 'user'), ['move_artboard']);
+  const back = doc.getArtboard(ab.id);
+  assert.deepEqual({ x: back.x, y: back.y, width: back.width, height: back.height }, before);
+  assert.ok(back.html.includes('data-name="card"'), 'the write before the moves is still there');
+});
