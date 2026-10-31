@@ -174,7 +174,9 @@ Order is a suggestion; the user decides.
     checkpoint); now one undo step each, and a left/top-handle resize sends x/y inside the single `resize` action.
     (b) Inspector showed "Mixed" X/Y/W for ONE flow child when `measure()` returned null (board drawn as a bitmap): `sharedNum` in
     `lib/inspect.ts` treats null as unknown (Mixed needs two known values that differ) and `NumberField` shows blank, not 0, for `value: null`.
-    OPEN, in order: (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
+    (d) home flashed "Recent projects 0" before the list loaded: `HomePage.tsx` shows `CardSkeleton` placeholders (shadcn `skeleton`) and no count
+    until the first list response; the empty state still waits for `loaded`.
+    OPEN, in order: (c) Shift+1 fit leaves ~half the view empty;
     (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
 15. **Brand identity generation (idea, 2026-10-31, not started; user wants a full, professional identity like an agency delivers, not just a logo):**

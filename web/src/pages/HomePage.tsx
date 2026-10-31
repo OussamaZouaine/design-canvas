@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select,SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createProject, importProject, listAllComments, listProjects, projectAction, type ProjectSummary } from '@/api/projects';
 import { useLiveReload } from '@/hooks/useLiveReload';
 import { toast } from '@/store/toast';
@@ -122,7 +123,7 @@ export function HomePage() {
           </section>
 
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <h2 className="mr-auto text-[13px] font-semibold">{inTrash ? 'Trash' : 'Recent projects'} <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span></h2>
+            <h2 className="mr-auto text-[13px] font-semibold">{inTrash ? 'Trash' : 'Recent projects'} {loaded && <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span>}</h2>
             <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
@@ -144,6 +145,8 @@ export function HomePage() {
           </div>
 
           <div className={cn(view === 'grid' ? 'grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2')}>
+            {/* Until the first list arrives, placeholders stand in so the page never reads as "0 projects". */}
+            {!loaded && Array.from({ length: 3 }, (_, i) => <CardSkeleton key={i} view={view} />)}
             {shown.map((p, i) => (
               <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
             ))}
@@ -155,6 +158,26 @@ export function HomePage() {
 
       <ConnectAgentsDialog />
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
+    </div>
+  );
+}
+
+// Loading placeholder shaped like ProjectCard (grid: 200px preview in a padded card; list: 96x60 thumb) so nothing jumps
+// when the real cards replace it. The pulse stops for reduced-motion users.
+function CardSkeleton({ view }: { view: View }) {
+  const bar = 'motion-reduce:animate-none';
+  if (view === 'list') {
+    return (
+      <div aria-hidden className="flex items-center gap-4 rounded-xl p-2">
+        <Skeleton className={cn('h-[60px] w-24 shrink-0', bar)} />
+        <div className="flex flex-1 flex-col gap-2"><Skeleton className={cn('h-4 w-40', bar)} /><Skeleton className={cn('h-3 w-56', bar)} /></div>
+      </div>
+    );
+  }
+  return (
+    <div aria-hidden className="flex flex-col gap-3">
+      <div className="rounded-2xl border bg-card p-2"><Skeleton className={cn('h-[200px] w-full rounded-lg', bar)} /></div>
+      <div className="flex flex-col gap-2 px-1"><Skeleton className={cn('h-4 w-2/5', bar)} /><Skeleton className={cn('h-3 w-3/5', bar)} /></div>
     </div>
   );
 }
