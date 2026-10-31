@@ -167,6 +167,12 @@ Order is a suggestion; the user decides.
     1 selection model (multi-select, context scoping, marquee, keyboard nav), 2 drag reorder/reparent in flow (`moveNodes`), 3 snapping + smart guides + nudge + better resize,
     4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Nothing left except the "not exercised" notes in the plan (real mouse drags, touch, cross-board drags).
 13. **Export (branch `feat/export`, 2026-10-29, not merged):** Figma-style Export section in the Design tab (one setting per item: scale + format, suffix, JPG/PDF quality, Preview; no add/remove rows), "Export…" and "Copy as PNG" in the context menu, Ctrl+Shift+E, page view exports all frames, saved rows per node, zip for several files, MCP `export` takes `format` png|jpg|svg|pdf and uses saved rows. Browser-tested on a scratch server (all four formats, zip, reload keeps rows). Not done: vector PDF (Chrome print-to-PDF), WebP, multi-select UI test, real download-folder check (blobs inspected in page JS).
+14. **User-test pass (2026-10-31), annoyances found by using the app:** FIXED: board names unreadable when zoomed out (labels counter-scaled via `--k`),
+    no zoom to selection (Shift+2) and dead +/- keys / tiny 1.25x zoom step (`ZOOM_STEP = 2`); copy now puts only ids on the system clipboard.
+    OPEN, in order: (a) a click on a board at overview zoom selects a deep (often locked) layer instead of the board; (b) Inspector shows "Mixed"
+    X/Y/W for ONE selected flow child; (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
+    (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
+    breakpoint preview side by side, click-through prototype links, snapshot compare.
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
