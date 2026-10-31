@@ -176,8 +176,11 @@ Order is a suggestion; the user decides.
     `lib/inspect.ts` treats null as unknown (Mixed needs two known values that differ) and `NumberField` shows blank, not 0, for `value: null`.
     (d) home flashed "Recent projects 0" before the list loaded: `HomePage.tsx` shows `CardSkeleton` placeholders (shadcn `skeleton`) and no count
     until the first list response; the empty state still waits for `loaded`.
-    OPEN, in order: (c) Shift+1 fit leaves ~half the view empty;
-    (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
+    (c) `fit()` reserved label room in world units (30, nothing at 5%; labels are counter-scaled) and never refit on resize: now 32px
+    margins + a 24 screen-px label row, and a ResizeObserver refits while the camera is still the fitted one (`fitted`, cleared in
+    `applyView`). Space left on one axis is just aspect ratio (wide rows in a tall viewport).
+    (e) `applyView` reports the zoom synchronously (`reportedK`), not only in the rAF. The DOM readout was already right in tests; the
+    built-in browser pane's screenshots can show a stale frame, which likely caused the report. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
 15. **Brand identity generation (idea, 2026-10-31, not started; user wants a full, professional identity like an agency delivers, not just a logo):**
     an agent builds a brand on its own page, in agency order: 0 strategy board (audience, positioning, 3-5 values, personality, voice and tone with
