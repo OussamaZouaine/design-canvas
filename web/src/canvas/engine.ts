@@ -14,7 +14,7 @@ import { exportNow } from '@/lib/exportActions';
 import { hashStr, rasterizeCanvas, thumbGet, thumbPut } from './raster';
 import { CanvasEditor } from './edit';
 import { measureBoard, pickRect, type RectEntry } from './rects';
-import { enterTarget, intersects, normalize, pickDeep, pickInChain, soleDescent, toggleId, unionBox, type Box } from './selection';
+import { enterTarget, intersects, normalize, pickBoardFirst, pickDeep, pickInChain, soleDescent, toggleId, unionBox, type Box } from './selection';
 import { fontsSignature, setProjectFonts } from './fonts';
 import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
@@ -1218,8 +1218,12 @@ export class CanvasEngine {
     this.lastDown = { chain: this.chainFrom(path, e.clientX, e.clientY), t: Date.now() };
     const chain = this.lastDown.chain;
     const deep = e.ctrlKey || e.metaKey;
-    if (onLabel && abEl) {
-      const id = abEl.dataset.ab!;
+    // A board label always picks the board; so does a plain click on a board at overview zoom (pickBoardFirst).
+    const hitBoard = chain.length ? this.pidIndex.get(chain[0]) : undefined;
+    const boardPick = onLabel && abEl ? abEl.dataset.ab!
+      : !deep && hitBoard && pickBoardFirst(hitBoard, this.selected, (id) => this.pidIndex.get(id), this.view.k < LIVE_K) ? hitBoard : null;
+    if (boardPick) {
+      const id = boardPick;
       if (e.shiftKey) { this.select(toggleId(this.selected, id)); return; }
       this.select([id]);
       this.editor.dragBoard(e, id);
@@ -1314,7 +1318,10 @@ export class CanvasEngine {
     if (this.tool !== 'move' || this.commentMode) return;
     let chain = this.chainFrom(e.composedPath(), e.clientX, e.clientY);
     if (!chain.length && Date.now() - this.lastDown.t < 600) chain = this.lastDown.chain;
-    const into = enterTarget(chain, this.primary(), this.isSole);
+    // A selected board is not part of the chain (it ends at the top-level node), so append it: double-click on a
+    // board picked at overview zoom then enters it like any container.
+    const board = chain.length ? this.pidIndex.get(chain[0]) : undefined;
+    const into = enterTarget(board ? [...chain, board] : chain, this.primary(), this.isSole);
     if (into) { this.select([into]); return; }
     const el = chain.length ? this.findElement(chain[0]) : null;
     if (el) this.editor.editText(el);

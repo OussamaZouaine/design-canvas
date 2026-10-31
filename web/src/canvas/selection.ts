@@ -30,6 +30,13 @@ export function pickInChain(chain: string[], context: string | null, selected: r
   return chain[i];
 }
 
+// Overview zoom (boards drawn as bitmaps): a plain click picks the whole board, as in Figma, instead of a deep layer
+// the user cannot even see. Once the user has gone into this board (something on it other than the board itself is
+// selected, e.g. after a double-click) clicks pick layers again. Ctrl/Cmd+click bypasses this in the engine.
+export function pickBoardFirst(boardId: string, selected: readonly string[], boardOf: (id: string) => string | undefined, overview: boolean): boolean {
+  return overview && !selected.some((id) => id !== boardId && boardOf(id) === boardId);
+}
+
 // Where a level really starts: from `start` (a node id or a board id) go down while it has exactly one child that
 // itself has children. Used by marquee / Ctrl+A / Enter so they see the same level a plain click does.
 export function soleDescent(start: string, childrenOf: (id: string) => string[]): string {

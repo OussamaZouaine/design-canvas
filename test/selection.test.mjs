@@ -1,7 +1,7 @@
 // Selection maths lives in the web client (web/src/canvas/selection.ts) but has no DOM, so the root runner imports it directly.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pickInChain, pickDeep, enterTarget, toggleId, normalize, unionBox, intersects, siblingStep, rangeIds, soleDescent } from '../web/src/canvas/selection.ts';
+import { pickInChain, pickDeep, enterTarget, toggleId, normalize, unionBox, intersects, siblingStep, rangeIds, soleDescent, pickBoardFirst } from '../web/src/canvas/selection.ts';
 
 // board A1 > N1 (card) > N2 (row) > N3 (title)
 const chain = ['N3', 'N2', 'N1'];
@@ -97,4 +97,13 @@ test('range between two rows is inclusive in either direction', () => {
   assert.deepEqual(rangeIds(['a', 'b', 'c', 'd'], 'b', 'd'), ['b', 'c', 'd']);
   assert.deepEqual(rangeIds(['a', 'b', 'c', 'd'], 'c', 'a'), ['a', 'b', 'c']);
   assert.deepEqual(rangeIds(['a'], 'zz', 'a'), ['a']);
+});
+
+test('overview zoom: a plain click picks the board until the user has gone into it', () => {
+  const boardOf = (id) => (id.startsWith('A') ? undefined : id === 'X1' ? 'A2' : 'A1');
+  assert.equal(pickBoardFirst('A1', [], boardOf, true), true);
+  assert.equal(pickBoardFirst('A1', ['A1'], boardOf, true), true);   // board already selected: stays the board
+  assert.equal(pickBoardFirst('A1', ['X1'], boardOf, true), true);   // a layer on another board does not count
+  assert.equal(pickBoardFirst('A1', ['N2'], boardOf, true), false);  // went into this board: pick layers
+  assert.equal(pickBoardFirst('A1', [], boardOf, false), false);     // zoomed in: normal picking
 });
