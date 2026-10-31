@@ -8,8 +8,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        // Champagne: the single primary action per area (e.g. Export). Brand moments only, never state.
-        brand: "bg-brand text-brand-ink hover:bg-[color-mix(in_oklch,var(--brand),white_10%)]",
+        // Ink brand: the single primary action per area (e.g. Export). Brand moments only, never state.
+        // Hover mixes toward the panel colour, so it lightens in light mode and darkens in dark mode.
+        brand: "bg-brand text-brand-ink hover:bg-[color-mix(in_oklch,var(--brand),var(--background)_14%)]",
         outline:
           "border-border hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
         secondary:
