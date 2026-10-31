@@ -24,6 +24,8 @@ const LIVE_K = 0.3;          // below this zoom a board is drawn from its snapsh
 const MOUNT_MARGIN = 500;    // screen px around the viewport inside which boards get mounted
 const UNMOUNT_MARGIN = 1600; // boards only unmount well past that, so small back-and-forth pans don't thrash
 const MIN_K = 0.05, MAX_K = 4;
+// One click of the zoom buttons or +/- doubles or halves the zoom (Figma-like): 1.25 needed 7 clicks from 6% to 28%.
+export const ZOOM_STEP = 2;
 
 export interface EngineEvents {
   onZoom: (k: number) => void;
@@ -523,6 +525,28 @@ export class CanvasEngine {
     this.view.x = (w - ab.width * this.view.k) / 2 - ab.x * this.view.k;
     this.view.y = (h - ab.height * this.view.k) / 2 - ab.y * this.view.k;
     this.glide(420);
+    this.applyView();
+  }
+
+  // Shift+2: frame the whole selection (boards and/or layers), Figma's "zoom to selection". Nothing selected = fit all.
+  // Boards come from their data; layers from their drawn box (live element or the snapshot's rect index), which is
+  // in screen px and converted back to world units with the current camera.
+  zoomToSelection() {
+    const { x, y, k } = this.view;
+    const boxes = this.selected.map((id): Box | null => {
+      const ab = this.doc.artboards.find((a) => a.id === id);
+      if (ab) return { left: ab.x, top: ab.y, width: ab.width, height: ab.height };
+      const r = this.rectOf(id);
+      return r && { left: (r.left - x) / k, top: (r.top - y) / k, width: r.width / k, height: r.height / k };
+    }).filter((b): b is Box => !!b);
+    const u = unionBox(boxes);
+    if (!u) { this.fit(); return; }
+    const w = this.viewport.clientWidth, h = this.viewport.clientHeight;
+    // max(1, ...) guards a zero-size node (empty div) from a division by zero.
+    this.view.k = Math.min(MAX_K, Math.max(MIN_K, Math.min((w - 120) / Math.max(1, u.width), (h - 120) / Math.max(1, u.height))));
+    this.view.x = (w - u.width * this.view.k) / 2 - u.left * this.view.k;
+    this.view.y = (h - u.height * this.view.k) / 2 - u.top * this.view.k;
+    this.glide(320);
     this.applyView();
   }
 

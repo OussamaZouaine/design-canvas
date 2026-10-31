@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { canvasAction } from '@/api/projects';
-import { pageOfBoard, pagesOf } from '@/canvas/engine';
+import { ZOOM_STEP, pageOfBoard, pagesOf } from '@/canvas/engine';
 import { buildActions, type Action } from '@/lib/actions';
 import { copyAsPng, openExport } from '@/lib/exportActions';
 import { useCanvas } from '@/store/canvas';
@@ -45,7 +45,7 @@ export function useActions(): Action[] {
         duplicate: () => engine?.duplicate(), copy: () => engine?.copy(), cut: () => engine?.cut(),
         paste: (inPlace) => engine?.paste(inPlace), remove: () => engine?.remove(),
         group: () => engine?.group('group'), ungroup: () => engine?.ungroup(), autoLayout: () => engine?.group('auto'),
-        zoomIn: () => engine?.zoomBy(1.25), zoomOut: () => engine?.zoomBy(1 / 1.25), fit: () => engine?.fit(),
+        zoomIn: () => engine?.zoomBy(ZOOM_STEP), zoomOut: () => engine?.zoomBy(1 / ZOOM_STEP), fit: () => engine?.fit(), zoomToSelection: () => engine?.zoomToSelection(),
         toggleFollow: () => { const c = useCanvas.getState(); c.setFollow(!c.follow); engine?.setFollow(!c.follow); },
         toggleRulers: () => ui().toggleRulers(), toggleTheme: () => ui().toggleTheme(),
         toggleLayers: () => ui().toggleLayers(), togglePanel: () => ui().togglePanel(),

@@ -20,6 +20,7 @@ import { useActions } from '@/shell/useActions';
 import { cn } from '@/lib/utils';
 import { useAgents } from '@/store/agents';
 import { useCanvas } from '@/store/canvas';
+import { ZOOM_STEP } from '@/canvas/engine';
 import { useProject } from '@/store/project';
 import { useUi, type PanelTab, type Tool } from '@/store/ui';
 import { Tip } from '@/ui/Tip';
@@ -72,9 +73,9 @@ function ZoomControls() {
   const { engine, zoom } = useCanvas();
   return (
     <ButtonGroup aria-label="Zoom">
-      <Tip label="Zoom out" keys="−" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / 1.25)}><Minus /></Button></Tip>
+      <Tip label="Zoom out" keys="−" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom out" onClick={() => engine?.zoomBy(1 / ZOOM_STEP)}><Minus /></Button></Tip>
       <ButtonGroupText className="tnum w-12 justify-center px-0 text-[11px] font-medium">{Math.round(zoom * 100)}%</ButtonGroupText>
-      <Tip label="Zoom in" keys="+" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(1.25)}><Plus /></Button></Tip>
+      <Tip label="Zoom in" keys="+" side="bottom"><Button variant="outline" size="icon" aria-label="Zoom in" onClick={() => engine?.zoomBy(ZOOM_STEP)}><Plus /></Button></Tip>
       <Tip label="Fit all" keys="⇧1" side="bottom"><Button variant="outline" size="icon" aria-label="Fit all artboards" onClick={() => engine?.fit()}><Maximize /></Button></Tip>
     </ButtonGroup>
   );
@@ -256,6 +257,10 @@ export function FloatingToolbar() {
       if (e.shiftKey && e.key.toLowerCase() === 'r') { useUi.getState().toggleRulers(); return; }
       // Shift+1 = fit all (Figma's key). Matched on `code`, not `key`: Shift+1 types "!" on QWERTY and "1" on AZERTY.
       if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); engine?.fit(); return; }
+      if (e.shiftKey && e.code === 'Digit2') { e.preventDefault(); engine?.zoomToSelection(); return; }
+      // + / - zoom (the zoom buttons' tooltips promise these keys). `=` too, so + works without Shift on QWERTY.
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); engine?.zoomBy(ZOOM_STEP); return; }
+      if (e.key === '-') { e.preventDefault(); engine?.zoomBy(1 / ZOOM_STEP); return; }
       const hit = TOOLS.find((t) => t.key.toLowerCase() === e.key.toLowerCase() && t.id !== 'comment');
       if (hit) pick(hit.id);
     };

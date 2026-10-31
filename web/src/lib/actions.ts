@@ -45,7 +45,7 @@ export interface ActionCtx {
     selectAll: () => void;
     duplicate: () => void; copy: () => void; cut: () => void; paste: (inPlace: boolean) => void; remove: () => void;
     group: () => void; ungroup: () => void; autoLayout: () => void;
-    zoomIn: () => void; zoomOut: () => void; fit: () => void;
+    zoomIn: () => void; zoomOut: () => void; fit: () => void; zoomToSelection: () => void;
     toggleFollow: () => void; toggleRulers: () => void; toggleTheme: () => void;
     toggleLayers: () => void; togglePanel: () => void;
     tab: (id: 'design' | 'comment' | 'agents') => void;
@@ -75,9 +75,10 @@ export function buildActions(c: ActionCtx): Action[] {
     { id: 'structure.ungroup', label: 'Ungroup', group: 'Structure', keys: ['mod+shift+g', 'mod+alt+g'], run: c.do.ungroup, enabled: c.has.oneLayer },
     { id: 'structure.autoLayout', label: 'Add auto layout', group: 'Structure', keys: ['shift+a'], keywords: ['flex', 'wrap'], run: c.do.autoLayout, enabled: layers },
 
-    { id: 'view.zoomIn', label: 'Zoom in', group: 'View', run: c.do.zoomIn },
-    { id: 'view.zoomOut', label: 'Zoom out', group: 'View', run: c.do.zoomOut },
+    { id: 'view.zoomIn', label: 'Zoom in', group: 'View', keys: ['+'], run: c.do.zoomIn },
+    { id: 'view.zoomOut', label: 'Zoom out', group: 'View', keys: ['-'], run: c.do.zoomOut },
     { id: 'view.fit', label: 'Fit all artboards', group: 'View', keys: ['shift+1'], keywords: ['zoom'], run: c.do.fit },
+    { id: 'view.zoomSelection', label: 'Zoom to selection', group: 'View', keys: ['shift+2'], keywords: ['focus', 'frame'], run: c.do.zoomToSelection, enabled: c.has.selection },
     { id: 'view.follow', label: 'Follow Claude\'s camera', group: 'View', keywords: ['agent'], run: c.do.toggleFollow },
     { id: 'view.rulers', label: 'Rulers', group: 'View', keys: ['shift+r'], run: c.do.toggleRulers },
     { id: 'view.theme', label: 'Toggle light or dark theme', group: 'View', keywords: ['dark', 'light', 'appearance'], run: c.do.toggleTheme },
