@@ -51,8 +51,13 @@
 .dc-label {
   position: absolute; bottom: 100%; left: 0; padding-bottom: 6px; white-space: nowrap;
   font-size: 12px; cursor: move; user-select: none; display: flex; align-items: center; color: var(--dc-muted);
+  /* Counter-scale by the zoom (--k, set in engine.updateVisibility) so the name stays readable when zoomed out, like
+     Figma, at every zoom. max-width is in board units before the scale, so after it the label is never wider than
+     the board on screen (long names get an ellipsis). */
+  transform-origin: 0 100%; transform: scale(calc(1 / var(--k, 1)));
+  max-width: calc(100% * var(--k, 1));
 }
-.dc-label .name { opacity: 0.8; }
+.dc-label .name { opacity: 0.8; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .dc-label.sel .name { color: var(--dc-accent); opacity: 1; }
 
 /* "Claude is designing": a light comet orbits the artboard edge. The spinner is a square bigger than the

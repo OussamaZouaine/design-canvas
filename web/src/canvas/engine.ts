@@ -764,6 +764,8 @@ export class CanvasEngine {
     }
     // Placeholder names are counter-scaled so they stay ~15 screen px at any zoom.
     this.world.style.setProperty('--lod-size', `${Math.min(260, 15 / k)}px`);
+    // Board name labels read it to counter-scale too, so they stay 12 screen px when zoomed out (canvas.css .dc-label).
+    this.world.style.setProperty('--k', String(k));
   }
 
   // ---- Snapshot cache ----------------------------------------------------------------
