@@ -789,19 +789,18 @@ export class CanvasEditor {
     const payload = buildPayload(asBoards ? 'boards' : 'nodes', items, { project: host.projectId, page: host.activePage() }, cut);
     if (!payload) { toast(asBoards ? 'Nothing to copy: reference boards and empty frames are skipped' : 'Nothing to copy'); return; }
     useClipboard.getState().set(payload);
-    this.writeSystemClipboard(payload.items.map((i) => i.html).join('\n'));
+    this.writeSystemClipboard(payload.items.map((i) => i.id).join(', '));
     const n = payload.items.length, what = asBoards ? (n > 1 ? `${n} frames` : 'Frame') : (n > 1 ? `${n} layers` : 'Layer');
     toast(`${cut ? 'Cut' : 'Copied'} ${what}${mixed ? ' (only the frames)' : ''}. ${cut ? 'Paste anywhere with' : 'Paste with'} ${modLabel()}V`);
     if (cut) this.remove(picked, true);
   }
 
-  // The markup also goes to the system clipboard so it pastes as text elsewhere. Best effort: it needs a user gesture
-  // and permission, and the app clipboard works without it. The text is remembered so onPaste can recognise our own.
-  private writeSystemClipboard(html: string) {
-    this.clipText = html;
-    try {
-      void navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([html], { type: 'text/plain' }) })]).catch(() => {});
-    } catch { /* no clipboard API here */ }
+  // Only the ids go to the system clipboard (e.g. "A12" or "N3, N7"): pasted into a chat they are all an agent needs to
+  // find the element, and the full markup was a wall of text. The real payload stays in the app clipboard. Best effort:
+  // it needs a user gesture and permission. The text is remembered so onPaste can recognise our own.
+  private writeSystemClipboard(text: string) {
+    this.clipText = text;
+    navigator.clipboard?.writeText(text).catch(() => {});
   }
 
   get canPaste() { return !!useClipboard.getState().payload; }
