@@ -119,6 +119,7 @@ export class CanvasEngine {
   private follow = lsGet('dc-follow') !== '0';
   private liveBoard: Board | null = null;
   private viewRaf = 0;
+  private reportedK = NaN; // last zoom sent to onZoom (NaN: nothing sent yet)
   private glideT?: number;
   private followAt = 0;
   private reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -981,6 +982,9 @@ export class CanvasEngine {
   private applyView() {
     this.fitted = false;
     this.world.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.view.k})`;
+    // Report the zoom now, not in the rAF: the readout then shows the target of a glide at once, and it never
+    // waits on a frame that a background pane may not paint. Only on change, so panning does not re-render it.
+    if (this.view.k !== this.reportedK) { this.reportedK = this.view.k; this.events.onZoom(this.view.k); }
     this.scheduleAfterView();
   }
 
@@ -988,7 +992,7 @@ export class CanvasEngine {
 
   private afterView = () => {
     this.viewRaf = 0;
-    this.events.onZoom(this.view.k);
+    this.events.onZoom(this.view.k); // also here: a new engine (project switch) resyncs the store's zoom on its first frame
     this.events.onView();
     for (const b of this.boards.values()) if (b.el.classList.contains('gen')) this.sizeRing(b);
     this.updateVisibility();
