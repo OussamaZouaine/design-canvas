@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import {
-  alignDeltas, distributeDeltas, flowAlign, gridCell, gridPatch, MIXED, px, rotationOf, shorthandOf, sidesOf, sizeCss, sizeMode, toPx,
+  alignDeltas, distributeDeltas, flowAlign, gridCell, gridPatch, MIXED, px, rotationOf, sharedNum, shorthandOf, sidesOf, sizeCss, sizeMode, toPx,
   type AlignOp, type Axis, type Box, type SizeMode, type StyleMap,
 } from '@/lib/inspect';
 import { cn } from '@/lib/utils';
@@ -117,11 +117,11 @@ export function PositionSection({ m }: { m: Model }) {
     const mixed = abs && v === MIXED;
     const measured = m.entries.map((e) => { const r = m.measure(e.id); return r ? (prop === 'left' ? r.x : r.y) : null; });
     const vals = m.entries.map((e, i) => (abs ? px(e.style[prop]) ?? measured[i] : measured[i]));
-    const same = vals.every((x) => x !== null && Math.abs(x - (vals[0] as number)) < 0.5);
+    const num = sharedNum(vals);
     return (
       <NumberField
         key={key(prop) + measured.join()} label={label} title={prop === 'left' ? 'x' : 'y'} disabled={!abs}
-        value={same ? roundPx(vals[0] as number) : null} mixed={mixed || !same}
+        value={num.value === null ? null : roundPx(num.value)} mixed={mixed || num.mixed}
         onPreview={(x) => m.preview(x === null ? null : { [prop]: toPx(x) })}
         onChange={(x) => m.patch({ [prop]: toPx(x) })}
       />
@@ -187,7 +187,7 @@ function AxisRow({ m, axis, label }: { m: Model; axis: Axis; label: string }) {
   const modes = m.entries.map((e) => sizeMode(axis, e.style, e.parent));
   const mode = modes.every((x) => x === modes[0]) ? modes[0] : MIXED;
   const nums = m.entries.map((e) => px(e.style[axis]) ?? (axis === 'width' ? m.measure(e.id)?.w : m.measure(e.id)?.h) ?? null);
-  const same = nums.every((x) => x !== null && Math.abs(x - (nums[0] as number)) < 0.5);
+  const num = sharedNum(nums);
   const cur = (e: Entry) => (axis === 'width' ? m.measure(e.id)?.w : m.measure(e.id)?.h) ?? px(e.style[axis]) ?? 0;
   const setNum = (x: number) => m.patchEach((e) => sizeCss(axis, 'fixed', e.style, e.parent, x));
   return (
@@ -195,7 +195,7 @@ function AxisRow({ m, axis, label }: { m: Model; axis: Axis; label: string }) {
       <NumberField
         key={`${m.entries.map((e) => e.id).join()}:${axis}:${m.getBy((e) => (e.style[axis] ?? '') + (e.style.flex ?? '') + (e.style['align-self'] ?? ''))}`}
         className="min-w-0 flex-1" label={label} title={axis} min={0}
-        value={same ? roundPx(nums[0] as number) : null} mixed={!same}
+        value={num.value === null ? null : roundPx(num.value)} mixed={num.mixed}
         onPreview={(x) => (x === null ? m.preview(null) : m.previewEach((e) => sizeCss(axis, 'fixed', e.style, e.parent, x)))}
         onChange={setNum}
       />

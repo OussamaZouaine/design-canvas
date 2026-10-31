@@ -172,8 +172,9 @@ Order is a suggestion; the user decides.
     (a) below `LIVE_K` a plain click (and drag) picks the whole board (`pickBoardFirst` in `selection.ts`) until something on that board is selected;
     double-click enters it, Ctrl/Cmd+click still goes deep. Ctrl+Z skipped board moves / resizes (`Doc.moveArtboard` / `resizeArtboard` took no
     checkpoint); now one undo step each, and a left/top-handle resize sends x/y inside the single `resize` action.
-    OPEN, in order: (b) Inspector shows "Mixed"
-    X/Y/W for ONE selected flow child; (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
+    (b) Inspector showed "Mixed" X/Y/W for ONE flow child when `measure()` returned null (board drawn as a bitmap): `sharedNum` in
+    `lib/inspect.ts` treats null as unknown (Mixed needs two known values that differ) and `NumberField` shows blank, not 0, for `value: null`.
+    OPEN, in order: (c) Shift+1 fit leaves ~half the view empty; (d) home flashes "0 projects · connecting" before the list loads;
     (e) zoom readout lags one step after quick key presses. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
 

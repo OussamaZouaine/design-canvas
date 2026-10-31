@@ -61,7 +61,8 @@ export function NumberField({ label, value, onChange, onPreview, mixed, disabled
     if (n !== null && (mixed || round(n) !== value)) onChange(round(n));
   };
 
-  const shown = draft ?? (mixed ? '' : String(roundTo(live ?? base, 3)));
+  // No known value (e.g. a node that cannot be measured at bitmap zoom) shows blank, never a made-up 0.
+  const shown = draft ?? (mixed || (value === null && live === null) ? '' : String(roundTo(live ?? base, 3)));
 
   return (
     <label

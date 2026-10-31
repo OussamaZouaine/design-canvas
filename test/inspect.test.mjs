@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   evalExpr, shared, MIXED, sidesOf, shorthandOf, sizeMode, sizeCss, parentInfo, BOARD_PARENT,
-  gridCell, gridPatch, alignDeltas, distributeDeltas, flowAlign, parseStroke, parseShadow, shadowCss, splitShadows, rotationOf, stepFactor, px,
+  gridCell, gridPatch, alignDeltas, distributeDeltas, flowAlign, parseStroke, parseShadow, shadowCss, splitShadows, rotationOf, stepFactor, px, sharedNum,
 } from '../web/src/lib/inspect.ts';
 import { parseOklch, formatOklch } from '../web/src/lib/color.ts';
 
@@ -144,4 +144,14 @@ test('oklch parts round trip', () => {
   assert.equal(parseOklch('#fff'), null);
   assert.equal(formatOklch({ l: 0.7, c: 0.1, h: 250, a: 1 }), 'oklch(0.7 0.1 250)');
   assert.equal(formatOklch({ l: 0.7, c: 0.1, h: 250, a: 0.5 }), 'oklch(0.7 0.1 250 / 0.5)');
+});
+
+test('sharedNum: unknown (unmeasured) values are never Mixed on their own', () => {
+  assert.deepEqual(sharedNum([null]), { value: null, mixed: false }); // one flow child on a bitmap board
+  assert.deepEqual(sharedNum([24]), { value: 24, mixed: false });
+  assert.deepEqual(sharedNum([80, 80.2]), { value: 80, mixed: false });
+  assert.deepEqual(sharedNum([80, 120]), { value: null, mixed: true });
+  assert.deepEqual(sharedNum([80, null]), { value: null, mixed: false }); // partly unknown: blank, not a guess
+  assert.deepEqual(sharedNum([80, null, 120]), { value: null, mixed: true });
+  assert.deepEqual(sharedNum([]), { value: null, mixed: false });
 });

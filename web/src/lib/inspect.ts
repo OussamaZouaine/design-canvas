@@ -71,6 +71,15 @@ export function shared(values: string[]): string {
   return values.every((v) => v === values[0]) ? values[0] : MIXED;
 }
 
+// The shared number of a numeric field (X, Y, W, H) across a selection. null = unknown (the node could not be measured,
+// e.g. its board is drawn as a bitmap below live zoom), which is NOT a different value: "Mixed" needs two known values
+// that differ, so one selected node never shows Mixed. A number is shown only when every value is known and equal.
+export function sharedNum(values: (number | null | undefined)[], tol = 0.5): { value: number | null; mixed: boolean } {
+  const known = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+  const mixed = known.some((v) => Math.abs(v - known[0]) >= tol);
+  return { value: !mixed && known.length && known.length === values.length ? known[0] : null, mixed };
+}
+
 // ---- CSS shorthand (padding, border-radius) ----------------------------------------------------------------
 
 // Split a CSS value on spaces that are not inside parentheses (so var(--a, 1px) and calc(1px + 2px) stay whole).
