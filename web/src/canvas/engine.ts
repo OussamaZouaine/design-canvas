@@ -131,6 +131,7 @@ export class CanvasEngine {
   private draft = div('dc-draft dc-hide'); // rubber-band rectangle while the frame tool drags
   private sizeLabel = div('dc-size');      // "W x H" pill under the selection
   private fitPending = false; // fit() was asked for before the viewport had a size
+  private fitted = false;     // the camera is still the one fit() set (no pan/zoom since), so a resize refits
 
   constructor(private viewport: HTMLElement, private projectId: string, private events: EngineEvents) {
     // ?page=<id> in the URL wins (each tab, link or bookmark keeps its own page); else the page last seen in this
@@ -199,8 +200,9 @@ export class CanvasEngine {
     // The camera glide is a CSS transition, so no JS runs while it moves: overlay boxes measured at its
     // start would be left behind. Redraw them when it finishes.
     this.world.addEventListener('transitionend', (e) => { if (e.target === this.world) this.afterView(); }, sig);
-    // Resizing the viewport (panels opening) changes which boards are near the screen.
-    const ro = new ResizeObserver(() => { if (this.fitPending) this.fit(); this.scheduleAfterView(); });
+    // Resizing the viewport (panels opening) changes which boards are near the screen. A fit view refits, so
+    // a fit made while the panels were still settling does not leave the boards small in the middle.
+    const ro = new ResizeObserver(() => { if (this.fitPending || this.fitted) this.fit(); this.scheduleAfterView(); });
     ro.observe(viewport);
     this.abort.signal.addEventListener('abort', () => ro.disconnect());
   }
@@ -494,7 +496,7 @@ export class CanvasEngine {
     const here = this.boardsHere();
     if (!here.length) return;
     const minX = Math.min(...here.map((a) => a.x));
-    const minY = Math.min(...here.map((a) => a.y)) - 30; // room for the labels above the boards
+    const minY = Math.min(...here.map((a) => a.y));
     const maxX = Math.max(...here.map((a) => a.x + a.width));
     const maxY = Math.max(...here.map((a) => a.y + a.height));
     const w = this.viewport.clientWidth, h = this.viewport.clientHeight;
@@ -502,10 +504,16 @@ export class CanvasEngine {
     // ResizeObserver to report a real size, then fit.
     if (w < 200 || h < 200) { this.fitPending = true; return; }
     this.fitPending = false;
-    this.view.k = Math.min(1, Math.max(MIN_K, Math.min((w - 80) / (maxX - minX), (h - 80) / (maxY - minY))));
-    this.view.x = (w - (maxX - minX) * this.view.k) / 2 - minX * this.view.k;
-    this.view.y = (h - (maxY - minY) * this.view.k) / 2 - minY * this.view.k;
+    // Margins are screen px. The labels above the boards are counter-scaled to a fixed ~22 screen px (canvas.css
+    // .dc-label), so their room is reserved in screen px too: a fixed 30 world units was nothing at 5% zoom.
+    const pad = 32, label = 24;
+    const bw = maxX - minX, bh = maxY - minY;
+    const k = Math.min(1, Math.max(MIN_K, Math.min((w - 2 * pad) / bw, (h - 2 * pad - label) / bh)));
+    this.view.k = k;
+    this.view.x = (w - bw * k) / 2 - minX * k;
+    this.view.y = (h - bh * k + label) / 2 - minY * k; // centre the boards in the space below the label row
     this.applyView();
+    this.fitted = true; // after applyView, which clears it for every other camera change
   }
 
   // Zoom around the viewport centre (zoom buttons / shortcuts). Animated: it is a deliberate action.
@@ -971,6 +979,7 @@ export class CanvasEngine {
   // layout or touches many nodes is coalesced into one requestAnimationFrame, so a burst of wheel events
   // costs one pass per frame instead of one per event.
   private applyView() {
+    this.fitted = false;
     this.world.style.transform = `translate(${this.view.x}px, ${this.view.y}px) scale(${this.view.k})`;
     this.scheduleAfterView();
   }
