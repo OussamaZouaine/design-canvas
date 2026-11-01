@@ -86,8 +86,7 @@ new arguments. UI development with hot reload: `pnpm dev:web` (Vite on http://lo
 The easiest way is the built-in dialog: click the **plug button** ("Connect agents") in the canvas header, or the same
 button in the projects home sidebar. Pick your agent on the left; the dialog shows the exact command (copy button) or an
 install link, a "manual install" config snippet, and notes. Everything below is generated from the same source
-([`web/src/lib/agents.ts`](web/src/lib/agents.ts)), so it matches the dialog. Doc sources and open gaps:
-[docs/notes/connect-agents.md](docs/notes/connect-agents.md).
+([`web/src/lib/agents.ts`](web/src/lib/agents.ts)), so it matches the dialog.
 
 **Basics for every agent**
 - MCP URL: `http://localhost:3777/mcp` (change the port if you set `PORT`).
@@ -398,7 +397,6 @@ scripts/                    setup-mcp.mjs (register with Claude), mcp-stdio.mjs 
 examples/sprig/             scripts that build the Sprig design system
 test/                       node:test unit tests (`pnpm test`)
 skills/, .claude-plugin/, .mcp.json   Claude Code plugin: design skill + MCP config
-docs/                       ROADMAP.md, REACT-REWRITE.md, notes/ (per-feature plans)
 data/                       runtime data (gitignored)
 ```
 The full module list with the reasons behind each is in [CLAUDE.md](CLAUDE.md).
@@ -430,8 +428,4 @@ For connection problems see [If the connection fails](#if-the-connection-fails).
 ## More documentation
 - [CLAUDE.md](CLAUDE.md): conventions and architecture notes that are easy to get wrong.
 - [PROGRESS.md](PROGRESS.md): history, known issues and next steps.
-- [docs/ROADMAP.md](docs/ROADMAP.md): build plan and status.
-- [docs/REACT-REWRITE.md](docs/REACT-REWRITE.md): how the React client was built.
-- [docs/notes/connect-agents.md](docs/notes/connect-agents.md): agent config sources and gaps.
-- [docs/notes/ui-system.md](docs/notes/ui-system.md): UI tokens and patterns.
 - [examples/sprig/DESIGN-SYSTEM.md](examples/sprig/DESIGN-SYSTEM.md): the Sprig design-system spec.

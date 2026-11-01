@@ -7,7 +7,7 @@ elements, and Claude reads and answers those comments. Local only, no database (
 **Read `PROGRESS.md` first** for what has been done, current state and what to do next (it has a "Next work, split into sessions"
 list: pick one area per session, keep sessions short, and update PROGRESS.md / ROADMAP.md before ending a session).
 
-**Paper (paper.design) research** is in `docs/PAPER-QUALITY-PLAN.md` (section 1.1b);
+**`docs/` is local only (gitignored, not on GitHub):** planning notes for agent sessions. **Paper (paper.design) research** is in `docs/PAPER-QUALITY-PLAN.md` (section 1.1b);
 the improvement ideas it produced are item 6 of "Next work" in `PROGRESS.md` (headless render worker, hidden-tab fix, per-session project binding).
 
 **The UI is a React app in `web/` (the rewrite of the old `public/` finished in Phase 8; plan and per-phase notes in `docs/REACT-REWRITE.md`).**
