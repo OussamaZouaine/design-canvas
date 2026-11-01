@@ -59,6 +59,7 @@ AI agent  --MCP (HTTP)-->  Node server (127.0.0.1:3777)  --SSE-->  Browser canva
 1. Install and build the UI once (rebuild after any change in `web/`):
    ```
    pnpm install
+   pnpm --dir web install
    pnpm build:web
    ```
 2. Start the server (serves http://localhost:3777):
