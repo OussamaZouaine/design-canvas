@@ -129,7 +129,7 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   `get` = shared value or `MIXED`, `patch` / `patchEach` = ONE `style` action with `ids` / `perId`, `preview` = live write to the element without a server write, `measure`),
   `LayoutSections.tsx` (align bar, Position, Size Fixed/Hug/Fill, Auto layout with 3x3 grid, Appearance), `PaintSections.tsx` (Fill, Stroke, Effects), `TypographySection.tsx`,
   `VectorSection.tsx` (single svg, `attrs` action), shared bits in `controls.tsx`. Pure logic (size modes, grid, align / distribute, expressions, shorthand, stroke / shadow parsing)
-  is `web/src/lib/inspect.ts`, tested by `test/inspect.test.mjs`. Fields: `ui/NumberField.tsx` (scrub label, arrows, expressions, Mixed, `onPreview`), `ui/ColorField.tsx` (OKLCH popover).
+  is `web/src/lib/inspect.ts`, tested by `test/inspect.test.mjs`. Fields: `ui/NumberField.tsx` (scrub label, arrows, expressions, Mixed, `onPreview`), `ui/ColorField.tsx` + `ui/ColorPicker.tsx` (OKLCH picker + gradient editor; maths in pure `lib/color.ts`, `test/color.test.mjs`).
   Fill / Stroke / Effects read `background`, `border` (inside) / `outline` (outside), `box-shadow`; a hidden fill is parked in `--dc-hidden-fill`.
 - **Font picker:** the Typography Font row is `web/src/ui/FontField.tsx` (menu of project fonts from `meta.fonts` plus system fonts, each name drawn
   in its own face because the project-fonts style tag lives in the same document as the panels) over a raw "Stack" text field. The shown family is
