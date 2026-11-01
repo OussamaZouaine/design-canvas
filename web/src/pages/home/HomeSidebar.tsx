@@ -7,13 +7,14 @@ import { ConnectionPill } from '@/ui/AppHeader';
 import { useUi } from '@/store/ui';
 
 interface Props {
-  inTrash: boolean;
-  onSection: (trash: boolean) => void;
-  liveCount: number;
-  trashCount: number;
+  section: 'recents' | 'trash' | 'comments';
+  // Project counts are only known on the home page; elsewhere the rows show none.
+  liveCount?: number;
+  trashCount?: number;
   openComments: number;
   connection: Connection;
-  onImport: () => void;
+  // Import needs the home page's hidden file input, so the row is left out where it is not passed.
+  onImport?: () => void;
   onConnect: () => void;
 }
 
@@ -30,9 +31,22 @@ function NavRow({ icon, active, count, children, ...rest }: { icon: ReactNode; a
   );
 }
 
-// Paper-style left rail: workspace row, navigation, and a footer for the small status controls. Recents vs Trash
-// is picked here; search lives in the page's sticky topbar so it stays next to the list it filters.
-export function HomeSidebar({ inTrash, onSection, liveCount, trashCount, openComments, connection, onImport, onConnect }: Props) {
+// Same look as NavRow for navigation; `search` is passed through so Recents and Trash can share the "/" route.
+function NavLink({ to, search, icon, active, count, children }: { to: '/' | '/comments'; search?: { trash: 1 }; icon: ReactNode; active: boolean; count?: ReactNode; children: ReactNode }) {
+  return (
+    // exact: otherwise the router counts "/" as active on "/?trash=1" too and both rows get aria-current.
+    <Link to={to} search={search ?? {}} activeOptions={{ exact: true }} aria-current={active ? 'page' : undefined} className={cn(ROW, active && 'bg-muted text-foreground')}>
+      <span className="size-4 shrink-0 [&>svg]:size-4">{icon}</span>
+      <span className="truncate md:flex-1">{children}</span>
+      {count}
+    </Link>
+  );
+}
+
+// Paper-style left rail shared by the home and Comments pages: workspace row, navigation, and a footer for the small
+// status controls. Sections are real links (Trash is /?trash=1), so they work from either page; search lives in each
+// page's sticky bar so it stays next to the list it filters.
+export function HomeSidebar({ section, liveCount, trashCount, openComments, connection, onImport, onConnect }: Props) {
   const { theme, toggleTheme } = useUi();
   return (
     <aside className="flex shrink-0 flex-col md:h-full md:w-60">
@@ -44,15 +58,11 @@ export function HomeSidebar({ inTrash, onSection, liveCount, trashCount, openCom
       {/* Below md the rail sits above the list, so the nav becomes one horizontally scrolling row instead of a
           tall stack that would eat a third of a phone screen. */}
       <nav className="flex gap-0.5 overflow-x-auto px-3 pb-3 md:flex-col" aria-label="Projects">
-        <NavRow icon={<Clock />} active={!inTrash} onClick={() => onSection(false)} count={<span className="tnum text-xs opacity-70">{liveCount || ''}</span>}>Recents</NavRow>
-        <NavRow icon={<Trash2 />} active={inTrash} onClick={() => onSection(true)} count={<span className="tnum text-xs opacity-70">{trashCount || ''}</span>}>Trash</NavRow>
-        {/* Link styled like a row so the whole line is a real anchor (middle-click, open in new tab). */}
-        <Link to="/comments" className={ROW}>
-          <MessageSquare className="size-4 shrink-0" />
-          <span className="md:flex-1">Comments</span>
-          {openComments > 0 && <span className="tnum rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{openComments}</span>}
-        </Link>
-        <NavRow icon={<Upload />} title="Import a .dcproject.json file" onClick={onImport}>Import project</NavRow>
+        {/* Links styled like rows so each whole line is a real anchor (middle-click, open in new tab). */}
+        <NavLink to="/" icon={<Clock />} active={section === 'recents'} count={<span className="tnum text-xs opacity-70">{liveCount || ''}</span>}>Recents</NavLink>
+        <NavLink to="/" search={{ trash: 1 }} icon={<Trash2 />} active={section === 'trash'} count={<span className="tnum text-xs opacity-70">{trashCount || ''}</span>}>Trash</NavLink>
+        <NavLink to="/comments" icon={<MessageSquare />} active={section === 'comments'} count={openComments > 0 && <span className="tnum rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{openComments}</span>}>Comments</NavLink>
+        {onImport && <NavRow icon={<Upload />} title="Import a .dcproject.json file" onClick={onImport}>Import project</NavRow>}
         <NavRow icon={<Plug />} title="Connect Claude, Codex, Cursor and other agents" onClick={onConnect}>Connect agents</NavRow>
       </nav>
 

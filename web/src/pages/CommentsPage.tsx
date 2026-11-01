@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { ChevronRight, MessageSquare, SearchX } from 'lucide-react';
+import { ChevronRight, MessageSquare, Search, SearchX } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { canvasAction, listAllComments } from '@/api/projects';
@@ -12,7 +11,10 @@ import { useLiveReload } from '@/hooks/useLiveReload';
 import { ago } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/toast';
-import { AppHeader } from '@/ui/AppHeader';
+import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
+import { useUi } from '@/store/ui';
+import { EmptyArt } from './home/EmptyArt';
+import { HomeSidebar } from './home/HomeSidebar';
 
 type Status = 'all' | 'open' | 'resolved';
 
@@ -56,43 +58,80 @@ export function CommentsPage() {
   const shown = base.filter((c) => status === 'all' || (status === 'open') === !c.resolved);
 
   return (
-    <div className="h-full overflow-y-auto bg-muted/30">
-      <AppHeader crumb="Comments" connection={connection}>
-        <Input type="search" placeholder="Search comments" aria-label="Search comments" className="w-64" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <Select items={projectItems} value={activeProject} onValueChange={(v) => setProject(String(v))}>
-          <SelectTrigger aria-label="Filter by project"><SelectValue /></SelectTrigger>
-          <SelectContent>{projectItems.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select items={WHO} value={who} onValueChange={(v) => setWho(String(v))}>
-          <SelectTrigger aria-label="Filter by author"><SelectValue /></SelectTrigger>
-          <SelectContent>{WHO.map((w) => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}</SelectContent>
-        </Select>
-      </AppHeader>
+    // Same Origin-style shell as HomePage (grey backdrop, shared sidebar, title row, white sheet with a sticky bar),
+    // so moving between Projects and Comments feels like one app. Layout classes mirror HomePage.tsx: keep in sync.
+    <div className="flex h-full flex-col bg-home md:flex-row">
+      <HomeSidebar
+        section="comments"
+        openComments={all.filter((c) => !c.resolved).length}
+        connection={connection}
+        onConnect={() => useUi.getState().setConnectOpen(true)}
+      />
 
-      <main className="mx-auto max-w-[860px] px-7 pt-8 pb-16">
-        {/* Status tabs double as the summary: how many are open vs resolved. */}
-        <Tabs value={status} onValueChange={(v) => setStatus(v as Status)} className="mb-5">
-          <TabsList>
-            <TabsTrigger value="all">All <span className="tnum opacity-70">{base.length}</span></TabsTrigger>
-            <TabsTrigger value="open">Open <span className="tnum opacity-70">{nOpen}</span></TabsTrigger>
-            <TabsTrigger value="resolved">Resolved <span className="tnum opacity-70">{base.length - nOpen}</span></TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="flex flex-col gap-3">
-          {shown.map((c, i) => <CommentCard key={`${c.projectId}/${c.id}`} comment={c} index={i} animateIn={!loaded || i < 10} />)}
+      <div className="flex min-h-0 flex-1 flex-col md:pr-3 md:pb-3">
+        <div className="flex items-center gap-3 px-4 py-3 md:h-16 md:px-6 md:py-0">
+          <h1 className="mr-auto font-display text-2xl tracking-[-0.03em]">Comments</h1>
         </div>
 
-        {loaded && shown.length === 0 && (
-          <Empty className="border py-16">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">{all.length ? <SearchX /> : <MessageSquare />}</EmptyMedia>
-              <EmptyTitle className="font-display text-xl tracking-[-0.03em]">{all.length ? 'Nothing matches' : 'No comments yet'}</EmptyTitle>
-              <EmptyDescription>{all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Your agent reads open comments and replies.'}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </main>
+        <main className="min-h-0 flex-1 overflow-y-auto border-t bg-background md:rounded-2xl md:border">
+          <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
+            <div className="@container">
+              {/* Status tabs double as the summary (open vs resolved counts). Narrow: tabs on the first row, the
+                  filters wrap to a full-width second row; container query for the same reason as on HomePage.
+                  Same max width as the list below so the tabs line up with the cards. */}
+              <div className="mx-auto flex max-w-[860px] flex-wrap items-center gap-2 px-4 py-3 md:px-6">
+                <Tabs value={status} onValueChange={(v) => setStatus(v as Status)} className="mr-auto">
+                  <TabsList>
+                    <TabsTrigger value="all">All <span className="tnum opacity-70">{base.length}</span></TabsTrigger>
+                    <TabsTrigger value="open">Open <span className="tnum opacity-70">{nOpen}</span></TabsTrigger>
+                    <TabsTrigger value="resolved">Resolved <span className="tnum opacity-70">{base.length - nOpen}</span></TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                <div className="flex min-w-0 items-center gap-2 @max-3xl:order-last @max-3xl:w-full">
+                  <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection @3xl:w-56 @3xl:flex-none">
+                    <Search className="size-3.5 shrink-0" aria-hidden />
+                    <input
+                      type="search"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                      placeholder="Search"
+                      aria-label="Search comments"
+                      className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+                    />
+                  </label>
+                  <Select items={projectItems} value={activeProject} onValueChange={(v) => setProject(String(v))}>
+                    <SelectTrigger aria-label="Filter by project" className="max-w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>{projectItems.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select items={WHO} value={who} onValueChange={(v) => setWho(String(v))}>
+                    <SelectTrigger aria-label="Filter by author"><SelectValue /></SelectTrigger>
+                    <SelectContent>{WHO.map((w) => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="mx-auto max-w-[860px] px-4 pt-6 pb-16 md:px-6">
+            <div className="flex flex-col gap-3">
+              {shown.map((c, i) => <CommentCard key={`${c.projectId}/${c.id}`} comment={c} index={i} animateIn={!loaded || i < 10} />)}
+            </div>
+
+            {loaded && shown.length === 0 && (
+              <Empty className="py-16">
+                <EmptyHeader>
+                  <EmptyMedia><EmptyArt icon={all.length ? <SearchX className="size-4" /> : <MessageSquare className="size-4" />} /></EmptyMedia>
+                  <EmptyTitle className="font-display text-xl tracking-[-0.03em]">{all.length ? 'Nothing matches' : 'No comments yet'}</EmptyTitle>
+                  <EmptyDescription>{all.length ? 'Try another filter.' : 'Open a project, press C and click an element to leave a comment. Your agent reads open comments and replies.'}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <ConnectAgentsDialog />
     </div>
   );
 }

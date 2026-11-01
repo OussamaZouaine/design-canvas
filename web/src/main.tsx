@@ -10,7 +10,13 @@ import { ProjectPage } from './pages/ProjectPage';
 
 // Code-based TanStack Router (no file-based plugin: only three routes, so one file is clearer).
 const rootRoute = createRootRoute({ component: Outlet });
-const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
+// ?trash=1 shows the Trash section, so the shared sidebar can link to it from the Comments page too.
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  validateSearch: (s: Record<string, unknown>): { trash?: 1 } => (s.trash ? { trash: 1 } : {}),
+  component: HomePage,
+});
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/p/$id',
