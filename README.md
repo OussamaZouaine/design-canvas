@@ -22,6 +22,8 @@ Everything runs on your machine. There is no database and no cloud service: proj
 - [Conventions](#conventions)
 - [Troubleshooting](#troubleshooting)
 - [More documentation](#more-documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## What you get
 | Area | Highlights |
@@ -429,3 +431,9 @@ For connection problems see [If the connection fails](#if-the-connection-fails).
 - [CLAUDE.md](CLAUDE.md): conventions and architecture notes that are easy to get wrong.
 - [PROGRESS.md](PROGRESS.md): history, known issues and next steps.
 - [examples/sprig/DESIGN-SYSTEM.md](examples/sprig/DESIGN-SYSTEM.md): the Sprig design-system spec.
+
+## Contributing
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+[MIT](LICENSE) © Oussama Zouaine
