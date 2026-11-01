@@ -6,6 +6,7 @@ import { NumberField } from '@/ui/NumberField';
 import type { Model } from './model';
 import { Tip } from '@/ui/Tip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Filled field, Figma-style: no border at rest, a slightly darker fill on hover, a signal-blue ring when focused.
 export const chrome = 'flex h-7 min-w-0 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:bg-field focus-within:ring-1 focus-within:ring-selection';
@@ -44,18 +45,33 @@ export function TextField({ label, title, value, list, mixed, disabled, onCommit
   );
 }
 
+// Base UI Select has no empty value, so "unset" ('') travels as this sentinel.
+const NONE = '__none';
+
+// The ONE dropdown of the panel: shadcn (Base UI) Select dressed as a filled field, so every dropdown matches the
+// number and text fields (the native <select> drew its own big arrow and an OS-styled menu, different per browser
+// and theme). `prefix` is the optional label chip; `items` maps value -> shown text, '' = unset ("—").
+export function FieldSelect({ label, prefix, value, items, mixed, onCommit, className }: {
+  label: string; prefix?: ReactNode; value: string; items: { value: string; label: ReactNode }[]; mixed?: boolean; onCommit: (v: string) => void; className?: string;
+}) {
+  const all = [...(mixed ? [{ value: MIXED, label: 'Mixed' }] : []), ...items].map((i) => ({ ...i, value: i.value || NONE }));
+  return (
+    <Select items={all} value={mixed ? MIXED : value || NONE} onValueChange={(v) => v !== null && v !== MIXED && onCommit(v === NONE ? '' : v)}>
+      <SelectTrigger aria-label={label} className={cn(chrome, 'w-full gap-0 border-0 py-0 pr-1.5 pl-0 dark:bg-field dark:hover:bg-field-hover focus-visible:ring-1 focus-visible:ring-selection', !prefix && 'pl-2', className)}>
+        {prefix && <span className={cn(labelCls, 'text-left')}>{prefix}</span>}
+        <SelectValue className="min-w-0 truncate" />
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false} className="min-w-28">
+        {all.map((i) => <SelectItem key={i.value} value={i.value} className="min-h-7 text-xs">{i.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function SelectField({ label, value, options, names, mixed, onCommit }: { label: string; value: string; options: string[]; names?: Record<string, string>; mixed?: boolean; onCommit: (v: string) => void }) {
   // A value outside the list (written by Claude) must still be shown rather than silently replaced.
   const all = ['', ...options, ...(value && value !== MIXED && !options.includes(value) ? [value] : [])];
-  return (
-    <label className={chrome}>
-      <span className={cn(labelCls, 'w-14 text-left')}>{label}</span>
-      <select aria-label={label} value={mixed ? MIXED : value} onChange={(e) => e.target.value !== MIXED && onCommit(e.target.value)} className="min-w-0 flex-1 bg-transparent pr-1 outline-none [&>option]:bg-popover">
-        {mixed && <option value={MIXED}>Mixed</option>}
-        {all.map((o) => <option key={o} value={o}>{names?.[o] ?? (o || '—')}</option>)}
-      </select>
-    </label>
-  );
+  return <FieldSelect label={label} prefix={label} value={value} mixed={mixed} items={all.map((o) => ({ value: o, label: names?.[o] ?? (o || '—') }))} onCommit={onCommit} />;
 }
 
 // Inspector section: shadcn Collapsible (state, aria-expanded and keyboard come from Base UI) plus the title row and an

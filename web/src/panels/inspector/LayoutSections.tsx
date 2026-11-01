@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from '@/store/toast';
 import { NumberField } from '@/ui/NumberField';
-import { chrome, IconBtn, LengthField, Section, SegBtn, Segmented, SelectField, TextField, withPx } from './controls';
+import { chrome, FieldSelect, IconBtn, LengthField, Section, SegBtn, Segmented, SelectField, TextField, withPx } from './controls';
 import type { Entry, Model, StylePatch } from './model';
 
 const isAbs = (e: Entry) => e.style.position === 'absolute' || e.style.position === 'fixed';
@@ -199,16 +199,11 @@ function AxisRow({ m, axis, label }: { m: Model; axis: Axis; label: string }) {
         onPreview={(x) => (x === null ? m.preview(null) : m.previewEach((e) => sizeCss(axis, 'fixed', e.style, e.parent, x)))}
         onChange={setNum}
       />
-      <label className={cn(chrome, 'w-[4.75rem] shrink-0')}>
-        <select
-          aria-label={`${axis} mode`} value={mode}
-          onChange={(e) => e.target.value !== MIXED && m.patchEach((n) => sizeCss(axis, e.target.value as SizeMode, n.style, n.parent, cur(n)))}
-          className="min-w-0 flex-1 bg-transparent px-1.5 outline-none [&>option]:bg-popover"
-        >
-          {mode === MIXED && <option value={MIXED}>Mixed</option>}
-          {MODES.map((x) => <option key={x} value={x}>{MODE_NAME[x]}</option>)}
-        </select>
-      </label>
+      <FieldSelect
+        label={`${axis} mode`} className="w-[4.75rem] shrink-0" value={mode === MIXED ? '' : mode} mixed={mode === MIXED}
+        items={MODES.map((x) => ({ value: x, label: MODE_NAME[x] }))}
+        onCommit={(v) => m.patchEach((n) => sizeCss(axis, v as SizeMode, n.style, n.parent, cur(n)))}
+      />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { MIXED, isSimpleShadow, parseShadow, parseStroke, shadowCss, splitShadow
 import { ColorField } from '@/ui/ColorField';
 import { partsOf } from '@/ui/ColorPicker';
 import { NumberField } from '@/ui/NumberField';
-import { IconBtn, rowLabel, Section, SegBtn, Segmented, TextField, TokenChip, tokenName } from './controls';
+import { FieldSelect, IconBtn, rowLabel, Section, SegBtn, Segmented, TextField, TokenChip, tokenName } from './controls';
 import type { Model } from './model';
 
 // Colour tokens (names starting with `color-`) for the picker and the Detach chip.
@@ -191,11 +191,7 @@ export function StrokeSection({ m }: { m: Model }) {
               onPreview={(x) => m.preview(x === null ? null : write({ ...st, width: toPx(x) }))}
               onChange={(x) => m.patch(write({ ...st, width: toPx(x) }))}
             />
-            <label className="flex h-7 min-w-0 items-center rounded-md bg-field text-xs transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection">
-              <select aria-label="Stroke style" value={st.style || 'solid'} onChange={(e) => m.patch(write({ ...st, style: e.target.value }))} className="min-w-0 flex-1 bg-transparent px-2 outline-none [&>option]:bg-popover">
-                {['solid', 'dashed', 'dotted', 'double'].map((x) => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}
-              </select>
-            </label>
+            <FieldSelect label="Stroke style" value={st.style || 'solid'} items={['solid', 'dashed', 'dotted', 'double'].map((x) => ({ value: x, label: x[0].toUpperCase() + x.slice(1) }))} onCommit={(v) => m.patch(write({ ...st, style: v }))} />
           </div>
           <Segmented>
             <SegBtn label="Stroke inside" on={!outside} onClick={() => m.patch(write(st, false))}>Inside</SegBtn>

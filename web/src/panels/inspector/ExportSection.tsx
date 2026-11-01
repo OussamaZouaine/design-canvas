@@ -7,7 +7,7 @@ import { DEFAULT_ROW, FORMATS, parseScale, SCALE_PRESETS, type ExportFormat, typ
 import { cn } from '@/lib/utils';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
-import { chrome, IconBtn, Section } from './controls';
+import { chrome, FieldSelect, IconBtn, Section } from './controls';
 
 // Figma's Export section: rows of scale + format, a "…" for the file-name suffix and JPG / PDF quality, "−" to drop a
 // row, "+" in the header to add one, one button that downloads, and a Preview of the first row. The caller decides
@@ -47,11 +47,7 @@ export function ExportSection({ projectId, items, rows, setRows }: Props) {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center gap-1">
           <ScaleField value={row.scale} onCommit={(scale) => patch({ scale })} />
-          <label className={cn(chrome, 'w-[4.5rem] shrink-0')}>
-            <select aria-label="Format" value={row.format} onChange={(e) => patch({ format: e.target.value as ExportFormat })} className="min-w-0 flex-1 bg-transparent px-1.5 uppercase outline-none [&>option]:bg-popover">
-              {FORMATS.map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
-            </select>
-          </label>
+          <FieldSelect label="Format" className="w-[4.5rem] shrink-0" value={row.format} items={FORMATS.map((f) => ({ value: f, label: f.toUpperCase() }))} onCommit={(f) => patch({ format: f as ExportFormat })} />
           <IconBtn label="More options" on={more} onClick={() => setMore(!more)}><Ellipsis className="size-3.5" /></IconBtn>
         </div>
         {more && (
