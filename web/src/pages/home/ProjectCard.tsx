@@ -143,7 +143,8 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
     >
       {list ? (
         <>
-          <CoverThumb cover={p.cover} width={96} height={60} className="rounded-md" />
+          {/* Hairline ring: white board previews would otherwise melt into the white row (grid view uses a grey frame). */}
+          <CoverThumb cover={p.cover} width={96} height={60} className="rounded-md ring-1 ring-border" />
           <div className="min-w-0 flex-1">{title}{subtitle}</div>
           {menu}
         </>
