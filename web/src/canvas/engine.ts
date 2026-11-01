@@ -201,9 +201,19 @@ export class CanvasEngine {
     // The camera glide is a CSS transition, so no JS runs while it moves: overlay boxes measured at its
     // start would be left behind. Redraw them when it finishes.
     this.world.addEventListener('transitionend', (e) => { if (e.target === this.world) this.afterView(); }, sig);
-    // Resizing the viewport (panels opening) changes which boards are near the screen. A fit view refits, so
-    // a fit made while the panels were still settling does not leave the boards small in the middle.
-    const ro = new ResizeObserver(() => { if (this.fitPending || this.fitted) this.fit(); this.scheduleAfterView(); });
+    // Resizing the viewport changes which boards are near the screen. A side panel opening or closing moves the
+    // viewport's left edge, which would drag every board sideways by the panel width (or recentre a fit view):
+    // shift the pan by the same amount so the boards stay still on screen. Only a real window resize refits a
+    // fit view; fitPending still refits once the first real size arrives.
+    let lastLeft = viewport.getBoundingClientRect().left, lastWin = window.innerWidth;
+    const ro = new ResizeObserver(() => {
+      const left = viewport.getBoundingClientRect().left, win = window.innerWidth;
+      const dx = left - lastLeft, winResized = win !== lastWin;
+      lastLeft = left; lastWin = win;
+      if (this.fitPending || (this.fitted && winResized)) this.fit();
+      else if (dx) { this.view.x -= dx; this.applyView(); }
+      this.scheduleAfterView();
+    });
     ro.observe(viewport);
     this.abort.signal.addEventListener('abort', () => ro.disconnect());
   }
