@@ -19,13 +19,15 @@ const NEW_SHADOW = '0px 4px 12px 0px oklch(0 0 0 / 0.15)';
 const HIDDEN_FILL = '--dc-hidden-fill';
 
 // A colour row: label, picker field (with live preview while a slider moves). `write` builds the patch for a value.
-export function ColorRow({ m, label, value, mixed, write, extra }: { m: Model; label: string; value: string; mixed?: boolean; write: (v: string) => Record<string, string | null>; extra?: ReactNode }) {
+// `bare` drops the visible label where the section title already says it (Fill, Stroke, Effects), giving the value
+// the width it needs; the label stays as the field's accessible name.
+export function ColorRow({ m, label, value, mixed, write, extra, bare }: { m: Model; label: string; value: string; mixed?: boolean; write: (v: string) => Record<string, string | null>; extra?: ReactNode; bare?: boolean }) {
   const tok = tokenName(value);
   const resolved = tok && tok in m.tokens ? m.tokens[tok] : value;
   return (
     <div>
     <div className="flex items-center gap-1">
-      <span className={rowLabel}>{label}</span>
+      {!bare && <span className={rowLabel}>{label}</span>}
       <ColorField
         // No value in the key: a commit from the open picker must not remount the field and close the popover.
         key={`${m.entries.map((e) => e.id).join()}:${label}`}
@@ -35,7 +37,7 @@ export function ColorRow({ m, label, value, mixed, write, extra }: { m: Model; l
       />
       {extra}
     </div>
-    {!mixed && <div className="pl-12"><TokenChip value={value} tokens={m.tokens} onDetach={(r) => m.patch(write(r))} /></div>}
+    {!mixed && <div className={bare ? undefined : 'pl-12'}><TokenChip value={value} tokens={m.tokens} onDetach={(r) => m.patch(write(r))} /></div>}
     </div>
   );
 }
@@ -93,7 +95,7 @@ export function FillSection({ m }: { m: Model }) {
       )}
       {has && kind !== 'image' && (
         <ColorRow
-          m={m} label="Fill" value={value} mixed={mixed} write={write}
+          m={m} label="Fill" bare value={value} mixed={mixed} write={write}
           extra={
             <>
               <IconBtn label={off ? 'Show fill' : 'Hide fill'} onClick={() => m.patch(off ? write(hidden) : { background: null, 'background-color': null, [HIDDEN_FILL]: bg })}>
@@ -181,7 +183,7 @@ export function StrokeSection({ m }: { m: Model }) {
       {has && (
         <>
           <ColorRow
-            m={m} label="Stroke" value={st.color} write={(v) => write({ ...st, color: v })}
+            m={m} label="Stroke" bare value={st.color} write={(v) => write({ ...st, color: v })}
             extra={<IconBtn label="Remove stroke" onClick={() => m.patch({ border: null, outline: null, 'outline-offset': null })}><Minus className="size-3.5" /></IconBtn>}
           />
           <div className="grid grid-cols-2 gap-1.5">
@@ -236,7 +238,7 @@ export function EffectsSection({ m }: { m: Model }) {
         return (
           <div key={key} className="flex flex-col gap-1.5 rounded-md">
             <ColorRow
-              m={m} label={s.inset ? 'Inner' : 'Shadow'} value={s.color} write={(c) => ({ 'box-shadow': layers.map((l, j) => (j === i ? shadowCss({ ...s, color: c }) : l)).join(', ') })}
+              m={m} label={s.inset ? 'Inner shadow' : 'Shadow'} bare value={s.color} write={(c) => ({ 'box-shadow': layers.map((l, j) => (j === i ? shadowCss({ ...s, color: c }) : l)).join(', ') })}
               extra={
                 <>
                   <IconBtn label="Inner shadow" on={s.inset} onClick={() => swap(i, shadowCss({ ...s, inset: !s.inset }))}><span className="text-[10px] font-semibold">In</span></IconBtn>
