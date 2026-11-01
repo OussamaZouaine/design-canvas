@@ -1,6 +1,6 @@
 import { Blend, Eye, EyeOff, Image, Minus, Plus, Square, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { formatGradient, formatOklch, parseGradient } from '@/lib/color';
+import { formatGradient, formatOklch, mixOklch, parseGradient, type Gradient } from '@/lib/color';
 import { MIXED, isSimpleShadow, parseShadow, parseStroke, shadowCss, splitShadows, strokeCss, toPx, type Shadow, type Stroke } from '@/lib/inspect';
 import { ColorField } from '@/ui/ColorField';
 import { partsOf } from '@/ui/ColorPicker';
@@ -104,7 +104,61 @@ export function FillSection({ m }: { m: Model }) {
           }
         />
       )}
+      {has && !mixed && !off && kind === 'gradient' && <GradientStops m={m} value={value} write={write} />}
     </Section>
+  );
+}
+
+// Paper-style stop list under a gradient Fill: one row per stop (swatch + colour, position %, remove) and "+" to add.
+// Rows are sorted by position but keyed by the stop's index in the CSS, so a stop moving past another reorders the row
+// instead of remounting it (which would close an open picker). The gradient popover on the Fill row still edits all of it.
+function GradientStops({ m, value, write }: { m: Model; value: string; write: (v: string) => Record<string, string | null> }) {
+  const g = parseGradient(value);
+  if (!g) return null; // a gradient the editor cannot model stays plain text in the Fill row
+  const ids = m.entries.map((e) => e.id).join();
+  const resolve = (css: string) => partsOf(css, m.tokens);
+  const out = (next: Gradient) => write(formatGradient(next));
+  const withStop = (i: number, s: Partial<Gradient['stops'][number]>) => ({ ...g, stops: g.stops.map((x, j) => (j === i ? { ...x, ...s } : x)) });
+  const sorted = g.stops.map((s, i) => ({ ...s, i })).sort((a, b) => a.pos - b.pos);
+  // "+" fills the widest gap with the colour the gradient already shows there, so adding a stop never changes the picture.
+  const add = () => {
+    let k = 0;
+    for (let j = 1; j < sorted.length - 1; j++) if (sorted[j + 1].pos - sorted[j].pos > sorted[k + 1].pos - sorted[k].pos) k = j;
+    const a = sorted[k], b = sorted[k + 1];
+    const pos = +((a.pos + b.pos) / 2).toFixed(3);
+    m.patch(out({ ...g, stops: [...g.stops, { color: formatOklch(mixOklch(resolve(a.color), resolve(b.color), 0.5)), pos }] }));
+  };
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">Stops</span>
+        <IconBtn label="Add stop" onClick={add}><Plus className="size-3.5" /></IconBtn>
+      </div>
+      {sorted.map((s) => {
+        const tok = tokenName(s.color);
+        return (
+          <div key={`${ids}:stop${s.i}`}>
+            <div className="flex items-center gap-1">
+              <NumberField
+                // Value in the key so an edit from the popover or canvas refreshes the field.
+                key={`${s.pos}`} className="w-16 shrink-0" label={<span className="text-[10px]">%</span>} title="stop position" min={0} max={100} step={1}
+                value={Math.round(s.pos * 1000) / 10}
+                onPreview={(x) => m.preview(x === null ? null : out(withStop(s.i, { pos: x / 100 })))}
+                onChange={(x) => m.patch(out(withStop(s.i, { pos: Math.min(1, Math.max(0, x / 100)) })))}
+              />
+              <ColorField
+                className="flex-1" label={`Stop ${s.i + 1}`} value={s.color} preview={tok && tok in m.tokens ? m.tokens[tok] : s.color}
+                list="dl-color" tokens={colorTokens(m.tokens)}
+                onPreview={(v) => m.preview(v === null ? null : out(withStop(s.i, { color: v })))}
+                onChange={(v) => v && m.patch(out(withStop(s.i, { color: v })))}
+              />
+              <IconBtn label="Remove stop" disabled={g.stops.length <= 2} onClick={() => m.patch(out({ ...g, stops: g.stops.filter((_, j) => j !== s.i) }))}><Minus className="size-3.5" /></IconBtn>
+            </div>
+            <div className="pl-17"><TokenChip value={s.color} tokens={m.tokens} onDetach={(r) => m.patch(out(withStop(s.i, { color: r })))} /></div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
