@@ -1,5 +1,5 @@
 import { ChevronDown, X } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { Children, useState, type ReactNode } from 'react';
 import { MIXED, px, toPx } from '@/lib/inspect';
 import { cn } from '@/lib/utils';
 import { NumberField } from '@/ui/NumberField';
@@ -60,18 +60,22 @@ export function SelectField({ label, value, options, names, mixed, onCommit }: {
 
 // Inspector section: shadcn Collapsible (state, aria-expanded and keyboard come from Base UI) plus the title row and an
 // optional trailing action (the + of Fill, the switch of Auto layout). 13px/600 title, 12px body, hairline below, 4px grid.
+// The chevron sits right after the title so the right edge belongs to the action alone (it used to land between the
+// title and the "+" in some sections and at the edge in others). The bottom padding lives on the content, so a closed
+// or empty section (Effects with no shadow) is just its 36px header instead of leaving a gap.
 // No open/close animation on purpose: collapsing is a frequent action (CLAUDE.md motion rules).
 export function Section({ title, off, action, children }: { title: string; off?: boolean; action?: ReactNode; children?: ReactNode }) {
   return (
-    <Collapsible defaultOpen render={<section className={cn('border-b px-3 pb-3', off && 'pointer-events-none opacity-50')} />}>
+    <Collapsible defaultOpen render={<section className={cn('border-b px-3', off && 'pointer-events-none opacity-50')} />}>
       <div className="flex h-9 items-center gap-1">
-        <CollapsibleTrigger className="group/sec -mx-1 flex h-8 flex-1 items-center justify-between rounded-md px-1 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/90">
+        <CollapsibleTrigger className="group/sec -mx-1 flex h-8 flex-1 items-center gap-1 rounded-md px-1 text-[13px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring/90">
           {title}
-          <ChevronDown className="size-3.5 text-muted-foreground transition-[rotate] duration-150 group-hover/sec:text-foreground group-data-[panel-open]/sec:rotate-0 -rotate-90" />
+          <ChevronDown className="size-3 text-muted-foreground transition-[rotate] duration-150 group-hover/sec:text-foreground group-data-[panel-open]/sec:rotate-0 -rotate-90" />
         </CollapsibleTrigger>
         {action}
       </div>
-      {children && <CollapsibleContent className="flex flex-col gap-2 text-xs">{children}</CollapsibleContent>}
+      {/* toArray drops false / null, so a section whose rows are all conditional and off counts as empty. */}
+      {Children.toArray(children).length > 0 && <CollapsibleContent className="flex flex-col gap-2 pb-3 text-xs">{children}</CollapsibleContent>}
     </Collapsible>
   );
 }
