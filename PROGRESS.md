@@ -47,14 +47,9 @@ Right-click a page > "Delete page", the row hover trash button (or palette "Dele
 ## Atelier Phase 3 (2026-10-30)
 Inspector `Section` now on shadcn Collapsible (13px titles, 12px body); Pages/Layers rows polished (14px icons, signal-blue tint); shadcn `Empty` states for layers, comments, no selection. Both themes checked in the browser. Next: Phase 4 command palette (`docs/notes/luxury-redesign-plan.md`). Not done: other panels (Agents, Theme, Tokens) keep their own section styling.
 
-## Home page redesign (2026-10-21)
-Home is now Paper-style: left sidebar (`web/src/pages/home/HomeSidebar.tsx`: workspace row, search, Recents / Trash / Comments / Import,
-connection pill + theme toggle in the footer) and a main area with a "Recents"/"Trash" heading, sort select, New project button and a
-grid/list toggle (remembered in localStorage `dc-home-view`). `ProjectCard` shows title + "Edited N ago" above the preview; `CoverThumb`
-takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet checked with real covers on a populated project.
-
-## Home topbar + cards (2026-10-30, topbar 2026-11-01)
-Sidebar kept (search moved out of it). The hero was removed (user): `HomePage` opens with a sticky translucent topbar inside `main` (title + count, search, sort, view toggle, brand New project, hidden in Trash), then a 2/3-column fluid grid paged 12 at a time with a "Load more" button (page resets on search/sort/section change). "/" focuses search (Esc clears, then blurs). The topbar wraps to two rows by a container query on its own width (not a viewport breakpoint); below md the sidebar nav is one horizontal scrolling row. Checked at 375 / 768 / 1100 dark. Layout is Origin-style (user reference): a `--home` grey shell (`bg-home`, globals.css; darker than the page in dark) holds the sidebar and a non-scrolling title row (big "Projects" + New project); the list is a white rounded sheet (`main`, edge to edge below md) with its own sticky bar (uppercase "Recent" label + count, search, sort, view). Card frames are `bg-home` in light so white previews do not melt into the sheet. Empty states (no projects / empty Trash / no matches) show `EmptyArt` in HomePage.tsx: an inline SVG fan of cards drawn with theme tokens plus the state icon in a badge. Not yet checked: tablet width, list view, Trash. `ProjectCard` = raised 200px preview, title + "N boards, edited X ago" below, menu on hover; `CoverThumb` measures its width when none is given. Checked dark at ~800px only; not checked light, Trash or list view.
+## Home + Comments pages (done 2026-11-01)
+Origin-style shell shared by `HomePage.tsx` and `CommentsPage.tsx`: grey `bg-home` backdrop (`--home` in globals.css) with `home/HomeSidebar.tsx` (sections are links: `/`, `/?trash=1`, `/comments`; `activeOptions.exact` so only one row is current), a title row, and a white rounded sheet with a sticky bar (container query wraps it to two rows). Home: grid/list (localStorage `dc-home-view`), Load more (12), "/" focuses search. Comments: status tabs + search + project/author filters, 860px column. Both use `home/EmptyArt.tsx` for empty states. `ui/AppHeader.tsx` now only holds `ConnectionPill`.
+Checked in light at 1280 / 768 / 375: grid, list, Trash, empty search, comments. Not re-checked in dark after the comments move.
 
 ## UI round 2026-10-21 (merged into main, verified in the browser)
 - Home page restyled like Paper (`web/src/pages/home/HomeSidebar.tsx`, `ProjectCard.tsx`): sidebar, Recents grid, New project, grid/list toggle.
