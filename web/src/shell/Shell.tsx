@@ -347,7 +347,8 @@ export function useAutoOpenPanels() {
 
 // Slides a side panel in and out with translate + opacity only. The slot reserves (or frees) the layout width at
 // once, so the canvas never re-measures mid-animation; the panel itself is absolutely placed in the slot and, while
-// leaving, travels over the grey margin and out of the window. Mounted stays true until the exit finishes.
+// leaving, travels over the canvas edge and out of the window. Panels are floating sheets (8px in from the window
+// edges, shadow-float instead of a border) on the borderless canvas. Mounted stays true until the exit finishes.
 // shown lags mounted by a tick so the entry has a "from" state to transition from (a bare mount would just appear).
 function SlideSlot({ open, side, width, children }: { open: boolean; side: 'left' | 'right'; width: string; children: ReactNode }) {
   const [mounted, setMounted] = useState(open);
@@ -361,12 +362,12 @@ function SlideSlot({ open, side, width, children }: { open: boolean; side: 'left
   }, [open]);
   const out = side === 'left' ? '-translate-x-[110%]' : 'translate-x-[110%]';
   return (
-    <div className={cn('relative shrink-0', open ? cn(width, side === 'left' ? 'mr-2' : 'ml-2') : 'w-0')}>
+    <div className={cn('relative shrink-0', open ? cn(width, side === 'left' ? 'ml-2' : 'mr-2') : 'w-0')}>
       {mounted && (
         <div
           inert={!open}
           className={cn(
-            'absolute inset-y-0 z-10 transition-[translate,opacity] duration-200 ease-(--ease-drawer) motion-reduce:duration-150',
+            'absolute inset-y-2 z-10 transition-[translate,opacity] duration-200 ease-(--ease-drawer) motion-reduce:duration-150',
             width, side === 'left' ? 'left-0' : 'right-0',
             // Reduced motion keeps the fade and drops the travel.
             !shown && cn('opacity-0 pointer-events-none', out, 'motion-reduce:translate-x-0'),
@@ -384,7 +385,7 @@ export function RightPanel({ projectId }: { projectId: string }) {
   const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
   return (
     <SlideSlot open={panelOpen} side="right" width="w-68">
-    <aside aria-label="Inspector" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
+    <aside aria-label="Inspector" className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-background shadow-float">
       {/* shadcn Tabs as a segmented control: three labelled tabs instead of eight icons. Panels render below, so
           only the list is used. */}
       <div data-drag className="flex h-11 shrink-0 items-center justify-between gap-1 border-b px-2">
@@ -421,7 +422,7 @@ export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
   return (
     <SlideSlot open={layersOpen} side="left" width="w-60">
-      <aside aria-label="Pages and layers" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
+      <aside aria-label="Pages and layers" className="flex h-full w-full flex-col overflow-hidden rounded-2xl bg-background shadow-float">
         <div data-drag className="flex h-11 shrink-0 items-center gap-0.5 border-b px-2">
           <BackButton /><div className="flex min-w-0 flex-1"><MainMenu /></div><PanelsToggle />
         </div>

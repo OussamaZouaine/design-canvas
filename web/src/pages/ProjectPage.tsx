@@ -36,6 +36,7 @@ function usePageInUrl(page: string | null) {
 }
 
 // Project page = React chrome around the imperative canvas engine (`<Canvas>` renders an empty div the engine fills).
+// Paper-style: the canvas grey fills the window edge to edge (no frame, no border) and the panels float on it.
 export function ProjectPage({ projectId }: { projectId: string }) {
   useProjectEvents(projectId);
   // ?comment=<id> comes from the Comments page; CommentsLayer opens that thread once everything has loaded.
@@ -47,10 +48,10 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const loading = useProject((s) => !s.doc);
   const empty = useProject((s) => !!s.doc && !s.doc.artboards.some((a) => pageOfBoard(s.doc!, a) === page));
   return (
-    <div className="flex h-full flex-col bg-home">
-      <div className="flex min-h-0 flex-1 overflow-hidden p-2">
+    <div className="flex h-full flex-col bg-[var(--canvas)]">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <LeftPanel projectId={projectId} />
-        <main className="relative min-w-0 flex-1 overflow-hidden rounded-2xl border bg-[var(--canvas)]">
+        <main className="relative min-w-0 flex-1 overflow-hidden bg-[var(--canvas)]">
           <Canvas projectId={projectId} />
           {/* Skeleton boards while the first doc event is on its way (hidden for reduced motion by .sk). */}
           {loading && (
