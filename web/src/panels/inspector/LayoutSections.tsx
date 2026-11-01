@@ -1,6 +1,6 @@
 import {
   AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalSpaceBetween, AlignStartHorizontal,
-  AlignStartVertical, AlignVerticalSpaceBetween, ArrowDown, ArrowRight, Minus, MoveHorizontal, MoveVertical, Plus, RotateCw, WrapText,
+  AlignStartVertical, AlignVerticalSpaceBetween, ArrowDown, ArrowRight, Minus, MoveHorizontal, MoveVertical, Plus, RotateCw, Scan, SquareRoundCorner, WrapText,
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import {
@@ -299,7 +299,7 @@ export function AutoLayoutSection({ m }: { m: Model }) {
               <SidesField m={m} prop="padding" idx={[1, 3]} label={<MoveHorizontal className="size-3" />} title="padding horizontal" />
               <SidesField m={m} prop="padding" idx={[0, 2]} label={<MoveVertical className="size-3" />} title="padding vertical" />
             </div>}
-        <IconBtn label="Padding per side" on={four} onClick={() => setFour(!four)} className="self-start"><span className="text-[10px] font-semibold">4</span></IconBtn>
+        <IconBtn label="Padding per side" on={four} onClick={() => setFour(!four)} className="self-start"><Scan className="size-3.5" /></IconBtn>
       </div>
     </div>
   );
@@ -356,7 +356,7 @@ export function AppearanceSection({ m }: { m: Model }) {
         />
         <div className="flex gap-1.5">
           <SidesField m={m} prop="border-radius" idx={[0, 1, 2, 3]} label={<span className="text-[10px]">R</span>} title="radius" />
-          <IconBtn label="Radius per corner" on={corners} onClick={() => setCorners(!corners)}><span className="text-[10px] font-semibold">4</span></IconBtn>
+          <IconBtn label="Radius per corner" on={corners} onClick={() => setCorners(!corners)}><SquareRoundCorner className="size-3.5" /></IconBtn>
         </div>
       </div>
       {corners && (
