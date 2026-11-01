@@ -118,7 +118,7 @@ export function HomePage() {
   };
 
   return (
-    <div className="flex h-full flex-col md:flex-row">
+    <div className="flex h-full flex-col bg-home md:flex-row">
       <HomeSidebar
         inTrash={inTrash}
         onSection={setInTrash}
@@ -131,18 +131,28 @@ export function HomePage() {
       />
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
 
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        {/* Sticky topbar: position sticky works because main is the scroll container, so New project and search
-            stay reachable however far the list scrolls. Translucent + blur so cards read through it. */}
+      {/* Origin-style shell: the grey backdrop (shared with the sidebar) holds the page title and New project, and
+          the list sits in a white rounded sheet that scrolls on its own. The title row never scrolls away, so New
+          project stays reachable; the sheet's own sticky bar keeps search and sort in reach. Below md the sheet
+          goes edge to edge (no radius or border) so phones keep every pixel. */}
+      <div className="flex min-h-0 flex-1 flex-col md:pr-3 md:pb-3">
+        <div className="flex items-center gap-3 px-4 py-3 md:h-16 md:px-6 md:py-0">
+          <h1 className="mr-auto font-display text-2xl tracking-[-0.03em]">{inTrash ? 'Trash' : 'Projects'}</h1>
+          {!inTrash && <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>}
+        </div>
+
+      <main className="min-h-0 flex-1 overflow-y-auto border-t bg-background md:rounded-2xl md:border">
+        {/* Sticky bar: position sticky works because main is the scroll container. Translucent + blur so cards
+            read through it. */}
         <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
         <div className="@container">
-          {/* Narrow: title + New project on the first row, the controls group wraps to a full-width second row
+          {/* Narrow: the label on the first row, the controls group wraps to a full-width second row
               (order-last) so the search field gets the room. Wide: one row. A container query (@3xl = 48rem of the
-              header's own width) is used instead of a viewport breakpoint because the sidebar eats part of the viewport. */}
-          <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-2 px-4 py-3 md:px-10">
-            <h1 className="mr-auto text-[13px] font-semibold whitespace-nowrap">{inTrash ? 'Trash' : 'Recent projects'} {loaded && <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span>}</h1>
+              bar's own width) is used instead of a viewport breakpoint because the sidebar eats part of the viewport. */}
+          <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-2 px-4 py-3 md:px-6">
+            <h2 className="mr-auto text-[11px] font-semibold tracking-[0.12em] whitespace-nowrap text-muted-foreground uppercase">{inTrash ? 'Deleted projects' : 'Recent'} {loaded && <span className="tnum ml-1.5 text-foreground">{shown.length}</span>}</h2>
             <div className="flex items-center gap-2 @max-3xl:order-last @max-3xl:w-full">
-            <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection @3xl:w-56 @3xl:flex-none">
+            <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection @3xl:w-64 @3xl:flex-none">
               <Search className="size-3.5 shrink-0" aria-hidden />
               <input
                 ref={searchRef}
@@ -178,12 +188,11 @@ export function HomePage() {
               ))}
             </div>
             </div>
-            {!inTrash && <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>}
           </div>
         </div>
         </header>
 
-        <div className="mx-auto max-w-[1280px] px-4 pt-6 pb-16 md:px-10">
+        <div className="mx-auto max-w-[1280px] px-4 pt-6 pb-16 md:px-6">
           <div className={cn(view === 'grid' ? 'grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2')}>
             {/* Until the first list arrives, placeholders stand in so the page never reads as "0 projects". */}
             {!loaded && Array.from({ length: 3 }, (_, i) => <CardSkeleton key={i} view={view} />)}
@@ -201,6 +210,7 @@ export function HomePage() {
           {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} onNew={() => setNewOpen(true)} />}
         </div>
       </main>
+      </div>
 
       <ConnectAgentsDialog />
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />

@@ -35,7 +35,7 @@ function NavRow({ icon, active, count, children, ...rest }: { icon: ReactNode; a
 export function HomeSidebar({ inTrash, onSection, liveCount, trashCount, openComments, connection, onImport, onConnect }: Props) {
   const { theme, toggleTheme } = useUi();
   return (
-    <aside className="flex shrink-0 flex-col border-b bg-background md:h-full md:w-60 md:border-r md:border-b-0">
+    <aside className="flex shrink-0 flex-col md:h-full md:w-60">
       <div className="flex h-14 items-center gap-2.5 px-4">
         <span aria-hidden className="grid size-7 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink">D</span>
         <Link to="/" className="truncate text-sm font-semibold" title="All projects">Design Canvas</Link>

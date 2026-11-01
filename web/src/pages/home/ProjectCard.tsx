@@ -149,8 +149,9 @@ export function ProjectCard({ project: p, inTrash, view, index, animateIn, actio
         </>
       ) : (
         <>
-          {/* Concentric radii: 8px preview + 8px padding = 16px card corner. */}
-          <div className={cn('relative rounded-2xl border bg-card p-2 transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', !inTrash && HOVER_LIFT)}>
+          {/* Concentric radii: 8px preview + 8px padding = 16px card corner. The frame is the grey home tone in light
+              mode so white board previews do not melt into the white sheet; dark keeps the lighter card surface. */}
+          <div className={cn('relative rounded-2xl border bg-home p-2 dark:bg-card transition-[box-shadow,translate] duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', !inTrash && HOVER_LIFT)}>
             <CoverThumb cover={p.cover} height={GRID_H} className="w-full rounded-lg" />
             {badge && <div className="absolute bottom-4 left-4">{badge}</div>}
           </div>
