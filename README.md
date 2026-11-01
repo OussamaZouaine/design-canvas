@@ -404,6 +404,9 @@ data/                       runtime data (gitignored)
 The full module list with the reasons behind each is in [CLAUDE.md](CLAUDE.md).
 
 ## Example: the Sprig design system
+> Unaffiliated demo: this example is a study inspired by a screenshot of the Sprig app. It is not made, endorsed or
+> sponsored by Sprig, and all trademarks belong to their owners.
+
 `examples/sprig/` builds a full design system (foundations, components, 14 pages, light and dark) through the running
 server. The scripts are idempotent: they delete same-named artboards and recreate them.
 ```

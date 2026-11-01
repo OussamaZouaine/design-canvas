@@ -1,5 +1,8 @@
 # Sprig-style design system
 
+> Unaffiliated demo: this example is a study inspired by a screenshot of the Sprig app. It is not made, endorsed or
+> sponsored by Sprig, and all trademarks belong to their owners.
+
 Reverse-read from a single Home screenshot. Source of truth is `ds.mjs` (tokens + components);
 `build.mjs` pushes the system and six pages onto the canvas through the MCP endpoint.
 Run it with the canvas server up: `node build.mjs` (it clears the canvas first).
