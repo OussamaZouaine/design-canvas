@@ -9,7 +9,7 @@ Stable knowledge lives in `CLAUDE.md`; this file is the history and the to-do li
   (buttons, forms, feedback, navigation, data display, states, icons, theme & tokens, data table density).
 - Plan status: every phase of the build plan that fits the Node stack is done (see `docs/ROADMAP.md`). Tools, panels (Layers,
   Design, Theme, MCP), pages, components, references, token sync, normalization, lint, export are all in. 207 unit tests pass.
-- Dev server is **stopped** (restart it to load `src/` changes); run `pnpm build:web` then `pnpm start`. No git remote configured, nothing pushed.
+- Dev server is **stopped** (restart it to load `src/` changes); run `pnpm build:web` then `pnpm start`. Remote: github.com/OussamaZouaine/design-canvas (public, MIT; `docs/` is local only and was rewritten out of history on 2026-11-01).
 - Git history is on `main`, small commits per concern (`git log --oneline`).
 
 ## What was built, in order
