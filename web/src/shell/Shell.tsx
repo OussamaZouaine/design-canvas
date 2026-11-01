@@ -316,12 +316,59 @@ function AgentsTab({ projectId }: { projectId: string }) {
   );
 }
 
+// Figma-style: the first selection after nothing was selected opens the panels. Only the empty -> something edge
+// counts, so a panel the user closed by hand stays closed while they keep working on the same selection. Below
+// 1024px only the inspector opens (both would leave the canvas too narrow).
+export function useAutoOpenPanels() {
+  const has = useCanvas((s) => s.selected.length > 0);
+  useEffect(() => {
+    if (!has) return;
+    const ui = useUi.getState();
+    if (!ui.panelOpen) ui.togglePanel();
+    if (window.innerWidth >= 1024 && !ui.layersOpen) ui.toggleLayers();
+  }, [has]);
+}
+
+// Slides a side panel in and out with translate + opacity only. The slot reserves (or frees) the layout width at
+// once, so the canvas never re-measures mid-animation; the panel itself is absolutely placed in the slot and, while
+// leaving, travels over the grey margin and out of the window. Mounted stays true until the exit finishes.
+// shown lags mounted by a tick so the entry has a "from" state to transition from (a bare mount would just appear).
+function SlideSlot({ open, side, width, children }: { open: boolean; side: 'left' | 'right'; width: string; children: ReactNode }) {
+  const [mounted, setMounted] = useState(open);
+  const [shown, setShown] = useState(open);
+  useEffect(() => {
+    // setTimeout rather than rAF: rAF never fires in background tabs, which would leave the panel invisible.
+    if (open) { setMounted(true); const t = setTimeout(() => setShown(true), 16); return () => clearTimeout(t); }
+    setShown(false);
+    const t = setTimeout(() => setMounted(false), 220);
+    return () => clearTimeout(t);
+  }, [open]);
+  const out = side === 'left' ? '-translate-x-[110%]' : 'translate-x-[110%]';
+  return (
+    <div className={cn('relative shrink-0', open ? cn(width, side === 'left' ? 'mr-2' : 'ml-2') : 'w-0')}>
+      {mounted && (
+        <div
+          inert={!open}
+          className={cn(
+            'absolute inset-y-0 z-10 transition-[translate,opacity] duration-200 ease-(--ease-drawer) motion-reduce:duration-150',
+            width, side === 'left' ? 'left-0' : 'right-0',
+            // Reduced motion keeps the fade and drops the travel.
+            !shown && cn('opacity-0 pointer-events-none', out, 'motion-reduce:translate-x-0'),
+          )}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RightPanel({ projectId }: { projectId: string }) {
   const { panelTab, setPanelTab, panelOpen, panelView } = useUi();
   const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
-  if (!panelOpen) return null;
   return (
-    <aside aria-label="Inspector" className="flex w-68 shrink-0 flex-col overflow-hidden rounded-2xl border bg-background">
+    <SlideSlot open={panelOpen} side="right" width="w-68">
+    <aside aria-label="Inspector" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
       {/* shadcn Tabs as a segmented control: three labelled tabs instead of eight icons. Panels render below, so
           only the list is used. */}
       <div className="shrink-0 border-b p-2">
@@ -346,18 +393,20 @@ export function RightPanel({ projectId }: { projectId: string }) {
         {!panelView && panelTab === 'agents' && <AgentsTab projectId={projectId} />}
       </div>
     </aside>
+    </SlideSlot>
   );
 }
 
 // Left drawer: the page list on top, then the layer tree of the active page (search, rename, hide/lock, drag to reorder).
 export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
-  if (!layersOpen) return null;
   return (
-    <aside aria-label="Pages and layers" className="flex w-60 shrink-0 flex-col overflow-hidden rounded-2xl border bg-background">
-      <PagesPanel projectId={projectId} />
-      <h2 className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold">Layers</h2>
-      <LayersPanel projectId={projectId} />
-    </aside>
+    <SlideSlot open={layersOpen} side="left" width="w-60">
+      <aside aria-label="Pages and layers" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
+        <PagesPanel projectId={projectId} />
+        <h2 className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold">Layers</h2>
+        <LayersPanel projectId={projectId} />
+      </aside>
+    </SlideSlot>
   );
 }

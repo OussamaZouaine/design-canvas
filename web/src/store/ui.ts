@@ -63,8 +63,9 @@ export const useUi = create<UiState>((set, get) => ({
   tool: 'move',
   panelTab: 'design',
   panelView: null,
-  layersOpen: true,
-  panelOpen: true,
+  // Narrow windows start with both panels closed; selecting something opens the inspector (useAutoOpenPanels).
+  layersOpen: window.innerWidth >= 1024,
+  panelOpen: window.innerWidth >= 1024,
   theme: initialTheme,
   rulers: read('dc-rulers') === '1',
   shortcutsOpen: false,
