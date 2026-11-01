@@ -10,7 +10,7 @@ import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
 import { CommandPalette } from '@/shell/CommandPalette';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { Rulers } from '@/shell/Rulers';
-import { FloatingToolbar, LeftPanel, LivePill, RightPanel, TopBar, useAutoOpenPanels } from '@/shell/Shell';
+import { FloatingPills, FloatingToolbar, LeftPanel, LivePill, RightPanel, StatusDock, useAutoOpenPanels } from '@/shell/Shell';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
 
@@ -48,8 +48,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const empty = useProject((s) => !!s.doc && !s.doc.artboards.some((a) => pageOfBoard(s.doc!, a) === page));
   return (
     <div className="flex h-full flex-col bg-home">
-      <TopBar projectId={projectId} />
-      <div className="flex min-h-0 flex-1 overflow-hidden px-2 pb-2">
+      <div className="flex min-h-0 flex-1 overflow-hidden p-2">
         <LeftPanel projectId={projectId} />
         <main className="relative min-w-0 flex-1 overflow-hidden rounded-2xl border bg-[var(--canvas)]">
           <Canvas projectId={projectId} />
@@ -69,6 +68,8 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <Rulers />
           <CommentsLayer projectId={projectId} deepLink={comment} />
           <LivePill />
+          <FloatingPills />
+          <StatusDock />
           <FloatingToolbar />
           <CanvasContextMenu />
           <ShortcutsDialog />

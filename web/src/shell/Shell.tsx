@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -82,21 +82,22 @@ function ZoomControls() {
 }
 
 // Follow is about Claude, so its on state borrows the signal colour rather than the neutral "pressed" grey.
-function FollowButton() {
+function FollowButton({ labelled = false }: { labelled?: boolean }) {
   const { engine, follow, setFollow } = useCanvas();
   return (
     <Tip label="Follow Claude's camera" side="bottom"><Button
-      variant="ghost" size="28" aria-pressed={follow}
+      variant="ghost" size={labelled ? '28' : 'icon'} aria-pressed={follow} aria-label="Follow Claude's camera"
       className={cn(follow && 'bg-selection-soft text-selection-ink hover:bg-selection-soft hover:text-selection-ink')}
       onClick={() => { setFollow(!follow); engine?.setFollow(!follow); }}
-    ><Crosshair />Follow</Button></Tip>
+    ><Crosshair />{labelled && 'Follow'}</Button></Tip>
   );
 }
 
-// Main menu behind the champagne logo mark: everything that left the bar because it is used rarely.
+// Main menu = the project name's dropdown: everything used rarely lives here.
 // (There is no Settings screen yet, so the menu has no Settings item.)
 function MainMenu() {
   const { theme, rulers } = useUi();
+  const name = useProject((s) => s.meta?.name);
   const actions = useActions();
   const setTheme = (t: string) => { if (t !== useUi.getState().theme) useUi.getState().toggleTheme(); };
   // Labels and shortcuts come from the registry (lib/actions.ts), so this menu cannot drift from the palette or the dialog.
@@ -107,7 +108,8 @@ function MainMenu() {
   const rulersAction = act('view.rulers');
   return (
     <DropdownMenu>
-      <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="grid size-7 shrink-0 place-items-center rounded-md bg-brand font-display text-[13px] text-brand-ink outline-none transition-[scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90" />}>D</DropdownMenuTrigger></Tip>
+      {/* React escapes text, so untrusted project names are safe here. */}
+      <Tip label="Main menu" side="bottom"><DropdownMenuTrigger render={<button type="button" aria-label="Main menu" className="flex h-7 min-w-0 items-center gap-1 rounded-md px-1.5 text-[13px] font-semibold outline-none transition-[background-color,scale] duration-150 active:scale-96 focus-visible:ring-2 focus-visible:ring-ring/90 pointer-hover:bg-foreground/8" />}><span className="truncate">{name ?? '…'}</span><ChevronDown aria-hidden className="size-3 shrink-0 text-muted-foreground" /></DropdownMenuTrigger></Tip>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuItem render={<Link to="/" />}><FolderOpen />{act('project.home').label}</DropdownMenuItem>
         {item('help.palette', <Search />)}
@@ -142,7 +144,7 @@ export function LivePill() {
   // A pending slow call (screenshot...) shows even when no board is being written, so a 15 s round-trip is visible.
   if (!live && !waiting) return null;
   return (
-    <div className="absolute top-6 right-3 z-10 flex flex-col items-end gap-1.5">
+    <div className="absolute top-18 right-7 z-10 flex flex-col items-end gap-1.5">
       {live && (
         <button onClick={() => engine?.focusBoard(live.id)} className="live-pill material flex h-7 items-center gap-2 rounded-full px-3 text-[11px] transition-[scale] duration-150 active:scale-96">
           {/* A soft halo in the agent's colour makes the dot read as "live" without animating it. */}
@@ -162,34 +164,49 @@ export function LivePill() {
   );
 }
 
-// Three zones (a grid with equal side columns keeps the centre truly centred): left = menu + where you are,
-// centre = who is working and the connection, right = view controls, the one primary action (Export), panel toggle.
-export function TopBar({ projectId: _projectId }: { projectId: string }) {
-  const name = useProject((s) => s.meta?.name);
+const PanelsToggle = () => {
   const { togglePanels, layersOpen, panelOpen } = useUi();
+  return <Tip label="Show / hide panels" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen || panelOpen} aria-label="Toggle panels" onClick={togglePanels}><PanelLeft /></Button></Tip>;
+};
+
+const BackButton = () => (
+  <Tip label="All projects" side="bottom"><Link to="/" aria-label="All projects" className={buttonVariants({ variant: 'ghost', size: 'icon' })}><ArrowLeft /></Link></Tip>
+);
+
+function ExportButton() {
   const engine = useCanvas((s) => s.engine);
+  return <Tip label="Export" keys={`${modLabel()}${shiftLabel()}E`} side="bottom"><Button variant="brand" size="28" onClick={() => engine && openExport(engine)}>Export</Button></Tip>;
+}
+
+// Header strips (panel headers and the floating pills) carry data-drag so a desktop shell can turn them into the
+// window drag area; interactive children would then be marked no-drag.
+// Floating pills: shown only while the matching panel is closed, so the canvas keeps name, panels toggle, zoom and
+// Export. They sit inside the canvas sheet (the Rulers occupy the first 20px, hence the 28px offset).
+export function FloatingPills() {
+  const { layersOpen, panelOpen } = useUi();
   return (
-    <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
-      <div className="flex min-w-0 items-center gap-1">
-        <MainMenu />
-        <Tip label="Show / hide panels" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen || panelOpen} aria-label="Toggle panels" onClick={togglePanels}><PanelLeft /></Button></Tip>
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
-          <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/90 pointer-hover:text-foreground">Projects</Link>
-          <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
-          {/* React escapes text, so untrusted project names are safe here. */}
-          <span aria-current="page" className="truncate px-1 font-semibold">{name ?? '…'}</span>
-        </nav>
-      </div>
-      <div className="flex min-w-0 items-center gap-1">
-        <AgentChips />
-        <StatusPill />
-      </div>
-      <div className="flex items-center justify-end gap-1.5">
-        <ZoomControls />
-        <FollowButton />
-        <Tip label="Export" keys={`${modLabel()}${shiftLabel()}E`} side="bottom"><Button variant="brand" size="28" onClick={() => engine && openExport(engine)}>Export</Button></Tip>
-      </div>
-    </header>
+    <>
+      {!layersOpen && (
+        <div data-drag className="material absolute top-7 left-7 z-10 flex h-9 max-w-1/2 items-center gap-0.5 rounded-xl px-1">
+          <BackButton /><MainMenu /><PanelsToggle />
+        </div>
+      )}
+      {!panelOpen && (
+        <div data-drag className="material absolute top-7 right-7 z-10 flex h-9 items-center gap-1 rounded-xl px-1">
+          <ZoomControls /><FollowButton /><ExportButton />
+        </div>
+      )}
+    </>
+  );
+}
+
+// Bottom-right pill: who is working and the connection. Replaces the old top-bar centre zone.
+export function StatusDock() {
+  return (
+    <div className="material absolute right-4 bottom-4 z-10 flex h-9 max-w-1/3 items-center gap-1 rounded-xl px-1.5">
+      <AgentChips />
+      <StatusPill />
+    </div>
   );
 }
 
@@ -370,6 +387,9 @@ export function RightPanel({ projectId }: { projectId: string }) {
     <aside aria-label="Inspector" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
       {/* shadcn Tabs as a segmented control: three labelled tabs instead of eight icons. Panels render below, so
           only the list is used. */}
+      <div data-drag className="flex h-11 shrink-0 items-center justify-between gap-1 border-b px-2">
+        <ZoomControls /><FollowButton /><ExportButton />
+      </div>
       <div className="shrink-0 border-b p-2">
         <Tabs value={panelTab} onValueChange={(v) => setPanelTab(v as PanelTab)}>
           <TabsList aria-label="Panels" className="w-full bg-field">
@@ -402,6 +422,9 @@ export function LeftPanel({ projectId }: { projectId: string }) {
   return (
     <SlideSlot open={layersOpen} side="left" width="w-60">
       <aside aria-label="Pages and layers" className="flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-background">
+        <div data-drag className="flex h-11 shrink-0 items-center gap-0.5 border-b px-2">
+          <BackButton /><div className="flex min-w-0 flex-1"><MainMenu /></div><PanelsToggle />
+        </div>
         <PagesPanel projectId={projectId} />
         <h2 className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold">Layers</h2>
         <LayersPanel projectId={projectId} />
