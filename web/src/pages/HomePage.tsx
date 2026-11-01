@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
+import { Kbd } from '@/components/ui/kbd';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select,SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createProject, importProject, listAllComments, listProjects, projectAction, type ProjectSummary } from '@/api/projects';
@@ -28,6 +29,7 @@ const BY: Record<Sort, (a: ProjectSummary, b: ProjectSummary) => number> = {
   name: (a, b) => a.name.localeCompare(b.name),
 };
 
+const PAGE = 12; // divisible by the 2 and 3 grid columns, so pages end on a full row
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 // Project home: every project as a card with a live preview of its cover artboard. Names and descriptions can come
@@ -40,10 +42,29 @@ export function HomePage() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('recent');
   const [newOpen, setNewOpen] = useState(false);
+  // How many cards are mounted; each card renders a live preview, so the list grows in pages via "Load more".
+  const [limit, setLimit] = useState(PAGE);
+  // A new filter, sort or section starts again from the first page (state reset during render, no extra effect).
+  const [listKey, setListKey] = useState('');
+  const key = `${query}|${sort}|${inTrash}`;
+  if (key !== listKey) { setListKey(key); setLimit(PAGE); }
   // Flips after the first non-empty list so later live refreshes do not replay the entrance animation.
   const [animateIn, setAnimateIn] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  // "/" focuses search (GitHub/YouTube convention), unless the user is already typing in a field or a dialog is open.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement;
+      if (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || document.querySelector('[role="dialog"]')) return;
+      e.preventDefault(); // otherwise the "/" would be typed into the field we just focused
+      searchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   // Grid/list choice is remembered; localStorage can throw (private mode), so it is guarded.
   const [view, setView] = useState<View>(() => { try { return localStorage.getItem('dc-home-view') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } });
   const changeView = (v: View) => { setView(v); try { localStorage.setItem('dc-home-view', v); } catch { /* not persisted */ } };
@@ -99,8 +120,6 @@ export function HomePage() {
   return (
     <div className="flex h-full flex-col md:flex-row">
       <HomeSidebar
-        query={query}
-        onQuery={setQuery}
         inTrash={inTrash}
         onSection={setInTrash}
         liveCount={live.length}
@@ -113,17 +132,33 @@ export function HomePage() {
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
 
       <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1280px] px-10 pt-12 pb-16">
-          <section className="mb-12 flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-            <div className="flex flex-col gap-3">
-              <h1 className="font-display text-[44px]/[1.05] tracking-[-0.04em] md:text-[64px]/[1.05]">Your work,<br />drawn by your agent.</h1>
-              <p className="max-w-[480px] text-base/6 text-muted-foreground">Open a project to watch designs appear live, comment on any element, and let your agents answer.</p>
-            </div>
-            <Button variant="brand" size="lg" className="h-10 px-5 text-sm" onClick={() => setNewOpen(true)}><Plus className="size-4" />New project</Button>
-          </section>
-
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <h2 className="mr-auto text-[13px] font-semibold">{inTrash ? 'Trash' : 'Recent projects'} {loaded && <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span>}</h2>
+        {/* Sticky topbar: position sticky works because main is the scroll container, so New project and search
+            stay reachable however far the list scrolls. Translucent + blur so cards read through it. */}
+        <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur-md">
+        <div className="@container">
+          {/* Narrow: title + New project on the first row, the controls group wraps to a full-width second row
+              (order-last) so the search field gets the room. Wide: one row. A container query (@3xl = 48rem of the
+              header's own width) is used instead of a viewport breakpoint because the sidebar eats part of the viewport. */}
+          <div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-2 px-4 py-3 md:px-10">
+            <h1 className="mr-auto text-[13px] font-semibold whitespace-nowrap">{inTrash ? 'Trash' : 'Recent projects'} {loaded && <span className="tnum ml-2 font-normal text-muted-foreground">{shown.length}</span>}</h1>
+            <div className="flex items-center gap-2 @max-3xl:order-last @max-3xl:w-full">
+            <label className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-field px-2.5 text-muted-foreground transition-colors duration-150 pointer-hover:bg-field-hover focus-within:ring-1 focus-within:ring-selection @3xl:w-56 @3xl:flex-none">
+              <Search className="size-3.5 shrink-0" aria-hidden />
+              <input
+                ref={searchRef}
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                // Esc clears first, then leaves the field, so the "/" shortcut can be used again right away.
+                onKeyDown={(e) => { if (e.key === 'Escape') { if (query) setQuery(''); else e.currentTarget.blur(); } }}
+                placeholder="Search"
+                aria-label="Search projects"
+                aria-keyshortcuts="/"
+                className="peer min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
+              />
+              {/* Hint only while the field is idle; hidden on touch-sized screens where there is no keyboard. */}
+              <Kbd className="max-sm:hidden peer-focus:hidden">/</Kbd>
+            </label>
             <Select items={SORTS} value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger aria-label="Sort projects"><SelectValue /></SelectTrigger>
               <SelectContent>{SORTS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
@@ -142,15 +177,26 @@ export function HomePage() {
                 </button>
               ))}
             </div>
+            </div>
+            {!inTrash && <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>}
           </div>
+        </div>
+        </header>
 
+        <div className="mx-auto max-w-[1280px] px-4 pt-6 pb-16 md:px-10">
           <div className={cn(view === 'grid' ? 'grid gap-x-6 gap-y-8 sm:grid-cols-2 xl:grid-cols-3' : 'flex flex-col gap-2')}>
             {/* Until the first list arrives, placeholders stand in so the page never reads as "0 projects". */}
             {!loaded && Array.from({ length: 3 }, (_, i) => <CardSkeleton key={i} view={view} />)}
-            {shown.map((p, i) => (
+            {shown.slice(0, limit).map((p, i) => (
               <ProjectCard key={p.id} project={p} inTrash={inTrash} view={view} index={i} animateIn={animateIn} actions={actions} />
             ))}
           </div>
+
+          {shown.length > limit && (
+            <div className="mt-10 flex justify-center">
+              <Button variant="outline" size="32" onClick={() => setLimit((n) => n + PAGE)}>Load more <span className="tnum text-muted-foreground">{shown.length - limit}</span></Button>
+            </div>
+          )}
 
           {loaded && shown.length === 0 && <EmptyState query={query} inTrash={inTrash} onNew={() => setNewOpen(true)} />}
         </div>
