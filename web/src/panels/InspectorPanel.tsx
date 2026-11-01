@@ -100,18 +100,19 @@ function NodeInspector({ projectId, doc, ids, lists, tokens }: { projectId: stri
             <TypographySection m={m} />
           </>
         )}
-        <ExportSection projectId={projectId} items={items} rows={exportRows} setRows={setExportRows} />
         {/* CSS the inspector has no dedicated control for (added by Claude or by hand): editable as raw rows. */}
         {other.length > 0 && (
           <Section title="Other styles">
             {other.map(([prop, value]) => (
               <div key={prop} className="flex items-center gap-1">
-                <div className="min-w-0 flex-1"><TextField key={`${prop}:${value}`} label={prop.length > 8 ? prop.slice(0, 7) + '…' : prop} title={prop} value={value} onCommit={(v) => set(prop, v)} /></div>
+                <div className="min-w-0 flex-1"><TextField key={`${prop}:${value}`} label={<span className="block max-w-24 truncate">{prop}</span>} title={prop} value={value} onCommit={(v) => set(prop, v)} /></div>
                 <Tip label={`Remove ${prop}`}><button aria-label={`Remove ${prop}`} onClick={() => set(prop, '')} className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted"><X className="size-3" /></button></Tip>
               </div>
             ))}
           </Section>
         )}
+        {/* Export stays last, as in Figma: it is about the whole layer, not one of its styles. */}
+        <ExportSection projectId={projectId} items={items} rows={exportRows} setRows={setExportRows} />
       </div>
     </div>
   );
