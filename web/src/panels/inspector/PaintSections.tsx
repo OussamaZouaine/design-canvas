@@ -1,7 +1,9 @@
-import { Eye, EyeOff, Minus, Plus, X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { Blend, Eye, EyeOff, Image, Minus, Plus, Square, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { formatGradient, formatOklch, parseGradient } from '@/lib/color';
 import { MIXED, isSimpleShadow, parseShadow, parseStroke, shadowCss, splitShadows, strokeCss, toPx, type Shadow, type Stroke } from '@/lib/inspect';
 import { ColorField } from '@/ui/ColorField';
+import { partsOf } from '@/ui/ColorPicker';
 import { NumberField } from '@/ui/NumberField';
 import { IconBtn, rowLabel, Section, SegBtn, Segmented, TextField, TokenChip, tokenName } from './controls';
 import type { Model } from './model';
@@ -38,18 +40,60 @@ export function ColorRow({ m, label, value, mixed, write, extra }: { m: Model; l
   );
 }
 
+// Image fills are `url(...)` cover-fitted; the URL is the only thing the row edits.
+const imageCss = (url: string) => `url("${url.replace(/["\\]/g, '')}") center / cover no-repeat`;
+const imageUrl = (bg: string) => /url\(\s*["']?([^"')]*)["']?\s*\)/i.exec(bg)?.[1] ?? '';
+type FillKind = 'solid' | 'gradient' | 'image';
+const kindOf = (v: string): FillKind => (/url\(/i.test(v) ? 'image' : /gradient\(/i.test(v) ? 'gradient' : 'solid');
+
 export function FillSection({ m }: { m: Model }) {
   const bg = m.get('background');
   const hidden = m.get(HIDDEN_FILL);
   const mixed = bg === MIXED;
   const has = mixed || bg !== '' || (hidden !== '' && hidden !== MIXED);
   const off = !mixed && bg === '' && hidden !== '';
+  const value = off ? hidden : bg;
+  // Picking "Image" before there is a URL shows the empty URL field; nothing is written until a URL is entered.
+  const [wantImage, setWantImage] = useState(false);
+  const kind = wantImage ? 'image' : kindOf(value);
   const write = (v: string) => ({ background: v || null, 'background-color': null, [HIDDEN_FILL]: null });
+  // Switching type keeps the colour: solid -> gradient fades that colour to a lighter/darker version of itself,
+  // gradient -> solid keeps the first stop.
+  const switchTo = (k: FillKind) => {
+    setWantImage(k === 'image' && kind !== 'image');
+    if (k === kind || k === 'image') return;
+    const tok = tokenName(value);
+    const resolved = tok && tok in m.tokens ? m.tokens[tok] : value;
+    const g = parseGradient(value);
+    if (k === 'solid') return m.patch(write(g ? g.stops[0].color : NEW_FILL));
+    const base = kind === 'solid' ? value || NEW_FILL : NEW_FILL;
+    const o = partsOf(kind === 'solid' ? resolved || NEW_FILL : NEW_FILL);
+    const end = formatOklch({ ...o, l: o.l > 0.5 ? o.l - 0.3 : o.l + 0.3 });
+    m.patch(write(formatGradient({ kind: 'linear', angle: 180, shape: '', stops: [{ color: base, pos: 0 }, { color: end, pos: 1 }] })));
+  };
   return (
     <Section title="Fill" action={!has && <IconBtn label="Add fill" onClick={() => m.patch(write(NEW_FILL))}><Plus className="size-3.5" /></IconBtn>}>
-      {has && (
+      {has && !mixed && (
+        <Segmented className="w-28">
+          <SegBtn label="Solid" on={kind === 'solid'} onClick={() => switchTo('solid')}><Square className="size-3.5" /></SegBtn>
+          <SegBtn label="Gradient" on={kind === 'gradient'} onClick={() => switchTo('gradient')}><Blend className="size-3.5" /></SegBtn>
+          <SegBtn label="Image" on={kind === 'image'} onClick={() => switchTo('image')}><Image className="size-3.5" /></SegBtn>
+        </Segmented>
+      )}
+      {has && kind === 'image' && (
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <TextField
+              key={`${m.entries.map((e) => e.id).join()}:img:${value}`} label={<Image className="size-3" />} title="Image URL"
+              value={imageUrl(value)} onCommit={(u) => { if (u) { setWantImage(false); m.patch(write(imageCss(u))); } }}
+            />
+          </div>
+          <IconBtn label="Remove fill" onClick={() => { setWantImage(false); m.patch(write('')); }}><Minus className="size-3.5" /></IconBtn>
+        </div>
+      )}
+      {has && kind !== 'image' && (
         <ColorRow
-          m={m} label="Fill" value={off ? hidden : bg} mixed={mixed} write={write}
+          m={m} label="Fill" value={value} mixed={mixed} write={write}
           extra={
             <>
               <IconBtn label={off ? 'Show fill' : 'Hide fill'} onClick={() => m.patch(off ? write(hidden) : { background: null, 'background-color': null, [HIDDEN_FILL]: bg })}>
