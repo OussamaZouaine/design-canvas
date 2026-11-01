@@ -169,7 +169,7 @@ export function TopBar({ projectId: _projectId }: { projectId: string }) {
   const { toggleLayers, togglePanel, layersOpen, panelOpen } = useUi();
   const engine = useCanvas((s) => s.engine);
   return (
-    <header className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b bg-background px-2">
+    <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
       <div className="flex min-w-0 items-center gap-1">
         <MainMenu />
         <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
@@ -321,7 +321,7 @@ export function RightPanel({ projectId }: { projectId: string }) {
   const open = useProject((s) => s.comments.filter((c) => !c.resolved).length);
   if (!panelOpen) return null;
   return (
-    <aside aria-label="Inspector" className="flex w-68 shrink-0 flex-col border-l bg-background">
+    <aside aria-label="Inspector" className="flex w-68 shrink-0 flex-col overflow-hidden rounded-2xl border bg-background">
       {/* shadcn Tabs as a segmented control: three labelled tabs instead of eight icons. Panels render below, so
           only the list is used. */}
       <div className="shrink-0 border-b p-2">
@@ -354,7 +354,7 @@ export function LeftPanel({ projectId }: { projectId: string }) {
   const layersOpen = useUi((s) => s.layersOpen);
   if (!layersOpen) return null;
   return (
-    <aside aria-label="Pages and layers" className="flex w-60 shrink-0 flex-col border-r bg-background">
+    <aside aria-label="Pages and layers" className="flex w-60 shrink-0 flex-col overflow-hidden rounded-2xl border bg-background">
       <PagesPanel projectId={projectId} />
       <h2 className="flex h-8 shrink-0 items-center px-3 text-[11px] font-semibold">Layers</h2>
       <LayersPanel projectId={projectId} />

@@ -46,11 +46,11 @@ export function ProjectPage({ projectId }: { projectId: string }) {
   const loading = useProject((s) => !s.doc);
   const empty = useProject((s) => !!s.doc && !s.doc.artboards.some((a) => pageOfBoard(s.doc!, a) === page));
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-home">
       <TopBar projectId={projectId} />
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 gap-2 px-2 pb-2">
         <LeftPanel projectId={projectId} />
-        <main className="relative min-w-0 flex-1 bg-[var(--canvas)]">
+        <main className="relative min-w-0 flex-1 overflow-hidden rounded-2xl border bg-[var(--canvas)]">
           <Canvas projectId={projectId} />
           {/* Skeleton boards while the first doc event is on its way (hidden for reduced motion by .sk). */}
           {loading && (

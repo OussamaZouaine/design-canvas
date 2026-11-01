@@ -199,3 +199,8 @@ Order is a suggestion; the user decides.
    project through MCP/HTTP, open it in a browser tab, and delete + purge it afterwards. Never leave scratch projects in `data/`.
 1. Read `CLAUDE.md` and this file. 2. `git log --oneline | head -20` and `git status`. 3. `pnpm start`, open
 http://localhost:3777. 4. Ask the user what to do next if the request is not clear.
+
+## Canvas page in the home shell
+- Import moved from the home sidebar to the title row beside New project (outline button, hidden in Trash); `onImport` prop removed from `HomeSidebar`.
+- `/p/<id>` now uses the same shell: `bg-home` frame (`ProjectPage.tsx`), top bar on the grey without a bottom border, Pages/Layers and Inspector panels and the canvas as rounded-2xl bordered sheets with 8px gaps (`Shell.tsx`). Restyle only, no behaviour change.
+- Checked: light and dark at 1280, light at 1280 + dark/768 screenshots. Not checked: phone width, dialogs/context menu clipping inside the rounded canvas, canvas pan/zoom feel. At 768 both panels open leave the canvas ~250px wide (same as before the restyle).
