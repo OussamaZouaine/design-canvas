@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { FolderPlus, LayoutGrid, List, Plus, Search, Trash2 } from 'lucide-react';
+import { FolderPlus, LayoutGrid, List, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -127,7 +127,6 @@ export function HomePage() {
         trashCount={trashed.length}
         openComments={openComments}
         connection={connection}
-        onImport={() => fileRef.current?.click()}
         onConnect={() => useUi.getState().setConnectOpen(true)}
       />
       <input ref={fileRef} type="file" accept=".json,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; onImport(f); }} />
@@ -139,6 +138,7 @@ export function HomePage() {
       <div className="flex min-h-0 flex-1 flex-col md:pr-3 md:pb-3">
         <div className="flex items-center gap-3 px-4 py-3 md:h-16 md:px-6 md:py-0">
           <h1 className="mr-auto font-display text-2xl tracking-[-0.03em]">{inTrash ? 'Trash' : 'Projects'}</h1>
+          {!inTrash && <Button variant="outline" size="32" title="Import a .dcproject.json file" onClick={() => fileRef.current?.click()}><Upload />Import</Button>}
           {!inTrash && <Button variant="brand" size="32" onClick={() => setNewOpen(true)}><Plus />New project</Button>}
         </div>
 

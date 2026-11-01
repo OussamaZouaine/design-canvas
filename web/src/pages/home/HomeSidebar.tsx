@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Clock, MessageSquare, Moon, Plug, Sun, Trash2, Upload } from 'lucide-react';
+import { Clock, MessageSquare, Moon, Plug, Sun, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Connection } from '@/hooks/useLiveReload';
 import { ConnectionPill } from '@/ui/AppHeader';
@@ -13,8 +13,6 @@ interface Props {
   trashCount?: number;
   openComments: number;
   connection: Connection;
-  // Import needs the home page's hidden file input, so the row is left out where it is not passed.
-  onImport?: () => void;
   onConnect: () => void;
 }
 
@@ -46,7 +44,7 @@ function NavLink({ to, search, icon, active, count, children }: { to: '/' | '/co
 // Paper-style left rail shared by the home and Comments pages: workspace row, navigation, and a footer for the small
 // status controls. Sections are real links (Trash is /?trash=1), so they work from either page; search lives in each
 // page's sticky bar so it stays next to the list it filters.
-export function HomeSidebar({ section, liveCount, trashCount, openComments, connection, onImport, onConnect }: Props) {
+export function HomeSidebar({ section, liveCount, trashCount, openComments, connection, onConnect }: Props) {
   const { theme, toggleTheme } = useUi();
   return (
     <aside className="flex shrink-0 flex-col md:h-full md:w-60">
@@ -62,7 +60,6 @@ export function HomeSidebar({ section, liveCount, trashCount, openComments, conn
         <NavLink to="/" icon={<Clock />} active={section === 'recents'} count={<span className="tnum text-xs opacity-70">{liveCount || ''}</span>}>Recents</NavLink>
         <NavLink to="/" search={{ trash: 1 }} icon={<Trash2 />} active={section === 'trash'} count={<span className="tnum text-xs opacity-70">{trashCount || ''}</span>}>Trash</NavLink>
         <NavLink to="/comments" icon={<MessageSquare />} active={section === 'comments'} count={openComments > 0 && <span className="tnum rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-300">{openComments}</span>}>Comments</NavLink>
-        {onImport && <NavRow icon={<Upload />} title="Import a .dcproject.json file" onClick={onImport}>Import project</NavRow>}
         <NavRow icon={<Plug />} title="Connect Claude, Codex, Cursor and other agents" onClick={onConnect}>Connect agents</NavRow>
       </nav>
 
