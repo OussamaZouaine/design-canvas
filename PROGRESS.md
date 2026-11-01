@@ -53,8 +53,8 @@ connection pill + theme toggle in the footer) and a main area with a "Recents"/"
 grid/list toggle (remembered in localStorage `dc-home-view`). `ProjectCard` shows title + "Edited N ago" above the preview; `CoverThumb`
 takes `width`/`height`. `AppHeader` is still used by the Comments page. Not yet checked with real covers on a populated project.
 
-## Home hero + cards (2026-10-30)
-Sidebar kept. `HomePage` now opens with the mock's 64px Bricolage hero + subtitle + brand New project, then a "Recent projects" row (count, sort, view toggle) and a 2/3-column fluid grid. `ProjectCard` = raised 200px preview, title + "N boards, edited X ago" below, menu on hover; `CoverThumb` measures its width when none is given. Checked dark at ~800px only; not checked light, Trash or list view.
+## Home topbar + cards (2026-10-30, topbar 2026-11-01)
+Sidebar kept (search moved out of it). The hero was removed (user): `HomePage` opens with a sticky translucent topbar inside `main` (title + count, search, sort, view toggle, brand New project, hidden in Trash), then a 2/3-column fluid grid paged 12 at a time with a "Load more" button (page resets on search/sort/section change). "/" focuses search (Esc clears, then blurs). The topbar wraps to two rows by a container query on its own width (not a viewport breakpoint); below md the sidebar nav is one horizontal scrolling row. Checked at 375 / 768 / 1100 dark; light not checked. `ProjectCard` = raised 200px preview, title + "N boards, edited X ago" below, menu on hover; `CoverThumb` measures its width when none is given. Checked dark at ~800px only; not checked light, Trash or list view.
 
 ## UI round 2026-10-21 (merged into main, verified in the browser)
 - Home page restyled like Paper (`web/src/pages/home/HomeSidebar.tsx`, `ProjectCard.tsx`): sidebar, Recents grid, New project, grid/list toggle.
