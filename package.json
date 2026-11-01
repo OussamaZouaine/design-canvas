@@ -1,16 +1,21 @@
 {
   "name": "design-canvas",
+  "private": true,
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A local, Paper-like design canvas that AI agents drive over MCP",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OussamaZouaine/design-canvas.git"
+  },
+  "homepage": "https://github.com/OussamaZouaine/design-canvas#readme",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
     "start": "node src/server.mjs",
     "dev:web": "pnpm --dir web dev",
     "build:web": "pnpm --dir web build"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["mcp", "design-tool", "canvas", "claude", "ai-agents"],
+  "author": "Oussama Zouaine",
   "license": "MIT",
   "type": "module",
   "dependencies": {
