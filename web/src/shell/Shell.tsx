@@ -405,7 +405,8 @@ export function RightPanel({ projectId }: { projectId: string }) {
           </TabsList>
         </Tabs>
       </div>
-      <div className="flex-1 overflow-auto">
+      {/* Stable gutter: the content keeps one width whether or not this view scrolls (board vs node view used to shift). */}
+      <div className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         {panelView === 'history' && <HistoryView projectId={projectId} />}
         {panelView === 'styles' && <StylesView projectId={projectId} />}
         {!panelView && panelTab === 'design' && <InspectorPanel projectId={projectId} />}
