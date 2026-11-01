@@ -53,6 +53,7 @@ interface UiState {
   closeView: () => void;
   toggleLayers: () => void;
   togglePanel: () => void;
+  togglePanels: () => void;
   toggleTheme: () => void;
 }
 
@@ -88,6 +89,11 @@ export const useUi = create<UiState>((set, get) => ({
   closeView: () => set({ panelView: null }),
   toggleLayers: () => set((s) => ({ layersOpen: !s.layersOpen })),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
+  // One button for both side panels: any open -> close both, else open both (inspector only on narrow windows).
+  togglePanels: () => set((s) => {
+    if (s.layersOpen || s.panelOpen) return { layersOpen: false, panelOpen: false };
+    return { panelOpen: true, layersOpen: window.innerWidth >= 1024 };
+  }),
   toggleTheme: () => {
     const theme: Theme = get().theme === 'dark' ? 'light' : 'dark';
     applyTheme(theme);

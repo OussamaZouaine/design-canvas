@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PanelRight, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
+import { ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
@@ -166,13 +166,13 @@ export function LivePill() {
 // centre = who is working and the connection, right = view controls, the one primary action (Export), panel toggle.
 export function TopBar({ projectId: _projectId }: { projectId: string }) {
   const name = useProject((s) => s.meta?.name);
-  const { toggleLayers, togglePanel, layersOpen, panelOpen } = useUi();
+  const { togglePanels, layersOpen, panelOpen } = useUi();
   const engine = useCanvas((s) => s.engine);
   return (
     <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3">
       <div className="flex min-w-0 items-center gap-1">
         <MainMenu />
-        <Tip label="Pages and layers" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen} aria-label="Toggle pages and layers" onClick={toggleLayers}><PanelLeft /></Button></Tip>
+        <Tip label="Show / hide panels" side="bottom"><Button variant="ghost" size="icon" aria-pressed={layersOpen || panelOpen} aria-label="Toggle panels" onClick={togglePanels}><PanelLeft /></Button></Tip>
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1">
           <Link to="/" className="shrink-0 rounded-sm px-1 text-muted-foreground outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/90 pointer-hover:text-foreground">Projects</Link>
           <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground/60" />
@@ -188,7 +188,6 @@ export function TopBar({ projectId: _projectId }: { projectId: string }) {
         <ZoomControls />
         <FollowButton />
         <Tip label="Export" keys={`${modLabel()}${shiftLabel()}E`} side="bottom"><Button variant="brand" size="28" onClick={() => engine && openExport(engine)}>Export</Button></Tip>
-        <Tip label="Inspector" side="bottom"><Button variant="ghost" size="icon" aria-pressed={panelOpen} aria-label="Toggle inspector" onClick={togglePanel}><PanelRight /></Button></Tip>
       </div>
     </header>
   );
@@ -316,17 +315,17 @@ function AgentsTab({ projectId }: { projectId: string }) {
   );
 }
 
-// Figma-style: the first selection after nothing was selected opens the panels. Only the empty -> something edge
-// counts, so a panel the user closed by hand stays closed while they keep working on the same selection. Below
-// 1024px only the inspector opens (both would leave the canvas too narrow).
+// Figma-style: picking an element opens the panels (and shows the Design tab). Keyed on the selected ids, not just
+// on "something is selected", so closing the panels and then clicking another element opens them again.
+// Below 1024px only the inspector opens (both would leave the canvas too narrow).
 export function useAutoOpenPanels() {
-  const has = useCanvas((s) => s.selected.length > 0);
+  const key = useCanvas((s) => s.selected.join(','));
   useEffect(() => {
-    if (!has) return;
+    if (!key) return;
     const ui = useUi.getState();
-    if (!ui.panelOpen) ui.togglePanel();
+    ui.setPanelTab('design'); // also opens the inspector and leaves any History / Styles view
     if (window.innerWidth >= 1024 && !ui.layersOpen) ui.toggleLayers();
-  }, [has]);
+  }, [key]);
 }
 
 // Slides a side panel in and out with translate + opacity only. The slot reserves (or frees) the layout width at
