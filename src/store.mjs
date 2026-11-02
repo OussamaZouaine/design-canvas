@@ -81,6 +81,7 @@ export class ProjectStore {
     // Read live from meta so toggling the option takes effect without reloading the doc.
     doc.normalize = () => !!this.metas.get(id)?.normalize;
     doc.fonts = () => this.metas.get(id)?.fonts ?? [];
+    doc.onRemap = (map) => this.remapComments(id, map);
     doc.onChange((data) => {
       const meta = this.metas.get(id);
       if (!meta) return;
@@ -478,6 +479,15 @@ export class ProjectStore {
     this._list(id, 'comments').push(c);
     this._commentsChanged(id);
     return c;
+  }
+
+  // A board was rebuilt: move comments from the old node ids to their rebuilt twins (Map old -> new).
+  remapComments(id, map) {
+    let moved = false;
+    for (const c of this._list(id, 'comments')) {
+      if (map.has(c.targetId)) { c.targetId = map.get(c.targetId); moved = true; }
+    }
+    if (moved) this._commentsChanged(id);
   }
 
   _comment(id, commentId) {

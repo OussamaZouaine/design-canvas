@@ -152,8 +152,9 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   picks the browser, `DC_HEADLESS=0` disables it. Needs `pnpm build:web`. A hard kill of the server (taskkill /F) orphans the browser.
 - **Active project:** the browser claims it via POST `/activate` on load/visibility, not on SSE reconnect.
 - **Rebuilds keep artboard ids:** `Doc.createArtboard` reuses the id of a same-named board (same page) deleted in the last 10 min
-  (`Doc.deletedBoards`, in memory), so build scripts that delete + recreate keep board comments attached. Node ids inside still change,
-  so comments pinned to elements of a rebuilt board show as "element was deleted" on `/comments`.
+  (`Doc.deletedBoards`, in memory), so build scripts that delete + recreate keep board comments attached. Inner node ids still change:
+  `src/remap.mjs` (pure, `test/boardid.test.mjs`) pairs old and new nodes by tree position (`tag[index]` path) after each write into the
+  rebuilt board (`Doc._remapComments` -> `doc.onRemap` -> `ProjectStore.remapComments`). Position only: a reordered rebuild can mis-pair.
 - Static files are served `no-cache`, so a reload picks up UI edits. Restart the server for `src/` changes.
 
 ## Sprig design system project (`examples/sprig`)

@@ -78,7 +78,7 @@ README (2026-10-26): added "Connect your agent" (per-agent snippets copied from 
 Copy / cut / paste now work for frames as well as layers, across pages, projects and tabs (see CLAUDE.md "Clipboard"). Cut keeps ids so comments stay attached on a move within a project. Cross-project paste brings missing tokens, fonts and component masters. Context menu has Cut and Paste in place; hints show the Mac keys. Checked in the browser: frame copy to another project, cut to another page. Not done: reference images used by a pasted layer still point at the source project, no MCP tool for cross-project copy, comments do not move across projects, paste in place and the multi-tab sync were only unit-tested.
 
 ## Known issues / caveats
-- Rebuilding Sprig sheets keeps board ids (comments on boards survive), but node ids inside change, so comments on elements still orphan.
+- Rebuilt boards keep their id and element comments are re-pinned by tree position (`src/remap.mjs`); a rebuild that reorders content can mis-pair them.
 - One blank screenshot of a freshly built artboard was seen after live delta updates; a reload fixed it and it did not
   reproduce. If it recurs, suspect the client refill of `html: null` in the `doc` SSE handler (`public/app.js`) and the
   per-client `sent` map in `sendDoc` (`src/server.mjs`).

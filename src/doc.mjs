@@ -14,6 +14,7 @@ import { foundationsHtml } from './foundations.mjs';
 import { validateRows } from '../web/src/lib/exportspec.ts';
 import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSheetHtml } from './components.mjs';
 import { freeSpot, pushBelow } from './placement.mjs';
+import { nodePaths, matchNodes } from './remap.mjs';
 
 const REUSE_MS = 10 * 60 * 1000; // how long a deleted board's id stays claimable by a same-named new board
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
@@ -30,6 +31,10 @@ export class Doc {
     // In-memory only: boards deleted in the last REUSE_MS, keyed by `page|name` -> { id, at }. A rebuild script
     // deletes a board and recreates it by name; createArtboard hands the old id back so comments stay attached.
     this.deletedBoards = new Map();
+    // In-memory only: a reused board id -> { paths, at }, the old nodes still waiting for their rebuilt twin.
+    this.pendingRemap = new Map();
+    // Set by the store: called with Map(oldNodeId -> newNodeId) so it can move comments to the rebuilt nodes.
+    this.onRemap = () => {};
     this.listeners = new Set();
     // Set by the store: returns true when this project normalizes HTML on write (see normalize.mjs).
     this.normalize = () => false;
@@ -706,7 +711,8 @@ export class Doc {
     this._checkpoint('create_artboard');
     const spot = freeSpot(this.data.artboards.filter((a) => this.pageOf(a) === page), { x, y: y ?? 0, width, height });
     // Reuse the id of a same-named board deleted moments ago (a rebuild) so its pinned comments do not orphan.
-    // Skipped when that id is live again (e.g. the delete was undone). Node ids inside still change.
+    // Skipped when that id is live again (e.g. the delete was undone). Inner node ids do change, so the old
+    // node positions are parked in pendingRemap and _remapComments pairs them with the rebuilt nodes on write.
     const key = `${page}|${name}`;
     const gone = this.deletedBoards.get(key);
     this.deletedBoards.delete(key);
@@ -723,6 +729,7 @@ export class Doc {
       ...(this.data.pages?.length ? { page } : {}), // projects that never added a page keep boards field-free
     };
     this.data.artboards.push(ab);
+    if (reuse && gone.paths.length) this.pendingRemap.set(reuse, { paths: gone.paths, at: gone.at });
     this._commit();
     // Not stored on the board (kept off `ab` so it never reaches doc.json): returned beside it for the caller.
     return x != null && spot.x !== x ? Object.defineProperty(ab, 'placed', { value: { asked: { x, y: y ?? 0 } }, enumerable: false }) : ab;
@@ -744,6 +751,7 @@ export class Doc {
       const out = prepared.toString();
       ab.html = mode === 'replace' ? out : mode === 'prepend' ? out + ab.html : ab.html + out;
       this._commit();
+      this._remapComments(ab);
       return this._topLevelIds(prepared);
     }
     let hit = this._find(targetId);
@@ -763,7 +771,22 @@ export class Doc {
     }
     this._save(hit.ab, hit.root);
     this._commit();
+    this._remapComments(hit.ab);
     return this._topLevelIds(prepared);
+  }
+
+  // After a write into a rebuilt board: pair its old nodes with the new ones at the same tree position and tell
+  // the store, which moves their comments. Runs on every write until the entry expires, so a board built in
+  // several write_html calls keeps picking up the nodes that arrive later; matched old nodes are dropped.
+  _remapComments(ab) {
+    const p = this.pendingRemap.get(ab.id);
+    if (!p) return;
+    if (Date.now() - p.at > REUSE_MS) return void this.pendingRemap.delete(ab.id);
+    const map = matchNodes(p.paths, ab.html);
+    if (!map.size) return;
+    p.paths = p.paths.filter((o) => !map.has(o.id));
+    if (!p.paths.length) this.pendingRemap.delete(ab.id);
+    this.onRemap(map);
   }
 
   // ---- Paste (clipboard) -----------------------------------------------------
@@ -950,7 +973,7 @@ export class Doc {
       const ab = this.getArtboard(id);
       if (ab) {
         this.data.artboards = this.data.artboards.filter((a) => a.id !== id);
-        this.deletedBoards.set(`${this.pageOf(ab)}|${ab.name}`, { id, at: Date.now() });
+        this.deletedBoards.set(`${this.pageOf(ab)}|${ab.name}`, { id, at: Date.now(), paths: nodePaths(ab.html) });
         continue;
       }
       const hit = this._find(id);
