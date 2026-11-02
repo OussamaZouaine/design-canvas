@@ -17,6 +17,7 @@ import { freeSpot, pushBelow } from './placement.mjs';
 
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
+const REUSE_MS = 10 * 60 * 1000; // how long a deleted board's id stays claimable by a same-named new board
 const MAX_BOARD_HEIGHT = 20000; // a runaway `fit` board must not grow without bound
 const FORBIDDEN_TAGS =['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form'];
 
@@ -26,6 +27,9 @@ export class Doc {
   constructor(file) {
     this.file = file;
     this.data = { counter: 0, artboards: [] };
+    // In-memory only: boards deleted in the last REUSE_MS, keyed by `page|name` -> { id, at }. A rebuild script
+    // deletes a board and recreates it by name; createArtboard hands the old id back so comments stay attached.
+    this.deletedBoards = new Map();
     this.listeners = new Set();
     // Set by the store: returns true when this project normalizes HTML on write (see normalize.mjs).
     this.normalize = () => false;
@@ -701,8 +705,14 @@ export class Doc {
     const page = this._pageId(pageArg); // validate before the undo checkpoint so a bad page leaves no entry
     this._checkpoint('create_artboard');
     const spot = freeSpot(this.data.artboards.filter((a) => this.pageOf(a) === page), { x, y: y ?? 0, width, height });
+    // Reuse the id of a same-named board deleted moments ago (a rebuild) so its pinned comments do not orphan.
+    // Skipped when that id is live again (e.g. the delete was undone). Node ids inside still change.
+    const key = `${page}|${name}`;
+    const gone = this.deletedBoards.get(key);
+    this.deletedBoards.delete(key);
+    const reuse = gone && Date.now() - gone.at < REUSE_MS && !this.getArtboard(gone.id) ? gone.id : null;
     const ab = {
-      id: this._newId('A'),
+      id: reuse ?? this._newId('A'),
       name,
       x: spot.x,
       y: spot.y,
@@ -940,6 +950,7 @@ export class Doc {
       const ab = this.getArtboard(id);
       if (ab) {
         this.data.artboards = this.data.artboards.filter((a) => a.id !== id);
+        this.deletedBoards.set(`${this.pageOf(ab)}|${ab.name}`, { id, at: Date.now() });
         continue;
       }
       const hit = this._find(id);

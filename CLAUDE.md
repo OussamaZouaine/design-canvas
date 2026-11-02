@@ -151,8 +151,9 @@ The sanitizer strips `<link>`/`<style>`, boards are shadow roots (which ignore `
   ordinary SSE client flagged `headless` (it never claims the active project, and real tabs win in `askBrowser`). `DC_BROWSER=<exe>`
   picks the browser, `DC_HEADLESS=0` disables it. Needs `pnpm build:web`. A hard kill of the server (taskkill /F) orphans the browser.
 - **Active project:** the browser claims it via POST `/activate` on load/visibility, not on SSE reconnect.
-- **Artboard ids change when artboards are deleted and recreated** (build scripts do this). Comments pinned to the old
-  ids become orphaned (shown as "replaced or deleted" on `/comments`).
+- **Rebuilds keep artboard ids:** `Doc.createArtboard` reuses the id of a same-named board (same page) deleted in the last 10 min
+  (`Doc.deletedBoards`, in memory), so build scripts that delete + recreate keep board comments attached. Node ids inside still change,
+  so comments pinned to elements of a rebuilt board show as "element was deleted" on `/comments`.
 - Static files are served `no-cache`, so a reload picks up UI edits. Restart the server for `src/` changes.
 
 ## Sprig design system project (`examples/sprig`)
