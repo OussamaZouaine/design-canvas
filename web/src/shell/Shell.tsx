@@ -3,7 +3,7 @@ import { projectAction } from '@/api/projects';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from '@/store/toast';
-import { ArrowLeft, GitCommitHorizontal, Shapes, ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
+import { ArrowLeft, GitCommitHorizontal, Shapes, ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Map as MapIcon, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
@@ -100,7 +100,7 @@ function FollowButton({ labelled = false }: { labelled?: boolean }) {
 // Main menu = the project name's dropdown: everything used rarely lives here.
 // (There is no Settings screen yet, so the menu has no Settings item.)
 function MainMenu() {
-  const { theme, rulers } = useUi();
+  const { theme, rulers, minimap } = useUi();
   const name = useProject((s) => s.meta?.name);
   const actions = useActions();
   const setTheme = (t: string) => { if (t !== useUi.getState().theme) useUi.getState().toggleTheme(); };
@@ -110,6 +110,7 @@ function MainMenu() {
     <DropdownMenuItem onClick={a.run}>{icon}{a.label}{a.keys && <DropdownMenuShortcut>{formatKeys(a.keys[0], isMac)}</DropdownMenuShortcut>}</DropdownMenuItem>
   ); };
   const rulersAction = act('view.rulers');
+  const minimapAction = act('view.minimap');
   return (
     <DropdownMenu>
       {/* React escapes text, so untrusted project names are safe here. */}
@@ -121,6 +122,7 @@ function MainMenu() {
         {item('panel.history', <History />)}
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem checked={rulers} onCheckedChange={rulersAction.run}><Ruler />{rulersAction.label}<DropdownMenuShortcut>{formatKeys(rulersAction.keys![0], isMac)}</DropdownMenuShortcut></DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem checked={minimap} onCheckedChange={minimapAction.run}><MapIcon />{minimapAction.label}<DropdownMenuShortcut>{formatKeys(minimapAction.keys![0], isMac)}</DropdownMenuShortcut></DropdownMenuCheckboxItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger><Moon />Theme</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
@@ -318,6 +320,7 @@ export function FloatingToolbar({ projectId }: { projectId: string }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       if (e.shiftKey && e.key.toLowerCase() === 'r') { useUi.getState().toggleRulers(); return; }
+      if (e.shiftKey && e.key.toLowerCase() === 'm') { useUi.getState().toggleMinimap(); return; }
       // Shift+1 = fit all (Figma's key). Matched on `code`, not `key`: Shift+1 types "!" on QWERTY and "1" on AZERTY.
       if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); engine?.fit(); return; }
       if (e.shiftKey && e.code === 'Digit2') { e.preventDefault(); engine?.zoomToSelection(); return; }

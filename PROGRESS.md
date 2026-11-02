@@ -182,8 +182,9 @@ Order is a suggestion; the user decides.
     margins + a 24 screen-px label row, and a ResizeObserver refits while the camera is still the fitted one (`fitted`, cleared in
     `applyView`). Space left on one axis is just aspect ratio (wide rows in a tall viewport).
     (e) `applyView` reports the zoom synchronously (`reportedK`), not only in the rAF. The DOM readout was already right in tests; the
-    built-in browser pane's screenshots can show a stale frame, which likely caused the report. Feature ideas: right-click "Ask agent about this", minimap, read-only share link,
+    built-in browser pane's screenshots can show a stale frame, which likely caused the report. Feature ideas: right-click "Ask agent about this", read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
+    DONE: minimap (Shift+M, main menu, palette; `shell/Minimap.tsx` + pure `canvas/minimap.ts`, bottom-right above the status dock, click/drag pans, remembered in `dc-minimap`).
 15. **Brand identity generation (idea, 2026-10-31, not started; user wants a full, professional identity like an agency delivers, not just a logo):**
     an agent builds a brand on its own page, in agency order: 0 strategy board (audience, positioning, 3-5 values, personality, voice and tone with
     do/don't lines), 1 mood board (inspiration), 2 logo directions (3-4 side by side with the reasoning for each, then the chosen one), 3 logo system

@@ -46,7 +46,7 @@ export interface ActionCtx {
     duplicate: () => void; copy: () => void; cut: () => void; paste: (inPlace: boolean) => void; remove: () => void;
     group: () => void; ungroup: () => void; autoLayout: () => void;
     zoomIn: () => void; zoomOut: () => void; fit: () => void; zoomToSelection: () => void;
-    toggleFollow: () => void; toggleRulers: () => void; toggleTheme: () => void;
+    toggleFollow: () => void; toggleRulers: () => void; toggleMinimap: () => void; toggleTheme: () => void;
     toggleLayers: () => void; togglePanel: () => void;
     tab: (id: 'design' | 'comment' | 'agents') => void;
     view: (id: 'history' | 'styles') => void;
@@ -81,6 +81,7 @@ export function buildActions(c: ActionCtx): Action[] {
     { id: 'view.zoomSelection', label: 'Zoom to selection', group: 'View', keys: ['shift+2'], keywords: ['focus', 'frame'], run: c.do.zoomToSelection, enabled: c.has.selection },
     { id: 'view.follow', label: 'Follow Claude\'s camera', group: 'View', keywords: ['agent'], run: c.do.toggleFollow },
     { id: 'view.rulers', label: 'Rulers', group: 'View', keys: ['shift+r'], run: c.do.toggleRulers },
+    { id: 'view.minimap', label: 'Minimap', group: 'View', keys: ['shift+m'], keywords: ['overview', 'map'], run: c.do.toggleMinimap },
     { id: 'view.theme', label: 'Toggle light or dark theme', group: 'View', keywords: ['dark', 'light', 'appearance'], run: c.do.toggleTheme },
 
     { id: 'panel.layers', label: 'Toggle pages and layers', group: 'Panels', run: c.do.toggleLayers },

@@ -37,6 +37,7 @@ interface UiState {
   panelOpen: boolean;
   theme: Theme;
   rulers: boolean;
+  minimap: boolean;
   shortcutsOpen: boolean;
   connectOpen: boolean;
   // Page awaiting delete confirmation (shared so the panel, context menu and palette open the same dialog).
@@ -47,6 +48,7 @@ interface UiState {
   setConnectOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
   toggleRulers: () => void;
+  toggleMinimap: () => void;
   setTool: (t: Tool) => void;
   setPanelTab: (t: PanelTab) => void;
   openView: (v: Exclude<PanelView, null>) => void;
@@ -69,6 +71,7 @@ export const useUi = create<UiState>((set, get) => ({
   panelOpen: window.innerWidth >= 1024,
   theme: initialTheme,
   rulers: read('dc-rulers') === '1',
+  minimap: read('dc-minimap') === '1',
   shortcutsOpen: false,
   connectOpen: false,
   deletePageId: null,
@@ -81,6 +84,11 @@ export const useUi = create<UiState>((set, get) => ({
     const rulers = !get().rulers;
     write('dc-rulers', rulers ? '1' : '0');
     set({ rulers });
+  },
+  toggleMinimap: () => {
+    const minimap = !get().minimap;
+    write('dc-minimap', minimap ? '1' : '0');
+    set({ minimap });
   },
   setTool: (tool) => set({ tool }),
   // Picking a tab always leaves any secondary view, so a tab click never looks ignored.

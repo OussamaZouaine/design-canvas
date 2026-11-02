@@ -47,7 +47,7 @@ export function useActions(): Action[] {
         group: () => engine?.group('group'), ungroup: () => engine?.ungroup(), autoLayout: () => engine?.group('auto'),
         zoomIn: () => engine?.zoomBy(ZOOM_STEP), zoomOut: () => engine?.zoomBy(1 / ZOOM_STEP), fit: () => engine?.fit(), zoomToSelection: () => engine?.zoomToSelection(),
         toggleFollow: () => { const c = useCanvas.getState(); c.setFollow(!c.follow); engine?.setFollow(!c.follow); },
-        toggleRulers: () => ui().toggleRulers(), toggleTheme: () => ui().toggleTheme(),
+        toggleRulers: () => ui().toggleRulers(), toggleMinimap: () => ui().toggleMinimap(),toggleTheme: () => ui().toggleTheme(),
         toggleLayers: () => ui().toggleLayers(), togglePanel: () => ui().togglePanel(),
         tab: (id) => ui().setPanelTab(id), view: (id) => ui().openView(id),
         openExport: () => engine && openExport(engine), copyPng: () => engine && void copyAsPng(engine),

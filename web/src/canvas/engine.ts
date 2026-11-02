@@ -18,6 +18,7 @@ import { enterTarget, intersects, normalize, pickBoardFirst, pickDeep, pickInCha
 import { fontsSignature, setProjectFonts } from './fonts';
 import { BOARD_CSS, boardRoot, boardRootStyle } from './contract';
 import type { ReplyHost } from './replies';
+import { centerCamera } from './minimap';
 
 // ---- Tunables (see "Level of detail" below) -------------------------------------------
 const LIVE_K = 0.3;          // below this zoom a board is drawn from its snapshot
@@ -508,6 +509,18 @@ export class CanvasEngine {
 
   // Read-only copy of the camera (screen = world * k + x/y). The rulers use it; they must not mutate the engine's own object.
   getView() { return { ...this.view }; }
+
+  // Minimap feed: this page's board rectangles (world units) and the viewport size in screen px. Straight from the
+  // doc data, so nothing is measured in the DOM.
+  getMinimapData() {
+    return { boards: this.boardsHere().map((a) => ({ x: a.x, y: a.y, w: a.width, h: a.height })), vw: this.viewport.clientWidth, vh: this.viewport.clientHeight };
+  }
+
+  // Minimap click/drag: put a world point in the middle of the viewport, zoom unchanged. Instant (no glide), it runs per pointer move.
+  centerOn(wx: number, wy: number) {
+    Object.assign(this.view, centerCamera(wx, wy, this.view.k, this.viewport.clientWidth, this.viewport.clientHeight));
+    this.applyView();
+  }
 
   // Zoom/pan so every artboard on the page is visible.
   fit() {

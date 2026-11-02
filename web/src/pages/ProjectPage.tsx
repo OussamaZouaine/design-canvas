@@ -10,6 +10,7 @@ import { ConnectAgentsDialog } from '@/shell/ConnectAgentsDialog';
 import { CommandPalette } from '@/shell/CommandPalette';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { Rulers } from '@/shell/Rulers';
+import { Minimap } from '@/shell/Minimap';
 import { FloatingPills, FloatingToolbar, LeftPanel, LivePill, RightPanel, StatusDock, useAutoOpenPanels } from '@/shell/Shell';
 import { useCanvas } from '@/store/canvas';
 import { useProject } from '@/store/project';
@@ -71,6 +72,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <LivePill />
           <FloatingPills />
           <StatusDock />
+          <Minimap />
           <FloatingToolbar projectId={projectId} />
           <CanvasContextMenu />
           <ShortcutsDialog />
