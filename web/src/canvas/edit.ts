@@ -935,4 +935,22 @@ export class CanvasEditor {
       }
     } catch (err) { fail(err, 'Could not add text'); }
   }
+
+  // Toolbar "Component": the server's writeHtml expands an <x-component> tag into the master's markup (the same
+  // path the insert_component MCP tool uses), so this is one paste action. Text leaves cannot hold children, so
+  // the instance goes after them, like addText.
+  async insertComponent(name: string, targetId: string) {
+    const { host } = this;
+    const el = targetId.startsWith('A') ? null : host.findElement(targetId);
+    const leaf = !!el && !el.children.length && !!el.textContent?.trim();
+    host.markUserEdit();
+    try {
+      const attr = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      const r = await canvasAction(host.projectId, 'paste', {
+        html: `<x-component name="${attr}"></x-component>`, target: targetId, position: leaf ? 'after' : 'append',
+      });
+      const id = (r.result as { ids?: string[] } | undefined)?.ids?.[0];
+      if (id) host.select([id]);
+    } catch (err) { fail(err, 'Could not insert the component'); }
+  }
 }

@@ -288,6 +288,13 @@ export class CanvasEngine {
   paste(inPlace = false) { this.editor.pasteNode(inPlace); }
   get canPaste() { return this.editor.canPaste; }
   addImageFile(file: File) { return this.editor.addReferenceFile(file); }
+  // Insert a component instance into the selected node, else the first board of the current page.
+  insertComponent(name: string) {
+    const target = this.selected.at(-1)
+      ?? this.doc?.artboards.find((a) => this.inPage(a) && !a.generated)?.id;
+    if (!target) { toast('Create a frame first'); return; }
+    return this.editor.insertComponent(name, target);
+  }
   selectNode(id: string | null) { this.select(id ? [id] : []); }
   selectIds(ids: string[]) { this.select(ids); }
   parentOf(id: string) {

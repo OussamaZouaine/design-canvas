@@ -1,5 +1,9 @@
 import { Link } from '@tanstack/react-router';
-import { ArrowLeft, ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
+import { projectAction } from '@/api/projects';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from '@/store/toast';
+import { ArrowLeft, GitCommitHorizontal, Shapes, ChevronDown, ChevronRight, Circle, Crosshair, FolderOpen, Frame, Hand, History, Image, Keyboard, Maximize, MessageSquare, Minus, MousePointer2, Moon, PanelLeft, PenTool, Plug, Plus, Ruler, Search, Slash, Square, Type } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
@@ -253,10 +257,53 @@ function SplitSlot({ group, label, tool, pick }: { group: Tool[]; label: string;
   );
 }
 
+// Toolbar "Component": lists the project's masters; picking one drops an instance into the selection (or the first
+// board). Masters live in doc.components, which the doc event already carries.
+function ComponentSlot() {
+  const engine = useCanvas((s) => s.engine);
+  const names = Object.keys((useProject((s) => s.doc)?.components as Record<string, unknown> | undefined) ?? {});
+  return (
+    <DropdownMenu>
+      <Tip label="Insert component">
+        <DropdownMenuTrigger render={<button type="button" aria-label="Insert component" className={cn(slotClass(false), 'w-8')} />}><Shapes /></DropdownMenuTrigger>
+      </Tip>
+      <DropdownMenuContent side="top" align="center" sideOffset={10} className="max-h-72 w-48">
+        {names.length ? names.map((n) => <DropdownMenuItem key={n} onClick={() => void engine?.insertComponent(n)}>{n}</DropdownMenuItem>)
+          : <DropdownMenuItem disabled>No components yet</DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// Toolbar "Commit version": a named snapshot (the same server action as Save version in History, but with your label).
+function CommitVersion({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState('');
+  const save = async () => {
+    try {
+      await projectAction(projectId, 'snapshot', { label: label.trim() || 'Saved version' });
+      toast('Version saved');
+      setLabel(''); setOpen(false);
+    } catch (e) { toast((e as Error).message || 'Could not save a version'); }
+  };
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tip label="Commit version">
+        <PopoverTrigger render={<button type="button" aria-label="Commit version" className={cn(slotClass(open), 'w-8')} />}><GitCommitHorizontal /></PopoverTrigger>
+      </Tip>
+      <PopoverContent side="top" sideOffset={10} className="w-64 gap-2">
+        <Input autoFocus value={label} maxLength={80} placeholder="Version name" aria-label="Version name"
+          onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void save(); }} />
+        <Button size="sm" onClick={() => void save()}>Save version</Button>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Bottom-centre floating toolbar, six slots: Move/Hand, Frame, Shapes, Text, Image, Comment. Frame (drag a rectangle),
 // Text (click an element), Hand (drag to pan) and Comment are modes the canvas engine reads; Image opens a file
 // picker (the picture becomes a reference board).
-export function FloatingToolbar() {
+export function FloatingToolbar({ projectId }: { projectId: string }) {
   const { tool, setTool } = useUi();
   const fileInput = useRef<HTMLInputElement>(null);
   const engine = useCanvas((s) => s.engine);
@@ -303,8 +350,10 @@ export function FloatingToolbar() {
       {sep}
       {single('text')}
       {single('image')}
+      <ComponentSlot />
       {sep}
       {single('comment')}
+      <CommitVersion projectId={projectId} />
     </div>
   );
 }

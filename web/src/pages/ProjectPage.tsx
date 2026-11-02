@@ -71,7 +71,7 @@ export function ProjectPage({ projectId }: { projectId: string }) {
           <LivePill />
           <FloatingPills />
           <StatusDock />
-          <FloatingToolbar />
+          <FloatingToolbar projectId={projectId} />
           <CanvasContextMenu />
           <ShortcutsDialog />
           <CommandPalette />
