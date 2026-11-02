@@ -139,8 +139,9 @@ Order is a suggestion; the user decides.
 6. **Ideas from the Paper desktop analysis (2026-10-22, local `docs/PAPER-QUALITY-PLAN.md` 1.1b):** DONE 2026-10-22: headless render worker
    (`src/headless.mjs`, see CLAUDE.md "Browser round-trips"), `capture_url`, `find_nodes`, `get_jsx`, `export` (PNG) and
    `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
-   reword on the next schema change. PDF export is done (raster, branch `feat/export`, see 13). Still open: per-MCP-session project binding + agent identity/presence;
-   make `askBrowser` handlers work in hidden tabs.
+   reword on the next schema change. PDF export is done (raster, branch `feat/export`, see 13). Hidden tabs checked 2026-11-02: screenshot, node crop, export, computed styles and check_layout all answer while rAF is stalled
+   (the reply handlers in `web/src/canvas/replies.ts` use no rAF/idle waits), so nothing to fix.
+   Still open: per-MCP-session project binding + agent identity/presence.
 7. **MCP token/turn optimization (A, B and C done 2026-10-24, in main):** plan and numbers in
    `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
    `tokens`, `history`, `export_code` (get_tree_summary dropped); 64 -> 46 tools, tools/list 9.41k -> 8.40k tokens. **Restart Claude Code to see the new tools.**
