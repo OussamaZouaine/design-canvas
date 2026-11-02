@@ -131,8 +131,8 @@ Order is a suggestion; the user decides.
    React 19 + React Compiler + Vite, Figma/Paper-like UI, canvas stays imperative, server unchanged). Do this before items 4-6. Phases 0-8 done (cut-over 2026-10-21: web/dist served at /, public/ deleted; Phase 7 leftovers rulers, Layers menu and profiler pass done 2026-10-21, see its log). Zoomed-out selection/hover via a rect index done 2026-10-21 (`web/src/canvas/rects.ts`, see the REACT-REWRITE log); follow-up: make context menu / comment mode use it too.
 3. **Desktop app (later)**: the Go/Wails path from the plan only makes sense if the server is rewritten in Go. Otherwise wrap the
    Node server (Electron or Tauri, or Wails with a Node sidecar). Open question for the user: is the Go rewrite itself a goal?
-4. **Roadmap leftovers** (`docs/ROADMAP.md`): insert toolbar (frame/text/image/component), canvas drag-reorder inside flex parents,
-   image upload to `assets/`, per-side padding + colour picker, extra shortcuts, "commit version" button, 50+ board performance.
+4. **Roadmap leftovers** (`docs/ROADMAP.md`): canvas drag-reorder inside flex parents, image upload to `assets/`, extra shortcuts, 50+ board performance.
+   Insert toolbar + "commit version" DONE: Frame/Text/Image already existed; added the Component menu (`ComponentSlot` in Shell.tsx -> `engine.insertComponent` -> `paste` action with `<x-component>`) and the named Commit version popover (`CommitVersion`, `snapshot` action). Not yet exercised live with a real component (Sprig has none); no palette action for either.
    `capture_url` is done (2026-10-22, `src/capture.mjs`; known gaps: table colspan/rowspan, web fonts, rgb colours, no oklch conversion).
 5. **Verification debts**: real Ctrl+V of a copied layer (automation does not fire paste events; logic tested via a dispatched
    paste event); look at all 46 Sprig boards after the contrast/size fixes (only Studies was viewed); Sprig lint `grid: 2` leftovers.
@@ -141,7 +141,7 @@ Order is a suggestion; the user decides.
    `scripts/setup-mcp.mjs` + stdio shim (restart Claude Code to see the new tools). MCP tool descriptions still say "needs a browser tab":
    reword on the next schema change. PDF export is done (raster, branch `feat/export`, see 13). Still open: per-MCP-session project binding + agent identity/presence;
    make `askBrowser` handlers work in hidden tabs.
-7. **MCP token/turn optimization (branch `perf/mcp-tokens`, A, B and C done 2026-10-24, not merged to main):** plan and numbers in
+7. **MCP token/turn optimization (A, B and C done 2026-10-24, in main):** plan and numbers in
    `docs/notes/mcp-token-optimization.md`. Group C merged low-traffic tools into action-enum tools: `pages`, `components`, `references`, `project`,
    `tokens`, `history`, `export_code` (get_tree_summary dropped); 64 -> 46 tools, tools/list 9.41k -> 8.40k tokens. **Restart Claude Code to see the new tools.**
    Open: run the evals (`examples/evals`) A/B on the branch before merging; D and E ideas in the plan.
@@ -168,7 +168,7 @@ Order is a suggestion; the user decides.
 12. **Element manipulation (Figma/Paper-style): DONE, all 5 phases (selection model; drag reorder / reparent `Doc.moveNodes`; snapping / guides / nudge `snap.ts`; Design tab `panels/inspector/*`; group / ungroup / add auto layout `Doc.wrapNodes`, `structure.ts`, drag hints, shortcuts dialog, fit regrow) 2026-10-25/26:** `docs/notes/element-manipulation-plan.md`. Phases, one session each:
     1 selection model (multi-select, context scoping, marquee, keyboard nav), 2 drag reorder/reparent in flow (`moveNodes`), 3 snapping + smart guides + nudge + better resize,
     4 Design tab redesign (Fixed/Hug/Fill, 3x3 align grid, scrub fields, Mixed values, OKLCH picker), 5 group/ungroup + polish. Nothing left except the "not exercised" notes in the plan (real mouse drags, touch, cross-board drags).
-13. **Export (branch `feat/export`, 2026-10-29, not merged):** Figma-style Export section in the Design tab (one setting per item: scale + format, suffix, JPG/PDF quality, Preview; no add/remove rows), "Export…" and "Copy as PNG" in the context menu, Ctrl+Shift+E, page view exports all frames, saved rows per node, zip for several files, MCP `export` takes `format` png|jpg|svg|pdf and uses saved rows. Browser-tested on a scratch server (all four formats, zip, reload keeps rows). Not done: vector PDF (Chrome print-to-PDF), WebP, multi-select UI test, real download-folder check (blobs inspected in page JS).
+13. **Export (2026-10-29, merged into main):** Figma-style Export section in the Design tab (one setting per item: scale + format, suffix, JPG/PDF quality, Preview; no add/remove rows), "Export…" and "Copy as PNG" in the context menu, Ctrl+Shift+E, page view exports all frames, saved rows per node, zip for several files, MCP `export` takes `format` png|jpg|svg|pdf and uses saved rows. Browser-tested on a scratch server (all four formats, zip, reload keeps rows). Not done: vector PDF (Chrome print-to-PDF), WebP, multi-select UI test, real download-folder check (blobs inspected in page JS).
 14. **User-test pass (2026-10-31), annoyances found by using the app:** FIXED: board names unreadable when zoomed out (labels counter-scaled via `--k`),
     no zoom to selection (Shift+2) and dead +/- keys / tiny 1.25x zoom step (`ZOOM_STEP = 2`); copy now puts only ids on the system clipboard;
     (a) below `LIVE_K` a plain click (and drag) picks the whole board (`pickBoardFirst` in `selection.ts`) until something on that board is selected;
@@ -200,6 +200,12 @@ Order is a suggestion; the user decides.
     once into the project (magic-number check like `src/images.mjs`) and served locally, because the SVG rasterizer cannot load http images.
     Store creator, source URL and licence with each image; default filter to commercial-safe licences (CC0, public domain, CC BY, CC BY-SA; never
     NC/ND for brand work), and the guidelines page lists credits for CC BY images. Later: a logo lint check (tiny-size legibility, colour count).
+16. **Import from Paper and Figma (idea, 2026-11-02, parked by the user as too much work for now):** today Import takes only `.dcproject.json`
+    (`web/src/pages/HomePage.tsx` `onImport`). Paper (~2-4 h): no downloadable file; a `get_guide` recipe where an agent reads boards through the
+    Paper MCP (`get_jsx`, `get_computed_styles`, `get_fill_image`) and writes them with `write_html` (both are HTML, near lossless). Figma: best is the
+    REST API with a personal access token (~3-5 days, +1-2 for components): server converts the node tree to HTML (auto layout -> flex, vectors as SVG
+    via the images endpoint), token stored locally only. Cheap fallback: Figma MCP + a guide recipe (~half day, lower fidelity). Skip `.fig` upload
+    (closed undocumented binary, fragile).
 
 ## How to resume in a new session
 0. Testing tip: run a scratch server with `PORT=3790 node src/server.mjs` (the user's own server may be on 3777), create a throwaway
