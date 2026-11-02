@@ -28,6 +28,8 @@ function ticks(offset: number, k: number, len: number) {
 // Top and left rulers (Shift+R). Pure overlay, redrawn when the view settles (`viewTick`), so it costs
 // nothing during a pan/zoom burst and never touches the engine's hot path. Shows design px, not screen px.
 export function Rulers() {
+  // Opt out of React Compiler: it reads engine.getView() and only subscribes to viewTick, so the compiler would memoize the read and freeze the ticks.
+  'use no memo';
   const on = useUi((s) => s.rulers);
   const engine = useCanvas((s) => s.engine);
   useCanvas((s) => s.viewTick); // subscribe so the ticks follow the camera
