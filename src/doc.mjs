@@ -15,9 +15,9 @@ import { validateRows } from '../web/src/lib/exportspec.ts';
 import { checkName, checkMaster, expand, readSlots, defaultVariant, componentsSheetHtml } from './components.mjs';
 import { freeSpot, pushBelow } from './placement.mjs';
 
+const REUSE_MS = 10 * 60 * 1000; // how long a deleted board's id stays claimable by a same-named new board
 // Tags that could run code or pull in outside pages. The HTML comes from an AI
 // and is rendered in the user's own browser, so we strip these on every write.
-const REUSE_MS = 10 * 60 * 1000; // how long a deleted board's id stays claimable by a same-named new board
 const MAX_BOARD_HEIGHT = 20000; // a runaway `fit` board must not grow without bound
 const FORBIDDEN_TAGS =['script', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form'];
 
