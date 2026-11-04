@@ -410,7 +410,7 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
 
   // ---- projects ----------------------------------------------------------
   server.registerTool('get_guide', {
-    description: 'Read this first, once. No topic = the whole method in one call (workflow, brief, type, layout, review). Single topics (brief, type, layout, review) re-read one part; mobile (status bar, safe areas) is only available as its own topic.',
+    description: 'Read this first, once. No topic = the whole method in one call (workflow, brief, type, layout, review). Single topics (brief, type, layout, review) re-read one part; mobile (status bar, safe areas), svg (vectors) and brand (a full brand identity, agency order) are only available as their own topics.',
     inputSchema: { topic: z.enum(Object.keys(TOPICS)).optional() },
   }, safe(({ topic }) => text(guideText(topic))));
 

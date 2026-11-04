@@ -29,6 +29,18 @@ test('guide points at reply_comment with resolve instead of two calls', () => {
   assert.match(TOPICS.start, /reply_comment with resolve: true/);
 });
 
+// The brand topic may only name tools that exist, and keeps its quality bar and agency order.
+test('brand topic names real tools and keeps the agency order', async () => {
+  const { readFileSync } = await import('node:fs');
+  const mcp = readFileSync(new URL('../src/mcp.mjs', import.meta.url), 'utf8');
+  for (const tool of ['set_tokens', 'components', 'insert_component', 'references', 'capture_url', 'export', 'pages', 'memory', 'use_font', 'more_tools']) {
+    assert.ok(mcp.includes(`'${tool}'`), `${tool} is not a registered tool`);
+    assert.ok(TOPICS.brand.includes(tool), `brand topic should mention ${tool}`);
+  }
+  for (const step of ['0 Strategy', '1 Mood', '3f Misuse', '6 Guidelines']) assert.ok(TOPICS.brand.includes(step), step);
+  assert.match(TOPICS.brand, /Never use an icon from the assets tool as the mark/);
+});
+
 // The taste doctrine must stay in the guide: scene-derived colour, named cliches, hero checkpoint.
 test('guide carries the colour method, cliche list and hero checkpoint', () => {
   assert.match(TOPICS.brief, /derive EVERY colour/);

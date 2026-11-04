@@ -12,7 +12,7 @@ The whole method (workflow, brief, type, layout, review, hard rules) lives in th
 and it is tested. This skill deliberately does not repeat it:
 
 1. In your first turn call `get_guide()` and `start({prompt, project, ...})` together, then follow the guide. `get_guide({topic: "mobile"})`
-   is the only separate topic (phone screens).
+   (phone screens) and `get_guide({topic: "brand"})` (a full brand identity / logo system) are the separate topics.
 2. If MCP tools are deferred, load the core set in one ToolSearch `select:` query: get_guide, start, list_projects, log_prompt,
    create_artboard, write_html, update_styles, get_tree, lint, get_screenshot, finish_working.
 
