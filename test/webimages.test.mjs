@@ -78,7 +78,7 @@ test('download stores bytes only after the licence and magic-number checks', asy
   await assert.rejects(() => new WebImages(junk.fetchImpl).download(`openverse:${UUID}`), /not a PNG/);
 });
 
-test('commons image bytes must come from upload.wikimedia.org', async () => {
+test('commons image bytes must come from a wikimedia upload or thumb host', async () => {
   const evil = mock([[COMMONS, { query: { pages: { a: page({ thumburl: 'https://evil.test/a.jpg' }) } } }]]);
   await assert.rejects(() => new WebImages(evil.fetchImpl).download('commons:42'), /Unexpected image host/);
   assert.ok(evil.calls.every((u) => !u.includes('evil.test')));

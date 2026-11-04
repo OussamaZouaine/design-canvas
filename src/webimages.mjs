@@ -6,7 +6,8 @@ import { imageInfo, MAX_IMAGE_BYTES } from './images.mjs';
 
 export const OPENVERSE = 'https://api.openverse.org';
 export const COMMONS = 'https://commons.wikimedia.org';
-const COMMONS_FILES = 'upload.wikimedia.org'; // the only host Commons image bytes may come from
+// the only hosts Commons image bytes may come from (the API now hands out resized thumbs on thumb.wikimedia.org)
+const COMMONS_FILES = new Set(['upload.wikimedia.org', 'thumb.wikimedia.org']);
 const TIMEOUT_MS = 10_000;
 const QUERY_RE = /^[\p{L}\p{N} ._-]{1,60}$/u;
 const OPENVERSE_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -109,7 +110,7 @@ export class WebImages {
       meta = fromCommons(Object.values(j.query?.pages ?? {})[0] ?? {});
       if (!meta) throw new Error(`No Commons image ${ref}.`);
       url = meta._thumb;
-      if (new URL(url).protocol !== 'https:' || new URL(url).hostname !== COMMONS_FILES) throw new Error('Unexpected image host from Commons; refused.');
+      if (new URL(url).protocol !== 'https:' || !COMMONS_FILES.has(new URL(url).hostname)) throw new Error('Unexpected image host from Commons; refused.');
     }
     if (!commercialSafe(meta.license)) throw new Error(`Licence "${meta.license}" is not commercial-safe (CC0, public domain, CC BY, CC BY-SA only).`);
     const buffer = await this._get(url, { json: false, maxBytes: MAX_IMAGE_BYTES });
