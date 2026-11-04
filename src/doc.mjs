@@ -501,10 +501,10 @@ export class Doc {
 
   get references() { return this.data.references ?? []; }
 
-  addReference({ name, mime, width, height }) {
+  addReference({ name, mime, width, height, credit }) {
     this._checkpoint('add_reference');
     const n = this.references.reduce((m, r) => Math.max(m, Number(r.id.slice(1)) || 0), 0) + 1;
-    const ref = { id: `R${n}`, name: String(name || 'Reference').trim().slice(0, 80) || 'Reference', mime, width, height };
+    const ref = { id: `R${n}`, name: String(name || 'Reference').trim().slice(0, 80) || 'Reference', mime, width, height, ...(credit && { credit }) };
     this.data.references = [...this.references, ref];
     this._commit();
     return ref;

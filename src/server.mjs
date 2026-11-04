@@ -20,6 +20,7 @@ import { layoutMetrics, lintMetrics } from './evalmetrics.mjs';
 import { extractTokens } from './tokens.mjs';
 import { FontCache } from './fonts.mjs';
 import { AssetCache } from './assets.mjs';
+import { WebImages } from './webimages.mjs';
 import { HeadlessWorker } from './headless.mjs';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { Session, SessionMap } from './sessions.mjs';
@@ -145,6 +146,7 @@ function highlight(projectId, ids, agent = null) {
 const fonts = new FontCache(path.join(DATA, 'fonts'));
 // Icons and brand logos from Iconify (assets tool), fetched once and kept in data/assets/.
 const assets = new AssetCache(path.join(DATA, 'assets'));
+const webImages = new WebImages(); // keyless Openverse / Wikimedia Commons photos (assets tool, action photos / photo)
 
 // What every agent pays before doing anything: the tools/list payload, the server instructions and one get_guide().
 // Measured once by listing the tools through an in-memory client (the same path a real client takes) and cached,
@@ -154,7 +156,7 @@ async function measureFixed() {
   if (fixedCache) return fixedCache;
   const [a, b] = InMemoryTransport.createLinkedPair();
   // Core toolset: that is what a new session pays for (more_tools adds the rest only when an agent asks).
-  const server = createMcpServer({ store, ui, fonts, assets, highlight, port: PORT, toolset: 'core' });
+  const server = createMcpServer({ store, ui, fonts, assets, webImages, highlight, port: PORT, toolset: 'core' });
   const client = new Client({ name: 'cost-probe', version: '0' });
   try {
     await Promise.all([server.connect(a), client.connect(b)]);
@@ -171,7 +173,7 @@ const claims = new Claims({
   onChange: (projectId) => { for (const c of ui.clients) if (projectId === null || c.projectId === projectId) send(c.res, 'claims', claimsPayload(c.projectId)); },
 });
 
-const mcpDeps = { store, ui, fonts, assets, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, claims, port: PORT };
+const mcpDeps = { store, ui, fonts, assets, webImages, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, claims, port: PORT };
 
 // Sessions of the MCP endpoint. Each client gets its own McpServer so identity and project binding live with it.
 const sessions = new SessionMap();

@@ -234,14 +234,14 @@ export class ProjectStore {
   // ---- reference images ----------------------------------------------------
   // Pictures to rebuild from live in data/projects/<id>/refs/R<n>.<ext>; the doc keeps their metadata.
 
-  addReference(id, { name, buffer, page }) {
+  addReference(id, { name, buffer, page, credit }) {
     if (!buffer?.length) throw new Error('Empty image');
     if (buffer.length > MAX_IMAGE_BYTES) throw new Error('Image too large (10 MB max)');
     const info = imageInfo(buffer); // trusts the bytes, not the file name or a claimed type
     if (!info) throw new Error('Not a PNG, JPEG, GIF or WebP image');
     if (!info.width || !info.height || info.width * info.height > 60_000_000) throw new Error('Image dimensions are not supported');
     const doc = this._doc(id);
-    const ref = doc.addReference({ name, ...info });
+    const ref = doc.addReference({ name, credit, ...info });
     const dir = path.join(this._dir(id), 'refs');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, `${ref.id}.${EXT[info.mime]}`), buffer);

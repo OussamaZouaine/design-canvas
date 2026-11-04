@@ -32,6 +32,7 @@ import { clampStatus,pendingFeedback, formatFeedback, markDelivered, STATUS_MAX 
 const STATUS_FIELD = z.string().max(STATUS_MAX * 2).optional().describe(`One present-tense line (max ${STATUS_MAX} chars) on what you are doing now, e.g. "Building the pricing section". Once per phase, not per call.`);
 import { extractSvg, MAX_SVG_BYTES } from './svg.mjs';
 import { formatResults, splitId } from './assets.mjs';
+import { creditLine } from './webimages.mjs';
 import { readInsideRepo, parseCustomProperties, mapProperties, exportTokens } from './tokensync.mjs';
 
 // Sent once per session with the tool list, so it stays short; the full workflow is in get_guide.
@@ -72,7 +73,7 @@ export const CORE_TOOLS = new Set([
 
 // `toolset`: 'core' (what server.mjs gives new sessions) or 'all' (the default here, so tests and old stateless
 // clients, which cannot unlock anything across requests, see every tool).
-export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims(), toolset = 'all' }) {
+export function createMcpServer({ store, ui, fonts, assets, webImages, requestScreenshot, requestMeasure, requestComputed, requestCompare, highlight, meter, calls, port, session = anonymousSession(), claims = new Claims(), toolset = 'all' }) {
   const instructions = toolset === 'core'
     ? `${INSTRUCTIONS}\nSome tools are hidden to save tokens (pages, components, tokens, references, capture, export, assets...): call more_tools once when the guide or the task needs one that is not listed.`
     : INSTRUCTIONS;
@@ -831,7 +832,7 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
     const ab = doc.getArtboard(artboard_id);
     if (!ab) throw new Error(`Artboard ${artboard_id} not found`);
     if (ab.generated === 'reference') throw new Error('Pick your own artboard, not a reference board');
-    const ref = reference_id ? doc.references.find((r) => r.id === reference_id) : doc.references.at(-1);
+    const ref = reference_id ? doc.references.find((r) => r.id === reference_id) : doc.references.findLast((r) => !r.credit);
     if (!ref) throw new Error(doc.references.length ? `Reference ${reference_id} not found` : 'No reference images yet. Call references (action add) first.');
     const r = await requestCompare(meta.id, artboard_id, ref.id);
     const { dataUrl, ...summary } = r;
@@ -902,17 +903,33 @@ export function createMcpServer({ store, ui, fonts, assets, requestScreenshot, r
   // One action tool: searches return ready-to-paste inline <svg> for the top few hits; insert places one via the
   // import_svg path so it gets ids and a fit-height board grows around it. Stock photos are out of scope (API keys).
   server.registerTool('assets', {
-    description: 'Real icons and brand logos instead of placeholder boxes. action icons (query, set default lucide; others: tabler, phosphor, heroicons...): UI icons. action logos (query = brand name or domain, e.g. "stripe" or "github.com"): brand marks from simple-icons (mono) and logos (full colour). Both return ids ("lucide:arrow-right") plus inline <svg> for the first few (size px, color oklch / currentColor / var(--x); hex is converted). action insert (id, target_id, optional size, color, mode, name): place one on the board as an editable node. Needs internet the first time; results are cached on disk. No stock photos.',
+    description: 'Real icons and brand logos instead of placeholder boxes. action icons (query, set default lucide; others: tabler, phosphor, heroicons...): UI icons. action logos (query = brand name or domain, e.g. "stripe" or "github.com"): brand marks from simple-icons (mono) and logos (full colour). Both return ids ("lucide:arrow-right") plus inline <svg> for the first few (size px, color oklch / currentColor / var(--x); hex is converted). action insert (id, target_id, optional size, color, mode, name): place one on the board as an editable node. Needs internet the first time; results are cached on disk. action photos (query, optional source openverse|commons, limit): free web photos, CC0 / public domain / CC BY / CC BY-SA only (never NC/ND), each with creator, licence and source URL. action photo (id from photos, optional name, page_id): downloads it into the project and returns src (an /api/p/... path: use it as <img src> in your own HTML) plus the credit line to print on the guidelines page for CC BY / BY-SA images; it also appears as a locked reference board.',
     inputSchema: {
       ...pid,
-      action: z.enum(['icons', 'logos', 'insert']),
+      action: z.enum(['icons', 'logos', 'insert', 'photos', 'photo']),
+      source: z.enum(['openverse', 'commons']).optional(), page_id: z.string().optional(),
       query: z.string().optional(), set: z.string().optional(), limit: z.number().int().min(1).max(24).optional(),
       size: z.number().int().min(8).max(512).optional(), color: z.string().optional(),
       id: z.string().optional().describe('prefix:name, e.g. lucide:home (insert)'), target_id: z.string().optional(),
       mode: z.enum(['replace', 'append', 'prepend', 'before', 'after']).optional(), name: z.string().optional(),
     },
-  }, safe(async ({ project_id, action, query, set, limit, size, color, id, target_id, mode, name }) => {
+  }, safe(async ({ project_id, action, query, set, limit, size, color, id, target_id, mode, name, source, page_id }) => {
     if (!assets) throw new Error('assets: not available on this server');
+    if (action === 'photos' || action === 'photo') {
+      if (!webImages) throw new Error('assets: web photos are not available on this server');
+      if (action === 'photos') {
+        need('assets', action, { query }, 'query');
+        const found = await webImages.search(query, { source, limit });
+        if (!found.length) return text(`No commercial-safe photos found for "${query}". Try a simpler word or the other source.`);
+        return text({ results: found, note: 'Add one with action photo (id). Only CC0 / public domain / CC BY / CC BY-SA are listed.' });
+      }
+      need('assets', action, { id }, 'id');
+      const { meta, doc } = target(project_id);
+      const { buffer, credit } = await webImages.download(id);
+      const { ref, board } = store.addReference(meta.id, { name: credit.title.slice(0, 80), buffer, page: page_id ?? ui.currentPage.get(meta.id), credit });
+      log(meta, doc, 'add_reference_image', board.id, id);
+      return text({ reference_id: ref.id, artboard_id: board.id, src: `/api/p/${meta.id}/ref/${ref.id}`, width: ref.width, height: ref.height, credit: creditLine(credit), license: credit.license, note: 'Use src as <img src> in your own HTML (object-fit: cover). Print the credit line on the guidelines page for CC BY / CC BY-SA.' });
+    }
     if (action === 'insert') {
       need('assets', action, { id, target_id }, 'id', 'target_id');
       const { prefix, name: icon } = splitId(id);
