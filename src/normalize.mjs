@@ -76,10 +76,12 @@ export function normalizeTree(root) {
   // carry a style or other attribute keep their formatting (that would be lost by flattening).
   for (const span of root.querySelectorAll('span').reverse()) {
     // (Normalization runs before ids are stamped, but an x-clone copy can still carry none either way.)
-    // Not inside a flex/grid parent: there each span is its own item (a nav row of plain spans), and unwrapping
-    // would merge them into one text node and lose the gap.
-    const flexParent = /display:\s*(inline-)?(flex|grid)/.test(span.parentNode?.getAttribute?.('style') || '');
-    if (!flexParent && Object.keys(span.attributes).every((a) => a === 'data-pid')) span.replaceWith(...span.childNodes);
+    // A row of spans with no text between them (a nav of plain spans) is a list of items, not one text block:
+    // unwrapping would merge them into a single text node and lose the flex gap. The parent's style is not
+    // checked because a fragment (write_html replace) does not know the node it will land in.
+    const sib = span.parentNode?.childNodes ?? [];
+    const row = sib.length > 1 && sib.every((c) => c instanceof HTMLElement || !c.text.trim());
+    if (!row && Object.keys(span.attributes).every((a) => a === 'data-pid')) span.replaceWith(...span.childNodes);
   }
   const walk = (el) => {
     for (const child of el.childNodes) {
