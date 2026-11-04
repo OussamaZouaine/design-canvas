@@ -13,7 +13,8 @@ const INLINE = /^(inline|inline-block|inline-grid)$/;
 export function dialectKind(tag, st) {
   const display = (st.get('display') || '').trim().toLowerCase();
   if (TABLE_TAGS.has(tag) || display.startsWith('table')) return 'table';
-  if ([...st.keys()].some((k) => k === 'margin' || k.startsWith('margin-'))) return 'margin';
+  // margin: 0 only resets the browser default (p, h1), it cannot collapse or shift neighbours
+  if ([...st.entries()].some(([k, v]) => (k === 'margin' || k.startsWith('margin-')) && !/^\s*0(px)?(\s+0(px)?){0,3}\s*$/.test(v))) return 'margin';
   if (display === 'grid' || display === 'inline-grid') return 'grid';
   if (INLINE.test(display)) return 'inline';
   return null;

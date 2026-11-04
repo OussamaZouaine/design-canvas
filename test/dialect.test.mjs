@@ -49,3 +49,8 @@ test('duplicate_nodes returns an id map for every descendant; parentOf names the
   // the default return shape is unchanged
   assert.ok(Array.isArray(doc.duplicateNodes([card])));
 });
+
+test('margin: 0 (a browser-default reset) is not a dialect problem', () => {
+  assert.equal(dialectNote('<p style="margin:0">x</p><h1 style="margin:0px 0 0 0">y</h1>'), '');
+  assert.match(dialectNote('<p style="margin:0 0 8px">x</p>'), /margin/);
+});
