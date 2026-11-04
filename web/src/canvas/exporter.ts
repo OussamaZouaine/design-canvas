@@ -6,6 +6,7 @@ import { fileNames, outputSize, safeName, type ExportFormat, type ExportRow } fr
 import { makePdf } from '@/lib/pdf';
 import { makeZip, type ZipEntry } from '@/lib/zip';
 import { boardSvg, rasterizeCanvas, type Crop } from './raster';
+import { vectorSvg } from './vectorize';
 import { toast } from '@/store/toast';
 import { cropOf, type ReplyHost } from './replies';
 
@@ -57,7 +58,14 @@ async function svgFor(host: ReplyHost, id: string, scale: string): Promise<Blob>
     if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${crop.w} ${crop.h}`);
     return new Blob([new XMLSerializer().serializeToString(clone)], { type: MIME.svg });
   }
-  // Anything else: the board's foreignObject SVG, cropped with a viewBox (HTML inside; opens in browsers).
+  // Anything else: native vector SVG built from the laid-out board (text stays text, boxes become rects). If the
+  // converter fails on odd markup, fall back to the foreignObject SVG (HTML inside; opens in browsers only).
+  if (ab.generated !== 'reference') {
+    try {
+      const k = w / crop.w;
+      return new Blob([await vectorSvg({ html: ab.html, width: ab.width, height: ab.height, fit: ab.heightMode === 'fit', themeDecls: host.themeDecls(), crop, nodeId: isNode ? id : undefined, scale: k })], { type: MIME.svg });
+    } catch (e) { console.warn("vector svg export failed, using foreignObject", e); }
+  }
   const svg = (await boardSvg(ab, host.themeDecls(), { isolate: isNode ? id : undefined, transparent: isNode }))
     .replace(/^<svg [^>]*>/, `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${crop.x} ${crop.y} ${crop.w} ${crop.h}">`);
   return new Blob([svg], { type: MIME.svg });
