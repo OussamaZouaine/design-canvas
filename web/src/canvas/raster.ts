@@ -59,8 +59,9 @@ export interface RasterOpts { isolate?: string; transparent?: boolean }
 // included, and also what the SVG export writes. Limit: only inline styles and data: images survive, because the
 // SVG is rendered in isolation (no network, no page CSS).
 export async function boardSvg(ab: Artboard, themeDecls: string, opts: RasterOpts = {}): Promise<string> {
-  // The SVG cannot fetch anything, so the faces this board uses travel inside it as data: URIs.
-  const fontCss = await embeddedFontCss(ab.html);
+  // The SVG cannot fetch anything, so the faces this board uses travel inside it as data: URIs. The theme is scanned
+  // too: a board that sets its font through var(--font-display) never names the family in its own HTML.
+  const fontCss = await embeddedFontCss(ab.html + themeDecls);
   const holder = document.createElement('div');
   holder.innerHTML = ab.html;
   // Project pictures (web photos from assets photo, references) are served from /api/p/...; inside the SVG that URL
