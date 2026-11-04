@@ -87,3 +87,9 @@ test('inputs are left alone when the project does not normalize', () => {
   const { doc, ab } = board(false);
   assert.match(write(doc, ab, '<input placeholder="x">'), /<input/);
 });
+
+test('attribute-less spans inside a flex parent stay separate items', () => {
+  const { doc, ab } = board();
+  const html = write(doc, ab, '<div style="display:flex;gap:16px"><span>Docs</span><span>Blog</span></div>');
+  assert.equal((html.match(/<span/g) || []).length, 2);
+});
