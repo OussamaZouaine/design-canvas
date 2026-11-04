@@ -735,18 +735,29 @@ export function createMcpServer({ store, ui, fonts, assets, webImages, requestSc
   // strict; fields are flat and optional in the schema, so each action checks its own required ones with `need`.
   // log() keeps the old per-operation names (create_page, ...): the Activity panel labels and doc history use them.
   server.registerTool('pages', {
-    description: 'Pages are separate canvases inside a project (one per flow or breakpoint); get_basic_info lists them. action: create (name) returns the page id; set (page_id) chooses the page NEW artboards go to until changed; update (page_id, name and/or background colour such as oklch(0.2 0 0), "" clears it); delete (page_id; ASK THE USER FIRST, it removes a page they may rely on; its artboards move to move_boards_to, default the first remaining page, never deleted); move_boards (artboard_ids, page_id).',
+    description: 'Pages are separate canvases inside a project (one per flow or breakpoint); get_basic_info lists them. action: create (name) returns the page id; set (page_id) chooses the page NEW artboards go to until changed; update (page_id, name and/or background colour such as oklch(0.2 0 0), "" clears it); delete (page_id; ASK THE USER FIRST, it removes a page they may rely on; its artboards move to move_boards_to, default the first remaining page, never deleted); move_boards (artboard_ids, page_id); move_board (artboard_id; optional x, y, width, height, page_id: moves/resizes ONE existing board in one undo step, a clash slides it right and the result says placed).',
     inputSchema: {
       ...pid,
-      action: z.enum(['create', 'set', 'update', 'delete', 'move_boards']),
+      action: z.enum(['create', 'set', 'update', 'delete', 'move_boards', 'move_board']),
       page_id: z.string().optional(),
+      artboard_id: z.string().optional(),
+      x: z.number().optional(),
+      y: z.number().optional(),
+      width: z.number().min(1).max(20000).optional(),
+      height: z.number().min(1).max(20000).optional(),
       name: z.string().max(60).optional(),
       background: z.string().max(60).optional(),
       move_boards_to: z.string().optional(),
       artboard_ids: z.array(z.string()).min(1).optional(),
     },
-  }, safe(({ project_id, action, page_id, name, background, move_boards_to, artboard_ids }) => {
+  }, safe(({ project_id, action, page_id, name, background, move_boards_to, artboard_ids, artboard_id, x, y, width, height }) => {
     const { meta, doc } = target(project_id);
+    if (action === 'move_board') {
+      need('pages', action, { artboard_id }, 'artboard_id');
+      const r = doc.placeArtboard(artboard_id, { x, y, width, height, page: page_id });
+      log(meta, doc, 'move_artboard', [artboard_id]);
+      return text(r);
+    }
     if (action === 'create') {
       need('pages', action, { name }, 'name');
       if (!name) throw new Error('pages create needs a non-empty name');

@@ -44,3 +44,23 @@ test('Doc: explicit overlapping x is moved and reported, growth pushes boards be
   doc.growArtboard(a.id, 500);
   assert.equal(c.y, 620);
 });
+
+test('Doc.placeArtboard: moves, slides on a clash, resizes, switches page, one undo step', () => {
+  const doc = new Doc(null);
+  const a = doc.createArtboard({ width: 400, height: 300 });
+  const b = doc.createArtboard({ width: 400, height: 300 }); // x 520
+  const r = doc.placeArtboard(b.id, { x: 0, y: 1000 });
+  assert.deepEqual([r.x, r.y], [0, 1000]);
+  assert.equal(r.placed, undefined);
+  const s = doc.placeArtboard(b.id, { x: 100, y: 0, width: 500 }); // clashes with a: slides right
+  assert.equal(s.x, 520);
+  assert.equal(b.width, 500);
+  assert.deepEqual(s.placed, { asked: { x: 100, y: 0 } });
+  assert.equal(doc.placeArtboard(a.id, { x: 0, y: 0 }).placed, undefined, 'own old spot is not a clash');
+  const p = doc.createPage('Two');
+  doc.placeArtboard(a.id, { page: p.id });
+  assert.equal(a.page, p.id);
+  assert.throws(() => doc.placeArtboard('nope', { x: 1 }), /not found/);
+  doc.undo();
+  assert.notEqual(doc.getArtboard(a.id).page, p.id, 'undo reverts the whole move');
+});

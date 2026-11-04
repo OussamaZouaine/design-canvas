@@ -1196,6 +1196,25 @@ export class Doc {
     this._commit();
   }
 
+  // MCP move/resize: like moveArtboard but the target is a wish. Missing x/y/width/height keep the current value, and
+  // if the spot would cover another board on the destination page it slides right (freeSpot, the board itself is
+  // ignored). One undo step; returns the final box and `placed` (the asked x/y) when it had to slide.
+  placeArtboard(id, { x, y, width, height, page: pageArg } = {}) {
+    const ab = this.getArtboard(id);
+    if (!ab) throw new Error(`Artboard ${id} not found`);
+    const page = pageArg === undefined ? this.pageOf(ab) : this._pageId(pageArg); // validate before the checkpoint
+    const w = width ?? ab.width, h = height ?? ab.height;
+    const want = { x: x ?? ab.x, y: y ?? ab.y };
+    const spot = freeSpot(this.data.artboards.filter((a) => a !== ab && this.pageOf(a) === page), { ...want, width: w, height: h });
+    const moved = spot.x !== want.x;
+    if (spot.x === ab.x && spot.y === ab.y && w === ab.width && h === ab.height && page === this.pageOf(ab)) return { x: ab.x, y: ab.y, width: w, height: h, page };
+    this._checkpoint('move_artboard');
+    if (page !== this.pageOf(ab)) { this._ensurePages(); ab.page = page; }
+    Object.assign(ab, { x: spot.x, y: spot.y, width: w, height: h });
+    this._commit();
+    return { x: spot.x, y: spot.y, width: w, height: h, page, ...(moved ? { placed: { asked: want } } : {}) };
+  }
+
   // Board drags and Inspector X/Y/W/H. Each is one undo step (Ctrl+Z used to skip them and undo the change before);
   // a no-op takes no checkpoint so it never leaves an empty step.
   moveArtboard(id, x, y) {
