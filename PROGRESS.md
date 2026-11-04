@@ -186,7 +186,7 @@ Order is a suggestion; the user decides.
     built-in browser pane's screenshots can show a stale frame, which likely caused the report. Feature ideas: right-click "Ask agent about this", read-only share link,
     breakpoint preview side by side, click-through prototype links, snapshot compare.
     DONE: minimap (Shift+M, main menu, palette; `shell/Minimap.tsx` + pure `canvas/minimap.ts`, bottom-right above the status dock, click/drag pans, remembered in `dc-minimap`).
-15. **Brand identity generation (idea, 2026-10-31, not started; user wants a full, professional identity like an agency delivers, not just a logo):**
+15. **Brand identity generation (2026-10-31). DONE 2026-11-04: guide topic `brand` (`src/guide.mjs`, test in `test/guide.test.mjs`; not yet run end to end by an agent, check steps 0-2 on the first real brand job). STILL OPEN: the keyless web-images tool (Openverse / Wikimedia, paragraph "Images" below). Known gap: MCP `export` writes one board per call, so the multi-page PDF and zip asset pack are made in the app Export UI (the guide says so); an MCP multi-board PDF/zip export is a possible later tool. Original idea notes: user wants a full, professional identity like an agency delivers, not just a logo):**
     an agent builds a brand on its own page, in agency order: 0 strategy board (audience, positioning, 3-5 values, personality, voice and tone with
     do/don't lines), 1 mood board (inspiration), 2 logo directions (3-4 side by side with the reasoning for each, then the chosen one), 3 logo system
     (construction grid, clear space, minimum size, primary / secondary / icon-only lockups, mono and reversed, 16-64 px checks, misuse examples),
